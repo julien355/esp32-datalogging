@@ -70,10 +70,40 @@ To check on the VPS, with the owner: which Hermes version runs, whether its webh
 
 **If speed matters more than R1, R2 and the Arkan look,** Emoncms is the off-the-shelf alternative: an ESP32 posting to it could show Adab's data within days. The cost is a second login and a data store that is not a folder per site, and moving to the Arkan platform later would mean migrating the data.
 
+## 7. Decision of 30 October 2026: Open Energy Dashboard
+
+The owner chose **Open Energy Dashboard (OED) as the reference for the platform**, and set the Arkan design (CMMS, Hub) aside until a later integration. §6 above is kept as the earlier recommendation. The plan now deploys OED as the dashboard, fed by our ingest service (PLAN.md §4.2, §5.3).
+
+### Can OED show temperature and humidity? Yes, with limits
+
+Checked in the OED source code (`OpenEnergyDashboard/OED`, branch `development`, commit `74a1c63` of 28 October 2026), because its website is not reachable from the cloud session:
+
+| Point | What the code says | Where |
+|---|---|---|
+| Unit types | Every unit is `quantity` (summed, like kWh), `flow` (a rate, like kW) or **`raw`** (neither summed nor rated: averaged) | `src/server/models/Unit.js`, `unitRepresentType` |
+| Temperature | **Celsius and Fahrenheit are standard OED units, type `raw`**, with a built-in Celsius to Fahrenheit conversion. They are created hidden (`displayable: none`); the admin makes them visible | `src/server/util/insertData.js` |
+| Humidity | **No built-in unit.** The admin adds one (for example "% RH", type `raw`) on the Units page; OED allows any unit | `src/client/app/components/unit/` |
+| Line graph | Works for raw units (there are server tests for raw line readings). OED averages points when the range is long; "Redraw" brings back full resolution | `src/server/test/web/readingsLineMeterRaw.js` |
+| 3D and radar graphs | Work for raw units (the rate menu is hidden for them) | `GraphicRateMenuComponent.tsx` |
+| **Bar graph** | **Not for raw units**: "Cannot create bar graph on raw units such as temperature" | `BarChartComponent.tsx`, `translations/data.ts` |
+| **Compare graph** | **Not for raw units**: "Cannot create comparison graph on raw units such as temperature" | `CompareBarComponent.tsx` |
+| Data in | CSV upload by API: `POST /api/csv/readings` with `meterIdentifier`, an OED user with the CSV role, `cumulative`, `headerRow`, `refreshReadings` and more | `src/server/routes/csv.js`, `services/csvPipeline/` |
+
+**In practice for Adab:**
+- Room temperature and humidity are two OED meters with raw units, shown as **line graphs over time** (day, week, month, with zoom) and in 3D (hour by day).
+- No daily bar chart and no "this week vs last week" comparison for them. If wanted, the ingest service can also write a daily min/max file. OED cannot show it as a bar either, so it would go on our status page.
+- Energy (kWh) gets everything: line (as kW), bar (per day, week), compare, map, 3D.
+
+### What OED does not do (kept in our ingest service)
+- Receive live posts from the logger: OED takes CSV uploads, so the service pushes every 5 minutes.
+- Alerts: none in OED; the service sends them through Hermes to the WhatsApp group.
+- A live "now" view: OED graphs readings once uploaded; the status page shows the latest values.
+- Timezones: OED stores times without a zone; the service sends WITA local time.
+
 ## Sources
 
 - Emoncms: https://github.com/emoncms/emoncms
-- Open Energy Dashboard: https://github.com/OpenEnergyDashboard/OED, https://openenergydashboard.github.io/features.html
+- Open Energy Dashboard: https://github.com/OpenEnergyDashboard/OED (source read at commit 74a1c63), https://openenergydashboard.github.io/features.html
 - ThingsBoard CE requirements (third-party guides): https://wz-it.com/en/knowledge/iot/install-thingsboard/, https://zbotic.in/thingsboard-iot-dashboard-self-hosted-setup-guide/
 - ESPHome Modbus controller: https://esphome.io/components/sensor/modbus_controller/; three-phase example on an ESP32-S3: https://gist.github.com/jabbas/55ed902656939e1c44010916668dd6db
 - Hermes Agent: https://github.com/NousResearch/hermes-agent (webhooks doc in the repository)

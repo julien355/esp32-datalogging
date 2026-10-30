@@ -1,7 +1,10 @@
-# Fort FCN300-3E4Y: what we know and what must be checked
+# Fort FCN300 (3E4Y or 3EH4Y): what we know and what must be checked
 
-Meter at Adab: **FORT FCN300-3E4Y**, 3-phase 4-wire multifunction meter, Modbus RTU over RS485.
-(`arkan-cmms` calls it "Fort FC300"; the model on the guide is FCN300-3E4Y. Read the label on the meter on site.)
+Meter at Adab: **FORT FCN300**, 3-phase 4-wire multifunction meter, Modbus RTU over RS485. **Variant to confirm on the label:**
+- **FCN300-3E4Y**: the guide received (`fcn300-3e4y-modbus-guide.md`) is for this one.
+- **FCN300-3EH4Y**: the harmonic variant; the owner sent its product page (https://fortindo.id/product/power-multimeter-fcn300-3eh4y-3-phase-ac-lcd-digital-meter/, not readable from the cloud session). Resellers list Modbus RS485 on it too. Its map may add harmonic registers or differ: ask the seller for it.
+
+(`arkan-cmms` calls it "Fort FC300".)
 
 Source: `fcn300-3e4y-modbus-guide.md`, received from the owner on 30 October 2026, kept as received.
 
@@ -17,7 +20,7 @@ The guide is the starting point for the firmware's register table. It is not a m
 | 4 | kVARh "32-bit" at a single address (0x001A) | A 32-bit value cannot fit in one register | Dump 0x0018 to 0x001F, watch which words count up |
 | 5 | Section 4: values may be **secondary** (before the CT ratio) | Currents and powers could be 1/20 or 1/100 of the real value | Read CT1/CT2 (0x0030, 0x0031) and compare with the LCD |
 | 6 | Both FC03 and FC04 listed for the same addresses | Only one may answer | Try both in the dump |
-| 7 | The "3E4Y" variant may or may not have the RS485 port | No port, no data | **Check for A/B (485) terminals on the back of the meter. Photo needed** |
+| 7 | RS485 port: resellers list Modbus RS485 for both 3E4Y and 3EH4Y | No port, no data | **Check for A/B (485) terminals on the back of the meter. Photo needed** |
 
 ## Defaults to start with (from the guide)
 
@@ -35,4 +38,4 @@ Everything above sits in a **register table in the logger's config**: address, f
    - print each word as u16, s16, and pairs as u32/s32/float in both word orders.
 2. Photograph the LCD pages at the same moment (V, A, kW, PF, Hz, kWh).
 3. Match each LCD value to a register and a scale; write the result in `fcn300-3e4y-verified.md`.
-4. The meter is installed in the hotel's panel, so this happens on site, unless a **spare FCN300-3E4Y is bought for the bench**. A spare is recommended: it lets the firmware be tested at the office and serves the next sites.
+4. **No spare meter yet** (owner, 30 October 2026), so this happens at the hotel during a first short visit, before the install. A spare bought later lets the firmware be tested at the office and serves the next sites.

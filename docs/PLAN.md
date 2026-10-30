@@ -1,6 +1,7 @@
 # Adab Hotel Energy Logger: Installation Plan
 
-Status: **DRAFT v0.4, 30 October 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+Status: **DRAFT v0.5, 30 October 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+v0.5: **Open Energy Dashboard (OED) is the platform's dashboard** (§4.2, §5.3); the Arkan design (CMMS, Hub) is left for a later integration. Meter variant to confirm (3E4Y or 3EH4Y). No spare meter yet. Alerts to the owner's WhatsApp group.
 v0.4: site code `adab`; meter FCN300-3E4Y with its register guide (`docs/meter/`, not yet verified); WhatsApp alerts through Hermes; search of reusable repositories and dashboards (`docs/REUSE.md`).
 v0.3: the platform gets **its own repository** (§4.2), and the recorded data lives in **one dedicated folder with a subfolder per site** (§5.3).
 Sources: `docs/img/sketch-adab-logger.jpg` (hand sketch), `docs/img/board-top.jpg`, `docs/img/board-bottom.jpg`,
@@ -67,7 +68,11 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 | 3 | Codex | **Not crossed out**: Claude, Codex and PowerShell | Repository rules go in `AGENTS.md` too (as in `arkan-skills-V1`) |
 | 15 | Client and site name | **`adab`** | Site code `adab` in both repositories: data folder `sites/adab/`, page `/adab/` |
 | 16 | New repository | **OK**: Claude creates `arkan-monitoring` (private) at the start of S1 | |
-| 17 | Alerts | **WhatsApp through Hermes** on hermes-vps | Hermes webhook route in direct delivery mode (§5.3) |
+| 17 | Alerts | **WhatsApp through Hermes** on hermes-vps, **to the owner's WhatsApp group** | Hermes webhook route in direct delivery mode (§5.3); the group's chat id is set in the route |
+| 18 | Meter link | fortindo.id page of the **FCN300-3EH4Y** (the harmonic variant) | The guide received is for the **3E4Y**. Resellers list Modbus RS485 on both. **Read the model on the meter's label**: the 3EH4Y may have extra (harmonic) registers and a different map |
+| 19 | Spare meter for the bench | **None yet** | The register check happens at the hotel (first site visit) unless one is bought (§7, S4) |
+| 20 | Dashboard | **Open Energy Dashboard as the reference.** The design of `arkan-cmms` and `arkan-hub` is not used for now; integration later | OED is deployed as the platform's dashboard (§4.2, §5.3) |
+| 21 | Temperature and humidity in OED | Asked: can OED show them? | **Yes**, as "raw" units: line, 3D and radar graphs; not bar or compare graphs (§5.3, `docs/REUSE.md` §7) |
 | 4 | Domain | **`arkan-monitoring.duckdns.org`** | New DuckDNS name pointing to hermes-vps; native Caddy gets the certificate |
 | 5 | Temp/RH | **Electrical room's air** | Alert on high room temperature (threshold to set) |
 | 6 | WiFi | **Staff network, password, no login page** | WPA2 credentials set through the logger's setup page, kept in NVS |
@@ -106,20 +111,20 @@ No repository has an ingest endpoint, a time-series store or device code. That p
 
 The contract lives in `arkan-monitoring`. The firmware repository keeps a copy, as `arkan-cmms` does with the UI kit, and its CI checks the firmware's example payloads against that copy. A contract change is made in `arkan-monitoring` first, then copied here, and both carry the contract version.
 
-**Build the platform in `arkan-monitoring`:**
-- **Copy the patterns, do not depend on the other repos at runtime:**
-  - the Python standard-library server pattern (Hub/CMMS);
-  - the **Arkan UI kit, vendored** as `arkan-cmms/arkan-ui/` does (`VENDORED.md`);
-  - the **deploy set from `arkan-cmms/cmms-app/deploy/`** (Dockerfile, `docker-compose.vps.yml`, `sites/*.caddy` with the shared login, `update-vps.sh`);
-  - `/health`, backup and smoke tests from `arkan-hub`.
-- **Port the CMMS Monitoring views** (meter card, phases, demand day chart, peak, energy, temp/RH with dew point, glossary terms) into the platform's site page, fed by the real API instead of the simulator.
-- **Storage: plain files in one dedicated data folder, one subfolder per site** (§5.3). The CMMS keeps its data the same way, as plain JSON files you can read without the app. No database server on a VPS that already runs other services.
-- **Afterwards, `arkan-cmms` reads the real feed** from the platform, server to server, the way it already reads the weather (`api/weather`). That is a small change in `arkan-cmms`, in its own session (S8). The CMMS page stays the hotel's view; the platform is Arkan's multi-site view.
+**The platform = a small ingest service of ours + Open Energy Dashboard (owner's decision, 30 October 2026).**
 
-**Why not the alternatives**
-- **Grafana + InfluxDB/Timescale:** a new stack and a second login system, a look that does not match the Arkan dashboards, and more services on a shared VPS.
-- **Inside `arkan-cmms`:** you asked for the platform to be separate. The CMMS is also one property per build, made by patching a demo page.
-- **Inside `arkan-hub`:** the Hub is built around the project record, one instance per project. Monitoring is per site and per device, with time series.
+- **Open Energy Dashboard (OED)** is the dashboard: graphs, meters, groups of meters (site, then all sites), comparison, maps, export, its own admin pages. MPL-2.0, Node.js + PostgreSQL, run from its own Docker compose. We **deploy it as it is**, with our settings, and do not fork it.
+- **`arkan-monitoring`** holds what OED does not do:
+  - the **ingest endpoint** the logger posts to (OED takes readings as CSV uploads, not live posts from devices);
+  - the **per-site data folders** (the record, §5.3);
+  - the **push to OED** (new rows uploaded as CSV every few minutes);
+  - the **alerts** through Hermes (OED has none);
+  - the device registry, tokens, OTA and remote config for the loggers;
+  - the deploy files: OED's compose with our settings, the Caddy site file, backups.
+- **Not used for now:** the design of `arkan-cmms` and `arkan-hub`. Later, the CMMS Monitoring page can read the same per-site files or OED's data (S8+).
+- **Reused from the Arkan repositories regardless of design:** the VPS conventions (loopback ports, `/opt/edge/sites/*.caddy`, the shared login file, no `sudo` by sessions, backups), as written up in `arkan-hub/deploy/` and `arkan-cmms/cmms-app/deploy/`.
+
+**Why OED rather than the others** (`docs/REUSE.md`): it is built for many buildings and meters with groups and comparison, which is the multi-site platform of the sketch; it handles temperature as a unit; and it keeps its own database, so our per-site folders remain the plain-file record.
 
 ### 4.3 House rules taken over from the other repositories
 - No em dashes or en dashes in any text.
@@ -187,36 +192,47 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 - **Backup:** the whole folder, nightly, as in `arkan-hub/deploy/backup.sh`. It can later be synced to Google Drive the same way, site by site.
 - If reading many files ever becomes slow, a cache can be added per site. It would be rebuilt from the CSV files, which stay the record.
 
-**The app:**
+**The ingest service (`arkan-monitoring`, Python 3.11 standard library):**
 - **Ingest:** `/api/v1/ingest` checks the token and the schema, appends the rows to the site's day file, and answers with the last `seq` stored.
-- **Read API** for the pages and for `arkan-cmms`: live values, day series, rollups, CSV export.
-- **Device API:** config and OTA.
-- **Pages** on the Arkan UI kit:
-  - **All sites:** status (online, offline since), live kW, today's kWh, peak, room temperature, last seen.
-  - **Site page:** the ported CMMS Monitoring views.
-  - **Device health.**
-  - **Settings:** sites, devices, tokens.
-- **Alerts:** logger offline over 15 min, backlog growing, room temperature too high, meter not answering.
-  - **Sent by WhatsApp through Hermes.** The platform POSTs the alert to a Hermes webhook route (`http://<docker gateway>:8644/webhooks/arkan-monitoring`), signed with HMAC-SHA256 (`X-Webhook-Signature-V2`). The route uses `deliver: whatsapp` and **`deliver_only: true`**, so Hermes sends the text as it is, without running the agent (no LLM cost). Hermes answers 200 when delivered and 502 when refused; the platform retries.
+- **Push to OED:** every 5 minutes, the new rows of each site go to OED's CSV upload API (`POST /api/csv/readings`, with an OED user that has the CSV role). One OED meter per measured value:
+
+  | OED meter (site `adab`) | Unit in OED | Type | Graphs |
+  |---|---|---|---|
+  | `adab-EM01-energy` | kWh (from the meter's cumulative counter, `cumulative=yes`) | quantity | line (shown as kW), bar (kWh per day, week), compare, map, 3D |
+  | `adab-room-temp` | Celsius (built into OED) | raw | line, 3D, radar |
+  | `adab-room-hum` | **% RH** (a unit we add once, raw) | raw | line, 3D, radar |
+  | `adab-EM01-I1/I2/I3`, `-V1/V2/V3`, `-PF` (optional) | A, V, PF (units we add, raw) | raw | line |
+
+  - The group **`adab`** holds the site's meters; a group **"All sites"** holds the site groups.
+  - **OED stores times without a timezone**: the push sends WITA local time (UTC+8, no daylight saving). Our files stay in UTC.
+  - **OED is not a live view.** Readings appear after each push (5 minutes) and daily graphs after its view refresh. The "now" values (kW, V, A, PF, room temperature) and the logger's health are on a small status page of the ingest service.
+  - The push is idempotent: it keeps, per site and meter, the last time sent, and can resend a whole day from the files.
+- **Status page** (`/status/`): per site, logger online or offline, last reading, the latest values, the backlog, the last push to OED, the open alerts. Plain HTML, no design work for now.
+- **Device API:** config and OTA for the loggers.
+- **Alerts:** logger offline over 15 min, backlog growing, room temperature or humidity too high, meter not answering, push to OED failing.
+  - **Sent to the owner's WhatsApp group through Hermes.** The service POSTs the alert to a Hermes webhook route (`http://<docker gateway>:8644/webhooks/arkan-monitoring`), signed with HMAC-SHA256 (`X-Webhook-Signature-V2`). The route uses `deliver: whatsapp`, the group's `chat_id` and **`deliver_only: true`**, so Hermes sends the text as it is, without running the agent (no LLM cost). Hermes answers 200 when delivered and 502 when refused; the service retries.
   - The route is added to Hermes's config by the owner (sessions do not touch Hermes). Port 8644 must stay closed to the internet.
-  - As in `arkan-solar-desk`: sending is **off by default** (`alerts.send` in the settings). Every alert is written to the site's `events.jsonl` and shown on the platform page, whether it was sent or not.
+  - As in `arkan-solar-desk`: sending is **off by default** (`alerts.send` in the settings). Every alert is written to the site's `events.jsonl` and shown on the status page, whether it was sent or not.
   - Repeats are throttled: one message when an alert starts, one when it clears, a reminder every 6 hours at most.
 - **`tools/`** (run from the laptop or the VPS):
-  - add a site or a device and issue its token;
+  - add a site or a device and issue its token; create the site's meters and group in OED;
   - export CSV;
-  - **backfill from an SD card's CSV files**;
-  - rebuild a site's daily and monthly files from its day files.
+  - **backfill from an SD card's CSV files** (then pushed to OED);
+  - rebuild a site's daily and monthly files from its day files;
+  - resend a period to OED.
 
-### 5.4 Deploy on hermes-vps (copied from `arkan-cmms/cmms-app/deploy/`)
-- Container `arkan-monitoring` on `127.0.0.1:<port>`. Proposed port 8800; check it is free (the Hub uses 8780, the CMMS 8790).
-- Data in `/srv/arkan-monitoring/data/` (§5.3), mounted into the container at `/data`, owned by uid 1000 as in the CMMS.
-- The code is cloned to `/opt/arkan-monitoring`, checked out at a tag.
-- `/opt/edge/sites/monitoring.caddy` gets its own host block for `arkan-monitoring.duckdns.org`:
-  - `basicauth` with `import /opt/edge/secrets/hub-users.caddy` (**the same logins**) on every path **except** `/api/v1/ingest` and the device endpoints. Those are open to the internet and protected by the device token in the app, because the logger cannot sign in through basicauth.
-  - `request_header -X-Auth-User`, then `X-Auth-User` set from the sign-in.
+### 5.4 Deploy on hermes-vps
+- **Two parts, both on loopback only:**
+  - **OED**: its own compose (`web` on port 3000 inside, `database` PostgreSQL), published on `127.0.0.1:<oed port>`; Postgres data in `/srv/arkan-monitoring/oed-postgres/`. About 1 to 2 GB of RAM: check what hermes-vps has free before S5.
+  - **The ingest service**: one container on `127.0.0.1:<ingest port>` (proposed 8800; check it is free: the Hub uses 8780, the CMMS 8790). Data in `/srv/arkan-monitoring/data/` (§5.3), mounted at `/data`, owned by uid 1000.
+- The code is cloned to `/opt/arkan-monitoring`, checked out at a tag. OED is built from a **pinned OED release or commit**, recorded in the repository.
+- `/opt/edge/sites/monitoring.caddy`, its own host block for `arkan-monitoring.duckdns.org`:
+  - `/` goes to **OED**, `/status/` to the ingest service's status page, both behind `basicauth` with `import /opt/edge/secrets/hub-users.caddy` (**the same logins as the other dashboards**). OED's own admin login stays for its settings pages.
+  - `/api/v1/ingest` and the device endpoints go to the ingest service **without basicauth**: the logger cannot sign in through it, so the device token is checked in the service.
+  - OED's own CSV upload API is **not** published: only the ingest service reaches it, inside the VPS.
   - The log filtered as in `cmms.caddy`, HSTS, `noindex`.
 - DuckDNS: create the `arkan-monitoring` name, point it to the VPS IP, and keep it updated the way the other duckdns names are.
-- Nightly backup of the data folder, kept as in `arkan-hub/deploy/backup.sh`.
+- Nightly backup of the data folder and an OED database dump (`pg_dump`), kept as in `arkan-hub/deploy/backup.sh`. OED can be rebuilt from the data folder at any time by resending.
 
 ### 5.5 Physical install (MDP, back of house)
 - The logger in a small IP54 plastic box **beside** the steel panel. Check WiFi RSSI on site first: better than -70 dBm.
@@ -232,11 +248,11 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 | P0 | Review | This plan v1.0, meter register guide (received), WiFi credentials | Plan approved |
 | P1 | Foundations | New `arkan-monitoring` repository; layout of both repositories, data contract, CI, vendored UI kit, `CLAUDE.md` + `AGENTS.md` in each | CI green in both: `pio run` here, `pytest` in `arkan-monitoring` |
 | P2 | Firmware MVP (parallel with P3) | Sensors, RTC, SD, Modbus, HTTPS uplink, backlog | 48 h bench soak; 0 records lost after WiFi is pulled for 1 h |
-| P3 | Platform MVP (parallel with P2) | Ingest, per-site data folders, pages, deploy files, tools | Simulated logger shows live on a local run, tests pass |
+| P3 | Platform MVP (parallel with P2) | Ingest, per-site data folders, push to OED, status page, alerts, deploy files, tools | Simulated logger's data shows in a local OED, tests pass |
 | P4 | VPS + bench | Platform live on `arkan-monitoring.duckdns.org`; real board on the bench feeding it | Bench logger visible with the Arkan login |
 | P5 | Remote ops | OTA, remote config, alerts | OTA update without touching the board; offline alert received |
 | P6 | Site install | Mounted, wired, commissioned | Meter values match the meter display within 1 %; data live for 24 h |
-| P7 | Validation + CMMS link | 1-week data review; CMMS Monitoring reads the real feed | 7 days, more than 99 % of minutes present |
+| P7 | Validation | 1-week data review in OED | 7 days, more than 99 % of minutes present |
 | P8 | Platform phase 2 | More meters and sites, reports, KPIs | A second site added by configuration only |
 
 ## 7. Work split: sessions and agents
@@ -248,20 +264,22 @@ Rule: **one session = one deliverable that ends in a PR.** Agents run in paralle
 | **S0** Plan review (this one) | cloud, `esp32-datalogging` | | | This plan v1.0 |
 | **S1** Foundations | cloud, **both repositories** | S0; you create the empty private repository `arkan-monitoring` (or approve that Claude creates it) | A1 `esp32-datalogging`: firmware skeleton (PlatformIO, ESP32-S3) + CI · A2 `arkan-monitoring`: platform skeleton, deploy set copied from `arkan-cmms`, vendored UI kit, data folder layout (§5.3), `CLAUDE.md`/`AGENTS.md` · A3 `arkan-monitoring`: data contract (JSON Schema, CSV columns, example payloads), then copied to `esp32-datalogging/contract/`; the FCN300-3E4Y register table seeded from the guide | Both skeletons, contract frozen at v1 |
 | **S2** Firmware MVP | cloud, `esp32-datalogging` | S1 | A1 drivers: RTC, T/RH, SD, ADS1115 · A2 Modbus master + FCN300-3E4Y table + a simulated meter for tests + `tools/modbus_dump.py` (laptop register dump) + an ESPHome YAML for a first meter test · A3 WiFi setup page, HTTPS uplink, store-and-forward queue | Firmware builds, unit tests pass |
-| **S3** Platform MVP | cloud, `arkan-monitoring` | S1 | A1 ingest + read API + per-site day files + daily/monthly files + tools (add site, tokens, CSV export, SD backfill) + tests · A2 pages: all sites, and the site page ported from the CMMS Monitoring views (EN + ID) · A3 deploy: Dockerfile, compose, `monitoring.caddy` (shared login, open ingest path), update and backup scripts, smoke tests | The platform runs locally against a simulated logger, writing to a scratch data folder |
-| **S4** Bench bring-up | **laptop, board on USB**, `esp32-datalogging` | S2 | A1 pin check (I2C scan, SD, RS485 loopback) · A2 **meter register check** (`docs/meter/README.md`): dump with the laptop, compare with the LCD, write `fcn300-3e4y-verified.md`. On a spare FCN300-3E4Y if bought, otherwise at the hotel | Pin map confirmed, registers verified, 48 h soak started |
+| **S3** Platform MVP | cloud, `arkan-monitoring` | S1 | A1 ingest + per-site day files + daily/monthly files + tools (add site, tokens, CSV export, SD backfill) + tests · A2 OED: pinned release, compose with our settings, units (% RH, A, V, PF), meters and groups created by a tool through OED's API, the push service, tested against a local OED · A3 status page, alerts (Hermes webhook client, off by default), deploy files (`monitoring.caddy` with the shared login and the open ingest path), backup, smoke tests | Simulated logger's data shows in a local OED and on the status page |
+| **S4** Bench bring-up | **laptop, board on USB**, `esp32-datalogging` | S2 | A1 pin check (I2C scan, SD, RS485 loopback) · A2 **meter register check** (`docs/meter/README.md`): dump with the laptop, compare with the LCD, write the verified map. **No spare meter yet**, so this is done at the hotel during a first short visit (laptop + USB-RS485 adapter, no install), unless one is bought before | Pin map confirmed, registers verified, 48 h soak started |
 | **S5** VPS deploy | **laptop, `ssh hermes-vps`**, `arkan-monitoring` | S3 | One operator, in sequence. The owner does the `sudo` steps (data folder `/srv/arkan-monitoring/data/`, Caddy site file) and approves the Caddy reload | Platform live, bench logger visible with the Arkan login |
 | **S6** Remote ops | cloud, both repositories | S4, S5 | A1 OTA + remote config (firmware here, server side in `arkan-monitoring`) · A2 alerts through the Hermes webhook (the owner adds the route) + install checklist (`docs/install-checklist.md`) | OTA and alerts proven on the bench unit |
 | **S7** Site install | on site, **you + Claude on the phone** | S6 | | Installed and commissioned |
-| **S8** Validation + CMMS link | cloud, then laptop | S7 + 7 days | A1 data quality report · A2 in **`arkan-cmms`**: Monitoring reads the platform's feed (server side, like `api/weather`), simulated data kept as the fallback | Hand-over, CMMS on real data |
-| **S9+** Platform phase 2 | | S8 | Planned separately | |
+| **S8** Validation | cloud, then laptop | S7 + 7 days | A1 data quality report (gaps, logger vs meter display, OED vs files) · A2 as-built record and operating guide | Hand-over |
+| **S9** Arkan integration (later) | | S8 | Arkan design for the platform; `arkan-cmms` Monitoring on real data | Planned separately |
+| **S10+** Platform phase 2 | | S8 | Planned separately | |
 
 **Critical path:** S0, S1, then S2 and S3 in parallel, then S4 and S5 in parallel, then S6, S7, S8.
 The **meter register check** is the one uncertain step on that path: on a spare meter it is done in S4; without one it moves to the hotel and the install day gets longer.
 
 **Who does what**
 - **You (Arkan):**
-  - get the staff WiFi credentials; photograph the meter's back (RS485 terminals) and label; decide on a spare FCN300-3E4Y for the bench;
+  - get the staff WiFi credentials; photograph the meter's label (3E4Y or 3EH4Y) and its back (RS485 terminals); buy a spare meter for the bench if wanted;
+  - give the WhatsApp group that receives the alerts (its chat id for the Hermes route);
   - add the Hermes webhook route for WhatsApp alerts (S6);
   - create the DuckDNS name;
   - approve PRs and the Caddy reload;
@@ -277,7 +295,9 @@ The **meter register check** is the one uncertain step on that path: on a spare 
 | P2 | The new platform repository | **Settled**: `arkan-monitoring`, private, created by Claude in S1 |
 | P3 | Alert channel | **Settled**: WhatsApp through Hermes. Open: which WhatsApp group or number receives them, and whether Hermes's webhook platform is on |
 | P4 | FCN300-3E4Y register map | Guide received, **not verified** (`docs/meter/README.md`). Confirm the RS485 terminals on the meter, and decide on a spare meter for the bench |
-| P5 | Platform or off-the-shelf | Recommended: the Arkan platform reusing `arkan-cmms` and `arkan-hub`. Alternative for speed: Emoncms (`docs/REUSE.md` §6) |
+| P5 | Platform | **Settled**: Open Energy Dashboard + our ingest service. Arkan design integration later |
+| P6 | Meter variant | Read the label: FCN300-**3E4Y** (guide received) or **3EH4Y** (link sent). If 3EH4Y, ask the seller for its register map |
+| P7 | RAM on hermes-vps | OED adds PostgreSQL and Node.js (about 1 to 2 GB). Check free memory before S5 (`free -h`) |
 
 ## 9. Bill of materials (trial)
 - 5 V / 2 A USB-C adapter
