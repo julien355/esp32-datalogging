@@ -1,6 +1,7 @@
 # Adab Hotel Energy Logger: Installation Plan
 
-Status: **DRAFT v0.2, 30 October 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4.
+Status: **DRAFT v0.3, 30 October 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4.
+v0.3: the platform gets **its own repository** (§4.2), and the recorded data lives in **one dedicated folder with a subfolder per site** (§5.3).
 Sources: `docs/img/sketch-adab-logger.jpg` (hand sketch), `docs/img/board-top.jpg`, `docs/img/board-bottom.jpg`,
 and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skills-V1` (read on 30 October 2026).
 
@@ -20,13 +21,14 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 
 **What it leads to**
 1. The Monitoring page in `arkan-cmms` for this hotel. That page already exists, with simulated data.
-2. The **full monitoring platform** for many sites and devices. Adab is its pilot. This is what this repository builds.
+2. The **full monitoring platform** for many sites and devices. Adab is its pilot. It is built in its own repository (`arkan-monitoring`, §4.2); this repository holds the logger.
 
 ```
  [Fort FC300] --RS485/Modbus--> [ESP32-S3 logger] --staff WiFi--> internet
                                   | T/RH (room air), RTC, SD                 |
  panel socket -> 5V adapter ------+                                          v  HTTPS POST, device token
-                                     hermes-vps: native Caddy -> monitoring container (Python + SQLite)
+                                     hermes-vps: native Caddy -> monitoring container (Python)
+                                       |  data: /srv/arkan-monitoring/data/sites/<site>/   one folder per site
                                        |  https://arkan-monitoring.duckdns.org/          all sites (Arkan login)
                                        |  https://arkan-monitoring.duckdns.org/<site>/   one site
                                        +--> arkan-cmms Monitoring page reads the real feed (later)
@@ -72,7 +74,7 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 | 11 | VPS | **Hostinger, Ubuntu, the same `hermes-vps`** | Same layout as the Hub and the CMMS: native Caddy 2.6, `/opt/edge/sites/*.caddy`, Docker on loopback, user `ai` |
 | 12 | Dashboard style | **Use the existing repositories** | No Grafana. Arkan UI kit, plus the CMMS Monitoring views ported (§4) |
 | 13 | Timing | **OK**: meter every 15 s then 1-minute averages, T/RH every 60 s, upload every minute | |
-| 14 | Access | **Same as the other dashboards** | Caddy `basicauth` with the shared login file `/opt/edge/secrets/hub-users.caddy`; the signed-in name reaches the app in `X-Auth-User` |
+| 14 | Access | **Same as the other dashboards** (shared login file confirmed, 30 October) | Caddy `basicauth` with the shared login file `/opt/edge/secrets/hub-users.caddy`; the signed-in name reaches the app in `X-Auth-User` |
 
 ## 4. Which existing repository to build on
 
@@ -89,15 +91,23 @@ No repository has an ingest endpoint, a time-series store or device code. That p
 
 ### 4.2 Recommendation
 
-**Build the platform in this repository** (`esp32-datalogging`, renamed `arkan-monitoring` if you agree) as one repository with `firmware/` and `platform/`:
+**Two repositories** (owner's decision, 30 October 2026):
+
+| Repository | Holds |
+|---|---|
+| **`esp32-datalogging`** (this one) | The logger: firmware, hardware notes, pin map, bench and install docs. A vendored copy of the data contract (`contract/`, with `VENDORED.md`) |
+| **`arkan-monitoring`** (new, private) | The platform: ingest, API, pages, tools, deploy files, the tests. **Owns the data contract** (`contract/`: JSON Schema, CSV columns, example payloads) |
+
+The contract lives in `arkan-monitoring`. The firmware repository keeps a copy, as `arkan-cmms` does with the UI kit, and its CI checks the firmware's example payloads against that copy. A contract change is made in `arkan-monitoring` first, then copied here, and both carry the contract version.
+
+**Build the platform in `arkan-monitoring`:**
 - **Copy the patterns, do not depend on the other repos at runtime:**
   - the Python standard-library server pattern (Hub/CMMS);
   - the **Arkan UI kit, vendored** as `arkan-cmms/arkan-ui/` does (`VENDORED.md`);
   - the **deploy set from `arkan-cmms/cmms-app/deploy/`** (Dockerfile, `docker-compose.vps.yml`, `sites/*.caddy` with the shared login, `update-vps.sh`);
   - `/health`, backup and smoke tests from `arkan-hub`.
 - **Port the CMMS Monitoring views** (meter card, phases, demand day chart, peak, energy, temp/RH with dew point, glossary terms) into the platform's site page, fed by the real API instead of the simulator.
-- **Storage: SQLite** (Python standard library), one file on the VPS, WAL mode. Raw 1-minute rows plus 15-minute and daily rollups. One logger with one meter is about 0.5 M rows a year, around 100 MB, which SQLite handles easily for dozens of devices. No new database server on a VPS that already runs other services.
-- **One repository for firmware and platform** because they share the data contract: a change to the payload changes both sides in one PR, with one version number.
+- **Storage: plain files in one dedicated data folder, one subfolder per site** (§5.3). The CMMS keeps its data the same way, as plain JSON files you can read without the app. No database server on a VPS that already runs other services.
 - **Afterwards, `arkan-cmms` reads the real feed** from the platform, server to server, the way it already reads the weather (`api/weather`). That is a small change in `arkan-cmms`, in its own session (S8). The CMMS page stays the hotel's view; the platform is Arkan's multi-site view.
 
 **Why not the alternatives**
@@ -144,8 +154,35 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 - `e` is the meter's **cumulative kWh counter**, stored as it is. Consumption is computed on the server, so gaps never corrupt totals.
 - `seq` drops duplicates when the backlog is resent.
 
-### 5.3 Platform (`platform/`, Python 3.11 standard library + SQLite)
-- **Ingest:** `/api/v1/ingest` checks the token and the schema, writes the rows, and answers with the last `seq` stored.
+### 5.3 Platform (`arkan-monitoring`, Python 3.11 standard library)
+
+**The data folder.** All recorded data lives in one dedicated folder, `/srv/arkan-monitoring/data/`, outside the code and outside the container image, with **one subfolder per site**:
+
+```
+/srv/arkan-monitoring/data/
+  sites/
+    <site>/                         one folder per site (the site code, for example s01)
+      site.json                     the site profile: name, timezone (Asia/Makassar), coordinates, devices, meters, alert thresholds
+      <device>/                     one folder per logger (LOG-0001)
+        raw/2026/11/2026-11-05.csv  1-minute records of that day (UTC), the same columns as the logger's SD card file
+        events.jsonl                boots, gaps, config changes, OTA updates, alerts
+      daily.csv                     one row per day: kWh, peak kW and its time, min/max room temperature, minutes received
+      monthly.csv                   one row per month
+    <next site>/
+  devices.json                      device code -> site, token hash, firmware version, last seen (no token in clear)
+  logs/                             the app's own log, one file per day
+```
+
+- **Plain CSV and JSON**: the files can be opened in Excel or read by Claude, Codex or PowerShell over SSH without the app, and copied site by site.
+- **Same CSV columns on the SD card and on the server.** Backfilling a gap is a copy of the SD card's day files into the site folder; the tool merges them by `seq` and drops duplicates.
+- **Append-only day files.** A new day starts a new file. The daily and monthly files are rewritten through a temporary file that is then swapped in, so a reader never sees half a file (the CMMS rule).
+- **Size:** about 1,440 rows a day per logger, around 100 MB a year. A day chart reads one file; a month view reads `daily.csv`.
+- **Adding a site** = a new subfolder with its `site.json`, made by `tools/add_site.py`. **Removing or archiving a site** = moving its folder.
+- **Backup:** the whole folder, nightly, as in `arkan-hub/deploy/backup.sh`. It can later be synced to Google Drive the same way, site by site.
+- If reading many files ever becomes slow, a cache can be added per site. It would be rebuilt from the CSV files, which stay the record.
+
+**The app:**
+- **Ingest:** `/api/v1/ingest` checks the token and the schema, appends the rows to the site's day file, and answers with the last `seq` stored.
 - **Read API** for the pages and for `arkan-cmms`: live values, day series, rollups, CSV export.
 - **Device API:** config and OTA.
 - **Pages** on the Arkan UI kit:
@@ -158,18 +195,18 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
   - add a site or a device and issue its token;
   - export CSV;
   - **backfill from an SD card's CSV files**;
-  - SQLite backup.
+  - rebuild a site's daily and monthly files from its day files.
 
 ### 5.4 Deploy on hermes-vps (copied from `arkan-cmms/cmms-app/deploy/`)
 - Container `arkan-monitoring` on `127.0.0.1:<port>`. Proposed port 8800; check it is free (the Hub uses 8780, the CMMS 8790).
-- Data in `/srv/arkan-monitoring/data/` (the SQLite file, the site profiles).
+- Data in `/srv/arkan-monitoring/data/` (§5.3), mounted into the container at `/data`, owned by uid 1000 as in the CMMS.
 - The code is cloned to `/opt/arkan-monitoring`, checked out at a tag.
 - `/opt/edge/sites/monitoring.caddy` gets its own host block for `arkan-monitoring.duckdns.org`:
   - `basicauth` with `import /opt/edge/secrets/hub-users.caddy` (**the same logins**) on every path **except** `/api/v1/ingest` and the device endpoints. Those are open to the internet and protected by the device token in the app, because the logger cannot sign in through basicauth.
   - `request_header -X-Auth-User`, then `X-Auth-User` set from the sign-in.
   - The log filtered as in `cmms.caddy`, HSTS, `noindex`.
 - DuckDNS: create the `arkan-monitoring` name, point it to the VPS IP, and keep it updated the way the other duckdns names are.
-- Nightly backup with `sqlite3 .backup`, kept as in `arkan-hub/deploy/backup.sh`.
+- Nightly backup of the data folder, kept as in `arkan-hub/deploy/backup.sh`.
 
 ### 5.5 Physical install (MDP, back of house)
 - The logger in a small IP54 plastic box **beside** the steel panel. Check WiFi RSSI on site first: better than -70 dBm.
@@ -183,9 +220,9 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 | # | Phase | Output | Exit criterion |
 |---|---|---|---|
 | P0 | Review | This plan v1.0, FC300 register map, WiFi credentials | Plan approved; register map in hand (or S2 starts with a configurable table) |
-| P1 | Foundations | Repository layout, data contract, CI, vendored UI kit, `CLAUDE.md` + `AGENTS.md` | CI green: `pio run` and `pytest` |
+| P1 | Foundations | New `arkan-monitoring` repository; layout of both repositories, data contract, CI, vendored UI kit, `CLAUDE.md` + `AGENTS.md` in each | CI green in both: `pio run` here, `pytest` in `arkan-monitoring` |
 | P2 | Firmware MVP (parallel with P3) | Sensors, RTC, SD, Modbus, HTTPS uplink, backlog | 48 h bench soak; 0 records lost after WiFi is pulled for 1 h |
-| P3 | Platform MVP (parallel with P2) | Ingest, SQLite, pages, deploy files, tools | Simulated logger shows live on a local run, tests pass |
+| P3 | Platform MVP (parallel with P2) | Ingest, per-site data folders, pages, deploy files, tools | Simulated logger shows live on a local run, tests pass |
 | P4 | VPS + bench | Platform live on `arkan-monitoring.duckdns.org`; real board on the bench feeding it | Bench logger visible with the Arkan login |
 | P5 | Remote ops | OTA, remote config, alerts | OTA update without touching the board; offline alert received |
 | P6 | Site install | Mounted, wired, commissioned | Meter values match the meter display within 1 %; data live for 24 h |
@@ -198,13 +235,13 @@ Rule: **one session = one deliverable that ends in a PR.** Agents run in paralle
 
 | Session | Where | Needs | Agents inside the session (parallel) | Deliverable |
 |---|---|---|---|---|
-| **S0** Plan review (this one) | cloud | | | This plan v1.0 |
-| **S1** Foundations | cloud | S0 | A1 firmware skeleton (PlatformIO, ESP32-S3) + CI · A2 platform skeleton: deploy set copied from `arkan-cmms`, vendored UI kit, `CLAUDE.md`/`AGENTS.md` · A3 data contract: JSON Schema, example payloads, the FC300 register table (template until the map arrives) | Repository skeleton, contract frozen |
-| **S2** Firmware MVP | cloud | S1 | A1 drivers: RTC, T/RH, SD, ADS1115 · A2 Modbus master + FC300 table + a simulated meter for tests · A3 WiFi setup page, HTTPS uplink, store-and-forward queue | Firmware builds, unit tests pass |
-| **S3** Platform MVP | cloud | S1 | A1 ingest + read API + SQLite + rollups + tools (tokens, CSV, SD backfill) + tests · A2 pages: all sites, and the site page ported from the CMMS Monitoring views (EN + ID) · A3 deploy: Dockerfile, compose, `monitoring.caddy` (shared login, open ingest path), update and backup scripts, smoke tests | `platform/` runs locally against a simulated logger |
-| **S4** Bench bring-up | **laptop, board on USB** | S2 | A1 pin check (I2C scan, SD, RS485 loopback) · A2 simulated FC300 through a USB-RS485 adapter, or the real meter if one is free | Pin map confirmed, 48 h soak started |
-| **S5** VPS deploy | **laptop, `ssh hermes-vps`** | S3 | One operator, in sequence. The owner does the `sudo` steps and approves the Caddy reload | Platform live, bench logger visible with the Arkan login |
-| **S6** Remote ops | cloud | S4, S5 | A1 OTA + remote config (firmware + platform) · A2 alerts + install checklist (`docs/install-checklist.md`) | OTA and alerts proven on the bench unit |
+| **S0** Plan review (this one) | cloud, `esp32-datalogging` | | | This plan v1.0 |
+| **S1** Foundations | cloud, **both repositories** | S0; you create the empty private repository `arkan-monitoring` (or approve that Claude creates it) | A1 `esp32-datalogging`: firmware skeleton (PlatformIO, ESP32-S3) + CI · A2 `arkan-monitoring`: platform skeleton, deploy set copied from `arkan-cmms`, vendored UI kit, data folder layout (§5.3), `CLAUDE.md`/`AGENTS.md` · A3 `arkan-monitoring`: data contract (JSON Schema, CSV columns, example payloads), then copied to `esp32-datalogging/contract/`; the FC300 register table (template until the map arrives) | Both skeletons, contract frozen at v1 |
+| **S2** Firmware MVP | cloud, `esp32-datalogging` | S1 | A1 drivers: RTC, T/RH, SD, ADS1115 · A2 Modbus master + FC300 table + a simulated meter for tests · A3 WiFi setup page, HTTPS uplink, store-and-forward queue | Firmware builds, unit tests pass |
+| **S3** Platform MVP | cloud, `arkan-monitoring` | S1 | A1 ingest + read API + per-site day files + daily/monthly files + tools (add site, tokens, CSV export, SD backfill) + tests · A2 pages: all sites, and the site page ported from the CMMS Monitoring views (EN + ID) · A3 deploy: Dockerfile, compose, `monitoring.caddy` (shared login, open ingest path), update and backup scripts, smoke tests | The platform runs locally against a simulated logger, writing to a scratch data folder |
+| **S4** Bench bring-up | **laptop, board on USB**, `esp32-datalogging` | S2 | A1 pin check (I2C scan, SD, RS485 loopback) · A2 simulated FC300 through a USB-RS485 adapter, or the real meter if one is free | Pin map confirmed, 48 h soak started |
+| **S5** VPS deploy | **laptop, `ssh hermes-vps`**, `arkan-monitoring` | S3 | One operator, in sequence. The owner does the `sudo` steps (data folder `/srv/arkan-monitoring/data/`, Caddy site file) and approves the Caddy reload | Platform live, bench logger visible with the Arkan login |
+| **S6** Remote ops | cloud, both repositories | S4, S5 | A1 OTA + remote config (firmware here, server side in `arkan-monitoring`) · A2 alerts + install checklist (`docs/install-checklist.md`) | OTA and alerts proven on the bench unit |
 | **S7** Site install | on site, **you + Claude on the phone** | S6 | | Installed and commissioned |
 | **S8** Validation + CMMS link | cloud, then laptop | S7 + 7 days | A1 data quality report · A2 in **`arkan-cmms`**: Monitoring reads the platform's feed (server side, like `api/weather`), simulated data kept as the fallback | Hand-over, CMMS on real data |
 | **S9+** Platform phase 2 | | S8 | Planned separately | |
@@ -225,8 +262,8 @@ The **FC300 register map** is the one outside input on that path: it is needed b
 
 | # | Point | Proposal |
 |---|---|---|
-| P1 | Client name in the repository. `arkan-cmms` and `arkan-hub` keep every client and place name out of the repository; this repo has "Adab" in this plan and in the sketch photo | Name the site by a code here (for example `S01`), keep the real name, the place and the path in a site profile on the VPS, and remove the sketch photo from the repository. Your call |
-| P2 | Rename this repository `arkan-monitoring` | Yes, so it matches the domain. GitHub redirects the old address |
+| P1 | Client name in the repository. `arkan-cmms` and `arkan-hub` keep every client and place name out of the repository; this repo has "Adab" in this plan and in the sketch photo | Name the site by a code in both repositories (for example `s01`, also the name of its data subfolder), keep the real name, the place and the path in the site's `site.json` on the VPS, and remove the sketch photo from the repository. Your call |
+| P2 | The new platform repository | Name it `arkan-monitoring` (matches the domain), private. Created in S1 |
 | P3 | Alert channel | Email first; WhatsApp or Telegram later if wanted |
 | P4 | FC300 register map | You get it from the supplier or the manual. Until then: a configurable table, tested on a simulated meter |
 

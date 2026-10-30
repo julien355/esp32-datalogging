@@ -3,5 +3,5 @@
 Energy and environment datalogger built on a Bluino ESP32-S3 (T/RH, RS485, RTC, analog inputs) board,
 with a VPS backend and web dashboard. Pilot site: **Adab hotel**.
 
-- Plan and work split: [`docs/PLAN.md`](docs/PLAN.md)
+- Plan and work split: [`docs/PLAN.md`](docs/PLAN.md). The monitoring platform (ingest, dashboards, per-site data folders) lives in its own repository, `arkan-monitoring`.
 - Hardware photos and original sketch: [`docs/img/`](docs/img/)
