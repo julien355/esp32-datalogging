@@ -1,6 +1,7 @@
 # Adab Hotel Energy Logger: Installation Plan
 
-Status: **DRAFT v0.3, 30 October 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4.
+Status: **DRAFT v0.4, 30 October 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+v0.4: site code `adab`; meter FCN300-3E4Y with its register guide (`docs/meter/`, not yet verified); WhatsApp alerts through Hermes; search of reusable repositories and dashboards (`docs/REUSE.md`).
 v0.3: the platform gets **its own repository** (§4.2), and the recorded data lives in **one dedicated folder with a subfolder per site** (§5.3).
 Sources: `docs/img/sketch-adab-logger.jpg` (hand sketch), `docs/img/board-top.jpg`, `docs/img/board-bottom.jpg`,
 and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skills-V1` (read on 30 October 2026).
@@ -11,7 +12,7 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 
 **On site (Adab hotel, main distribution panel in the back-of-house area)**
 - The **Bluino ESP32-S3 TMP/RH RS485 RTC AI** board, with its built-in temperature and humidity sensor (it reads the **electrical room's air**), an SD card, a real-time clock and WiFi.
-- It reads **one Fort FC300 power meter** over RS485 (Modbus RTU). More meters may be added later.
+- It reads **one Fort FCN300-3E4Y power meter** over RS485 (Modbus RTU). More meters may be added later.
 - **5 V** from an adapter plugged into a socket in the panel. **No UPS for the trial.**
 - It goes online through the hotel's **staff WiFi network** (WPA2 password, no login page).
 
@@ -24,7 +25,7 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 2. The **full monitoring platform** for many sites and devices. Adab is its pilot. It is built in its own repository (`arkan-monitoring`, §4.2); this repository holds the logger.
 
 ```
- [Fort FC300] --RS485/Modbus--> [ESP32-S3 logger] --staff WiFi--> internet
+ [FCN300-3E4Y] --RS485/Modbus--> [ESP32-S3 logger] --staff WiFi--> internet
                                   | T/RH (room air), RTC, SD                 |
  panel socket -> 5V adapter ------+                                          v  HTTPS POST, device token
                                      hermes-vps: native Caddy -> monitoring container (Python)
@@ -61,9 +62,12 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 
 | # | Question | Answer | Effect on the plan |
 |---|---|---|---|
-| 1 | Meter model and register map | **To be confirmed.** `arkan-cmms` calls it the **Fort FC300** (not FCN300) and notes that no datasheet was found online | Get the register map from the supplier or read it off the meter's manual. **Blocks S2 (meter driver) and S4 (bench test).** Until then the driver is written against a configurable register table |
+| 1 | Meter model and register map | **FORT FCN300-3E4Y**, register guide received (`docs/meter/fcn300-3e4y-modbus-guide.md`). `arkan-cmms` says "FC300" | The guide is not a manufacturer document and has gaps (data types, scales, CT ratio): **verify it on the meter** (`docs/meter/README.md`). The firmware reads a configurable register table seeded from the guide |
 | 2 | How many meters | **1 for now**, more later | Firmware and database take N meters per logger from the start |
 | 3 | Codex | **Not crossed out**: Claude, Codex and PowerShell | Repository rules go in `AGENTS.md` too (as in `arkan-skills-V1`) |
+| 15 | Client and site name | **`adab`** | Site code `adab` in both repositories: data folder `sites/adab/`, page `/adab/` |
+| 16 | New repository | **OK**: Claude creates `arkan-monitoring` (private) at the start of S1 | |
+| 17 | Alerts | **WhatsApp through Hermes** on hermes-vps | Hermes webhook route in direct delivery mode (§5.3) |
 | 4 | Domain | **`arkan-monitoring.duckdns.org`** | New DuckDNS name pointing to hermes-vps; native Caddy gets the certificate |
 | 5 | Temp/RH | **Electrical room's air** | Alert on high room temperature (threshold to set) |
 | 6 | WiFi | **Staff network, password, no login page** | WPA2 credentials set through the logger's setup page, kept in NVS |
@@ -79,6 +83,8 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 ## 4. Which existing repository to build on
 
 ### 4.1 What exists
+
+The full search (Arkan repositories, open-source platforms and dashboards, firmware, Hermes) with a screenshot of the existing CMMS Monitoring page is in **`docs/REUSE.md`**. Summary of the Arkan repositories:
 
 | Repository | What is useful for monitoring | What does not fit |
 |---|---|---|
@@ -126,7 +132,7 @@ The contract lives in `arkan-monitoring`. The firmware repository keeps a copy, 
 ## 5. Architecture
 
 ### 5.1 Logger firmware (ESP32-S3, PlatformIO + Arduino framework)
-- **Read:** Modbus RTU master (FC300, register table in config), I2C temp/RH, DS3231 RTC, ADS1115 (later).
+- **Read:** Modbus RTU master (FCN300-3E4Y, register table in config: address, function code, type, word order, scale), I2C temp/RH, DS3231 RTC, ADS1115 (later).
 - **Timestamp:** RTC, set by NTP when online. Everything is in UTC.
 - **Store-and-forward:** every record is written to the **SD card first** (daily CSV + a send queue), then uploaded. The backlog is sent when the link comes back, so nothing is lost.
 - **Uplink:** **HTTPS POST of JSON batches to `/api/v1/ingest`** with a per-device token.
@@ -161,7 +167,7 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 ```
 /srv/arkan-monitoring/data/
   sites/
-    <site>/                         one folder per site (the site code, for example s01)
+    adab/                           one folder per site, named by the site code
       site.json                     the site profile: name, timezone (Asia/Makassar), coordinates, devices, meters, alert thresholds
       <device>/                     one folder per logger (LOG-0001)
         raw/2026/11/2026-11-05.csv  1-minute records of that day (UTC), the same columns as the logger's SD card file
@@ -190,7 +196,11 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
   - **Site page:** the ported CMMS Monitoring views.
   - **Device health.**
   - **Settings:** sites, devices, tokens.
-- **Alerts:** logger offline over 15 min, backlog growing, room temperature too high, meter not answering. The channel is still to choose (P3).
+- **Alerts:** logger offline over 15 min, backlog growing, room temperature too high, meter not answering.
+  - **Sent by WhatsApp through Hermes.** The platform POSTs the alert to a Hermes webhook route (`http://<docker gateway>:8644/webhooks/arkan-monitoring`), signed with HMAC-SHA256 (`X-Webhook-Signature-V2`). The route uses `deliver: whatsapp` and **`deliver_only: true`**, so Hermes sends the text as it is, without running the agent (no LLM cost). Hermes answers 200 when delivered and 502 when refused; the platform retries.
+  - The route is added to Hermes's config by the owner (sessions do not touch Hermes). Port 8644 must stay closed to the internet.
+  - As in `arkan-solar-desk`: sending is **off by default** (`alerts.send` in the settings). Every alert is written to the site's `events.jsonl` and shown on the platform page, whether it was sent or not.
+  - Repeats are throttled: one message when an alert starts, one when it clears, a reminder every 6 hours at most.
 - **`tools/`** (run from the laptop or the VPS):
   - add a site or a device and issue its token;
   - export CSV;
@@ -219,7 +229,7 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 
 | # | Phase | Output | Exit criterion |
 |---|---|---|---|
-| P0 | Review | This plan v1.0, FC300 register map, WiFi credentials | Plan approved; register map in hand (or S2 starts with a configurable table) |
+| P0 | Review | This plan v1.0, meter register guide (received), WiFi credentials | Plan approved |
 | P1 | Foundations | New `arkan-monitoring` repository; layout of both repositories, data contract, CI, vendored UI kit, `CLAUDE.md` + `AGENTS.md` in each | CI green in both: `pio run` here, `pytest` in `arkan-monitoring` |
 | P2 | Firmware MVP (parallel with P3) | Sensors, RTC, SD, Modbus, HTTPS uplink, backlog | 48 h bench soak; 0 records lost after WiFi is pulled for 1 h |
 | P3 | Platform MVP (parallel with P2) | Ingest, per-site data folders, pages, deploy files, tools | Simulated logger shows live on a local run, tests pass |
@@ -236,22 +246,23 @@ Rule: **one session = one deliverable that ends in a PR.** Agents run in paralle
 | Session | Where | Needs | Agents inside the session (parallel) | Deliverable |
 |---|---|---|---|---|
 | **S0** Plan review (this one) | cloud, `esp32-datalogging` | | | This plan v1.0 |
-| **S1** Foundations | cloud, **both repositories** | S0; you create the empty private repository `arkan-monitoring` (or approve that Claude creates it) | A1 `esp32-datalogging`: firmware skeleton (PlatformIO, ESP32-S3) + CI · A2 `arkan-monitoring`: platform skeleton, deploy set copied from `arkan-cmms`, vendored UI kit, data folder layout (§5.3), `CLAUDE.md`/`AGENTS.md` · A3 `arkan-monitoring`: data contract (JSON Schema, CSV columns, example payloads), then copied to `esp32-datalogging/contract/`; the FC300 register table (template until the map arrives) | Both skeletons, contract frozen at v1 |
-| **S2** Firmware MVP | cloud, `esp32-datalogging` | S1 | A1 drivers: RTC, T/RH, SD, ADS1115 · A2 Modbus master + FC300 table + a simulated meter for tests · A3 WiFi setup page, HTTPS uplink, store-and-forward queue | Firmware builds, unit tests pass |
+| **S1** Foundations | cloud, **both repositories** | S0; you create the empty private repository `arkan-monitoring` (or approve that Claude creates it) | A1 `esp32-datalogging`: firmware skeleton (PlatformIO, ESP32-S3) + CI · A2 `arkan-monitoring`: platform skeleton, deploy set copied from `arkan-cmms`, vendored UI kit, data folder layout (§5.3), `CLAUDE.md`/`AGENTS.md` · A3 `arkan-monitoring`: data contract (JSON Schema, CSV columns, example payloads), then copied to `esp32-datalogging/contract/`; the FCN300-3E4Y register table seeded from the guide | Both skeletons, contract frozen at v1 |
+| **S2** Firmware MVP | cloud, `esp32-datalogging` | S1 | A1 drivers: RTC, T/RH, SD, ADS1115 · A2 Modbus master + FCN300-3E4Y table + a simulated meter for tests + `tools/modbus_dump.py` (laptop register dump) + an ESPHome YAML for a first meter test · A3 WiFi setup page, HTTPS uplink, store-and-forward queue | Firmware builds, unit tests pass |
 | **S3** Platform MVP | cloud, `arkan-monitoring` | S1 | A1 ingest + read API + per-site day files + daily/monthly files + tools (add site, tokens, CSV export, SD backfill) + tests · A2 pages: all sites, and the site page ported from the CMMS Monitoring views (EN + ID) · A3 deploy: Dockerfile, compose, `monitoring.caddy` (shared login, open ingest path), update and backup scripts, smoke tests | The platform runs locally against a simulated logger, writing to a scratch data folder |
-| **S4** Bench bring-up | **laptop, board on USB**, `esp32-datalogging` | S2 | A1 pin check (I2C scan, SD, RS485 loopback) · A2 simulated FC300 through a USB-RS485 adapter, or the real meter if one is free | Pin map confirmed, 48 h soak started |
+| **S4** Bench bring-up | **laptop, board on USB**, `esp32-datalogging` | S2 | A1 pin check (I2C scan, SD, RS485 loopback) · A2 **meter register check** (`docs/meter/README.md`): dump with the laptop, compare with the LCD, write `fcn300-3e4y-verified.md`. On a spare FCN300-3E4Y if bought, otherwise at the hotel | Pin map confirmed, registers verified, 48 h soak started |
 | **S5** VPS deploy | **laptop, `ssh hermes-vps`**, `arkan-monitoring` | S3 | One operator, in sequence. The owner does the `sudo` steps (data folder `/srv/arkan-monitoring/data/`, Caddy site file) and approves the Caddy reload | Platform live, bench logger visible with the Arkan login |
-| **S6** Remote ops | cloud, both repositories | S4, S5 | A1 OTA + remote config (firmware here, server side in `arkan-monitoring`) · A2 alerts + install checklist (`docs/install-checklist.md`) | OTA and alerts proven on the bench unit |
+| **S6** Remote ops | cloud, both repositories | S4, S5 | A1 OTA + remote config (firmware here, server side in `arkan-monitoring`) · A2 alerts through the Hermes webhook (the owner adds the route) + install checklist (`docs/install-checklist.md`) | OTA and alerts proven on the bench unit |
 | **S7** Site install | on site, **you + Claude on the phone** | S6 | | Installed and commissioned |
 | **S8** Validation + CMMS link | cloud, then laptop | S7 + 7 days | A1 data quality report · A2 in **`arkan-cmms`**: Monitoring reads the platform's feed (server side, like `api/weather`), simulated data kept as the fallback | Hand-over, CMMS on real data |
 | **S9+** Platform phase 2 | | S8 | Planned separately | |
 
 **Critical path:** S0, S1, then S2 and S3 in parallel, then S4 and S5 in parallel, then S6, S7, S8.
-The **FC300 register map** is the one outside input on that path: it is needed by S4 at the latest.
+The **meter register check** is the one uncertain step on that path: on a spare meter it is done in S4; without one it moves to the hotel and the install day gets longer.
 
 **Who does what**
 - **You (Arkan):**
-  - get the FC300 register map and the staff WiFi credentials;
+  - get the staff WiFi credentials; photograph the meter's back (RS485 terminals) and label; decide on a spare FCN300-3E4Y for the bench;
+  - add the Hermes webhook route for WhatsApp alerts (S6);
   - create the DuckDNS name;
   - approve PRs and the Caddy reload;
   - run S4 and S5 on the laptop, and the install day.
@@ -262,10 +273,11 @@ The **FC300 register map** is the one outside input on that path: it is needed b
 
 | # | Point | Proposal |
 |---|---|---|
-| P1 | Client name in the repository. `arkan-cmms` and `arkan-hub` keep every client and place name out of the repository; this repo has "Adab" in this plan and in the sketch photo | Name the site by a code in both repositories (for example `s01`, also the name of its data subfolder), keep the real name, the place and the path in the site's `site.json` on the VPS, and remove the sketch photo from the repository. Your call |
-| P2 | The new platform repository | Name it `arkan-monitoring` (matches the domain), private. Created in S1 |
-| P3 | Alert channel | Email first; WhatsApp or Telegram later if wanted |
-| P4 | FC300 register map | You get it from the supplier or the manual. Until then: a configurable table, tested on a simulated meter |
+| P1 | Client name in the repository | **Settled**: `adab` is the site code and name, in both repositories |
+| P2 | The new platform repository | **Settled**: `arkan-monitoring`, private, created by Claude in S1 |
+| P3 | Alert channel | **Settled**: WhatsApp through Hermes. Open: which WhatsApp group or number receives them, and whether Hermes's webhook platform is on |
+| P4 | FCN300-3E4Y register map | Guide received, **not verified** (`docs/meter/README.md`). Confirm the RS485 terminals on the meter, and decide on a spare meter for the bench |
+| P5 | Platform or off-the-shelf | Recommended: the Arkan platform reusing `arkan-cmms` and `arkan-hub`. Alternative for speed: Emoncms (`docs/REUSE.md` §6) |
 
 ## 9. Bill of materials (trial)
 - 5 V / 2 A USB-C adapter
@@ -278,7 +290,8 @@ The **FC300 register map** is the one outside input on that path: it is needed b
 ## 10. Risks
 | Risk | Mitigation |
 |---|---|
-| FC300 register map not found | Ask the supplier now; read registers on the bench with the laptop + USB-RS485 adapter before site day |
+| Register guide wrong or incomplete | Configurable register table; register dump compared with the LCD; a spare meter for the bench |
+| The meter has no RS485 port | Check the back of the meter before buying anything else; if absent, a meter with Modbus is needed |
 | Weak WiFi at the back of house | Box outside the panel; RSSI check before mounting; 4G router as a fallback |
 | Power cuts (no UPS) | RTC keeps time; the SD queue keeps unsent data; the gap is shown as "logger offline" |
 | SD card wear or corruption | Industrial card, append-only files, SD health in the heartbeat |
