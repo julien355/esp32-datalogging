@@ -1,8 +1,8 @@
-# Fort FCN300 (3E4Y or 3EH4Y): what we know and what must be checked
+# Fort FCN300 (3E4Y and 3EH4Y): what we know and what must be checked
 
-Meter at Adab: **FORT FCN300**, 3-phase 4-wire multifunction meter, Modbus RTU over RS485. **Variant to confirm on the label:**
-- **FCN300-3E4Y**: the guide received (`fcn300-3e4y-modbus-guide.md`) is for this one.
-- **FCN300-3EH4Y**: the harmonic variant; the owner sent its product page (https://fortindo.id/product/power-multimeter-fcn300-3eh4y-3-phase-ac-lcd-digital-meter/, not readable from the cloud session). Resellers list Modbus RS485 on it too. Its map may add harmonic registers or differ: ask the seller for it.
+Meter at Adab: **FORT FCN300**, 3-phase 4-wire multifunction meter, Modbus RTU over RS485. The label will say **FCN300-3E4Y** or **FCN300-3EH4Y** (the harmonic variant).
+
+**Decision (owner, 31 October 2026): the same register map is used for both variants.** The firmware reads the registers of the guide (`fcn300-3e4y-modbus-guide.md`) whichever variant is installed. The 3EH4Y's harmonic values, if it has extra registers for them, are not read for now. The register check below still applies to whichever meter is there.
 
 (`arkan-cmms` calls it "Fort FC300".)
 

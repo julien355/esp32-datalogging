@@ -1,6 +1,7 @@
 # Adab Hotel Energy Logger: Installation Plan
 
-Status: **DRAFT v0.5, 30 October 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+Status: **DRAFT v0.6, 31 October 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+v0.6: **live data every 15 s** on a live page beside OED (`docs/LIVE.md`); **alarm register** with a WhatsApp yes/no column (`docs/alarms/`); **RAM plan** for hermes-vps (`docs/VPS-MEMORY.md`); one register map for the 3E4Y and 3EH4Y.
 v0.5: **Open Energy Dashboard (OED) is the platform's dashboard** (§4.2, §5.3); the Arkan design (CMMS, Hub) is left for a later integration. Meter variant to confirm (3E4Y or 3EH4Y). No spare meter yet. Alerts to the owner's WhatsApp group.
 v0.4: site code `adab`; meter FCN300-3E4Y with its register guide (`docs/meter/`, not yet verified); WhatsApp alerts through Hermes; search of reusable repositories and dashboards (`docs/REUSE.md`).
 v0.3: the platform gets **its own repository** (§4.2), and the recorded data lives in **one dedicated folder with a subfolder per site** (§5.3).
@@ -72,6 +73,10 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 | 18 | Meter link | fortindo.id page of the **FCN300-3EH4Y** (the harmonic variant) | The guide received is for the **3E4Y**. Resellers list Modbus RS485 on both. **Read the model on the meter's label**: the 3EH4Y may have extra (harmonic) registers and a different map |
 | 19 | Spare meter for the bench | **None yet** | The register check happens at the hotel (first site visit) unless one is bought (§7, S4) |
 | 20 | Dashboard | **Open Energy Dashboard as the reference.** The design of `arkan-cmms` and `arkan-hub` is not used for now; integration later | OED is deployed as the platform's dashboard (§4.2, §5.3) |
+| 22 | Live data | **15-second refresh for some values** | Live page `/live/<site>/` served by the ingest service, OED unchanged (`docs/LIVE.md`) |
+| 23 | Meter variants | **Same registers for 3E4Y and 3EH4Y** | One register table; harmonics not read for now |
+| 24 | Alarms | **A register saying which alarms go to WhatsApp** | `docs/alarms/alarms.csv`, `whatsapp` column, editable in Excel (`docs/alarms/README.md`) |
+| 25 | RAM on the VPS | **Keep it low** | OED built off the VPS, slim image, tuned PostgreSQL, memory limits per container: about 300 to 450 MB in all (`docs/VPS-MEMORY.md`) |
 | 21 | Temperature and humidity in OED | Asked: can OED show them? | **Yes**, as "raw" units: line, 3D and radar graphs; not bar or compare graphs (§5.3, `docs/REUSE.md` §7) |
 | 4 | Domain | **`arkan-monitoring.duckdns.org`** | New DuckDNS name pointing to hermes-vps; native Caddy gets the certificate |
 | 5 | Temp/RH | **Electrical room's air** | Alert on high room temperature (threshold to set) |
@@ -141,6 +146,7 @@ The contract lives in `arkan-monitoring`. The firmware repository keeps a copy, 
 - **Timestamp:** RTC, set by NTP when online. Everything is in UTC.
 - **Store-and-forward:** every record is written to the **SD card first** (daily CSV + a send queue), then uploaded. The backlog is sent when the link comes back, so nothing is lost.
 - **Uplink:** **HTTPS POST of JSON batches to `/api/v1/ingest`** with a per-device token.
+- **Live:** every 15 s, a small snapshot of the live values to `/api/v1/live` (not buffered, best effort; `docs/LIVE.md`).
 - **Remote management:** OTA firmware updates pulled from the platform; remote config (intervals, Modbus address, register table); heartbeat (RSSI, uptime, free heap, SD state, backlog size, firmware version).
 - **Robustness:** watchdog, WiFi reconnect, keeps running if the SD card fails, logs a boot reason (a power cut shows as a cold boot after a gap).
 - **Setup:** WiFi credentials through a one-time setup page in access-point mode, stored in NVS.
@@ -205,14 +211,14 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 
   - The group **`adab`** holds the site's meters; a group **"All sites"** holds the site groups.
   - **OED stores times without a timezone**: the push sends WITA local time (UTC+8, no daylight saving). Our files stay in UTC.
-  - **OED is not a live view.** Readings appear after each push (5 minutes) and daily graphs after its view refresh. The "now" values (kW, V, A, PF, room temperature) and the logger's health are on a small status page of the ingest service.
+  - **OED is not a live view.** Readings appear after each push (5 minutes) and daily graphs after its view refresh. The "now" values and the logger's health are on the live page of the ingest service, refreshed every 15 s.
   - The push is idempotent: it keeps, per site and meter, the last time sent, and can resend a whole day from the files.
-- **Status page** (`/status/`): per site, logger online or offline, last reading, the latest values, the backlog, the last push to OED, the open alerts. Plain HTML, no design work for now.
+- **Live page** (`/live/` for all sites, `/live/<site>/` per site): the values listed in `site.json`, refreshed every 15 s, with a 60-minute sparkline, the logger's status (online, backlog, last push to OED), the open alarms and links to OED. Snapshots are kept in memory only (`docs/LIVE.md`).
 - **Device API:** config and OTA for the loggers.
-- **Alerts:** logger offline over 15 min, backlog growing, room temperature or humidity too high, meter not answering, push to OED failing.
+- **Alerts:** checked against the **alarm register** `alarms.csv` (`docs/alarms/`): 20 alarms to start, each with its threshold, delay, severity and a **`whatsapp` yes/no** column. A per-site copy in the site folder can override a line.
   - **Sent to the owner's WhatsApp group through Hermes.** The service POSTs the alert to a Hermes webhook route (`http://<docker gateway>:8644/webhooks/arkan-monitoring`), signed with HMAC-SHA256 (`X-Webhook-Signature-V2`). The route uses `deliver: whatsapp`, the group's `chat_id` and **`deliver_only: true`**, so Hermes sends the text as it is, without running the agent (no LLM cost). Hermes answers 200 when delivered and 502 when refused; the service retries.
   - The route is added to Hermes's config by the owner (sessions do not touch Hermes). Port 8644 must stay closed to the internet.
-  - As in `arkan-solar-desk`: sending is **off by default** (`alerts.send` in the settings). Every alert is written to the site's `events.jsonl` and shown on the status page, whether it was sent or not.
+  - As in `arkan-solar-desk`: sending is **off by default** (`alerts.send` in the settings). Every alert is written to the site's `events.jsonl` and shown on the live page, whether it was sent or not.
   - Repeats are throttled: one message when an alert starts, one when it clears, a reminder every 6 hours at most.
 - **`tools/`** (run from the laptop or the VPS):
   - add a site or a device and issue its token; create the site's meters and group in OED;
@@ -223,11 +229,11 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 
 ### 5.4 Deploy on hermes-vps
 - **Two parts, both on loopback only:**
-  - **OED**: its own compose (`web` on port 3000 inside, `database` PostgreSQL), published on `127.0.0.1:<oed port>`; Postgres data in `/srv/arkan-monitoring/oed-postgres/`. About 1 to 2 GB of RAM: check what hermes-vps has free before S5.
+  - **OED**: `web` (Node.js) and `database` (PostgreSQL), published on `127.0.0.1:<oed port>`; Postgres data in `/srv/arkan-monitoring/oed-postgres/`. **Not OED's default compose**: our own lean image built off the VPS, tuned PostgreSQL and memory limits (`docs/VPS-MEMORY.md`).
   - **The ingest service**: one container on `127.0.0.1:<ingest port>` (proposed 8800; check it is free: the Hub uses 8780, the CMMS 8790). Data in `/srv/arkan-monitoring/data/` (§5.3), mounted at `/data`, owned by uid 1000.
 - The code is cloned to `/opt/arkan-monitoring`, checked out at a tag. OED is built from a **pinned OED release or commit**, recorded in the repository.
 - `/opt/edge/sites/monitoring.caddy`, its own host block for `arkan-monitoring.duckdns.org`:
-  - `/` goes to **OED**, `/status/` to the ingest service's status page, both behind `basicauth` with `import /opt/edge/secrets/hub-users.caddy` (**the same logins as the other dashboards**). OED's own admin login stays for its settings pages.
+  - `/` goes to **OED**, `/live/` to the ingest service's live page, both behind `basicauth` with `import /opt/edge/secrets/hub-users.caddy` (**the same logins as the other dashboards**). OED's own admin login stays for its settings pages.
   - `/api/v1/ingest` and the device endpoints go to the ingest service **without basicauth**: the logger cannot sign in through it, so the device token is checked in the service.
   - OED's own CSV upload API is **not** published: only the ingest service reaches it, inside the VPS.
   - The log filtered as in `cmms.caddy`, HSTS, `noindex`.
@@ -248,7 +254,7 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 | P0 | Review | This plan v1.0, meter register guide (received), WiFi credentials | Plan approved |
 | P1 | Foundations | New `arkan-monitoring` repository; layout of both repositories, data contract, CI, vendored UI kit, `CLAUDE.md` + `AGENTS.md` in each | CI green in both: `pio run` here, `pytest` in `arkan-monitoring` |
 | P2 | Firmware MVP (parallel with P3) | Sensors, RTC, SD, Modbus, HTTPS uplink, backlog | 48 h bench soak; 0 records lost after WiFi is pulled for 1 h |
-| P3 | Platform MVP (parallel with P2) | Ingest, per-site data folders, push to OED, status page, alerts, deploy files, tools | Simulated logger's data shows in a local OED, tests pass |
+| P3 | Platform MVP (parallel with P2) | Ingest, per-site data folders, push to OED, live page, alarms, deploy files, tools | Simulated logger's data shows in a local OED, tests pass |
 | P4 | VPS + bench | Platform live on `arkan-monitoring.duckdns.org`; real board on the bench feeding it | Bench logger visible with the Arkan login |
 | P5 | Remote ops | OTA, remote config, alerts | OTA update without touching the board; offline alert received |
 | P6 | Site install | Mounted, wired, commissioned | Meter values match the meter display within 1 %; data live for 24 h |
@@ -264,7 +270,7 @@ Rule: **one session = one deliverable that ends in a PR.** Agents run in paralle
 | **S0** Plan review (this one) | cloud, `esp32-datalogging` | | | This plan v1.0 |
 | **S1** Foundations | cloud, **both repositories** | S0; you create the empty private repository `arkan-monitoring` (or approve that Claude creates it) | A1 `esp32-datalogging`: firmware skeleton (PlatformIO, ESP32-S3) + CI · A2 `arkan-monitoring`: platform skeleton, deploy set copied from `arkan-cmms`, vendored UI kit, data folder layout (§5.3), `CLAUDE.md`/`AGENTS.md` · A3 `arkan-monitoring`: data contract (JSON Schema, CSV columns, example payloads), then copied to `esp32-datalogging/contract/`; the FCN300-3E4Y register table seeded from the guide | Both skeletons, contract frozen at v1 |
 | **S2** Firmware MVP | cloud, `esp32-datalogging` | S1 | A1 drivers: RTC, T/RH, SD, ADS1115 · A2 Modbus master + FCN300-3E4Y table + a simulated meter for tests + `tools/modbus_dump.py` (laptop register dump) + an ESPHome YAML for a first meter test · A3 WiFi setup page, HTTPS uplink, store-and-forward queue | Firmware builds, unit tests pass |
-| **S3** Platform MVP | cloud, `arkan-monitoring` | S1 | A1 ingest + per-site day files + daily/monthly files + tools (add site, tokens, CSV export, SD backfill) + tests · A2 OED: pinned release, compose with our settings, units (% RH, A, V, PF), meters and groups created by a tool through OED's API, the push service, tested against a local OED · A3 status page, alerts (Hermes webhook client, off by default), deploy files (`monitoring.caddy` with the shared login and the open ingest path), backup, smoke tests | Simulated logger's data shows in a local OED and on the status page |
+| **S3** Platform MVP | cloud, `arkan-monitoring` | S1 | A1 ingest + per-site day files + daily/monthly files + tools (add site, tokens, CSV export, SD backfill) + tests · A2 OED: pinned release, compose with our settings, units (% RH, A, V, PF), meters and groups created by a tool through OED's API, the push service, tested against a local OED · A3 live page and `/api/v1/live`, alarms from `alarms.csv` (Hermes webhook client, sending off by default), lean OED image and memory limits measured with `docker stats`, deploy files (`monitoring.caddy` with the shared login and the open ingest path), backup, smoke tests | Simulated logger's data shows in a local OED and on the live page; RAM measured |
 | **S4** Bench bring-up | **laptop, board on USB**, `esp32-datalogging` | S2 | A1 pin check (I2C scan, SD, RS485 loopback) · A2 **meter register check** (`docs/meter/README.md`): dump with the laptop, compare with the LCD, write the verified map. **No spare meter yet**, so this is done at the hotel during a first short visit (laptop + USB-RS485 adapter, no install), unless one is bought before | Pin map confirmed, registers verified, 48 h soak started |
 | **S5** VPS deploy | **laptop, `ssh hermes-vps`**, `arkan-monitoring` | S3 | One operator, in sequence. The owner does the `sudo` steps (data folder `/srv/arkan-monitoring/data/`, Caddy site file) and approves the Caddy reload | Platform live, bench logger visible with the Arkan login |
 | **S6** Remote ops | cloud, both repositories | S4, S5 | A1 OTA + remote config (firmware here, server side in `arkan-monitoring`) · A2 alerts through the Hermes webhook (the owner adds the route) + install checklist (`docs/install-checklist.md`) | OTA and alerts proven on the bench unit |
@@ -297,7 +303,8 @@ The **meter register check** is the one uncertain step on that path: on a spare 
 | P4 | FCN300-3E4Y register map | Guide received, **not verified** (`docs/meter/README.md`). Confirm the RS485 terminals on the meter, and decide on a spare meter for the bench |
 | P5 | Platform | **Settled**: Open Energy Dashboard + our ingest service. Arkan design integration later |
 | P6 | Meter variant | Read the label: FCN300-**3E4Y** (guide received) or **3EH4Y** (link sent). If 3EH4Y, ask the seller for its register map |
-| P7 | RAM on hermes-vps | OED adds PostgreSQL and Node.js (about 1 to 2 GB). Check free memory before S5 (`free -h`) |
+| P7 | RAM on hermes-vps | Plan in `docs/VPS-MEMORY.md` (about 300 to 450 MB). Check free memory and swap before S5 (`free -h`) |
+| P8 | Alarm thresholds | Supply voltage, contracted kVA, room limits to confirm (`docs/alarms/README.md`) |
 
 ## 9. Bill of materials (trial)
 - 5 V / 2 A USB-C adapter
