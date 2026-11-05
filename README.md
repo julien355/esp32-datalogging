@@ -10,3 +10,4 @@ reading a FORT FCN300 (3E4Y or 3EH4Y, same registers) meter over Modbus RTU. Pil
 - Live data every 15 s: [`docs/LIVE.md`](docs/LIVE.md)
 - Keeping RAM low on the VPS: [`docs/VPS-MEMORY.md`](docs/VPS-MEMORY.md)
 - Hardware photos and original sketch: [`docs/img/`](docs/img/)
+- Installation and setup guide, written as a lab manual for engineering students, with schematics: [`docs/install/`](docs/install/)
