@@ -1,6 +1,7 @@
 # Adab Hotel Energy Logger: Installation Plan
 
-Status: **DRAFT v0.6, 31 October 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+Status: **DRAFT v0.7, 5 November 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+v0.7: a **second temperature and humidity sensor, AM2301**, on a cable (§2, §5); the sensors become a list (`TH1`, `TH2`) in the data, OED, the live page and the alarms (`applies_to` column, new A21).
 v0.6: **live data every 15 s** on a live page beside OED (`docs/LIVE.md`); **alarm register** with a WhatsApp yes/no column (`docs/alarms/`); **RAM plan** for hermes-vps (`docs/VPS-MEMORY.md`); one register map for the 3E4Y and 3EH4Y.
 v0.5: **Open Energy Dashboard (OED) is the platform's dashboard** (§4.2, §5.3); the Arkan design (CMMS, Hub) is left for a later integration. Meter variant to confirm (3E4Y or 3EH4Y). No spare meter yet. Alerts to the owner's WhatsApp group.
 v0.4: site code `adab`; meter FCN300-3E4Y with its register guide (`docs/meter/`, not yet verified); WhatsApp alerts through Hermes; search of reusable repositories and dashboards (`docs/REUSE.md`).
@@ -14,6 +15,7 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 
 **On site (Adab hotel, main distribution panel in the back-of-house area)**
 - The **Bluino ESP32-S3 TMP/RH RS485 RTC AI** board, with its built-in temperature and humidity sensor (it reads the **electrical room's air**), an SD card, a real-time clock and WiFi.
+- A **second temperature and humidity sensor, AM2301** (also sold as DHT21), on a cable from the board (added 5 November 2026; location to confirm).
 - It reads **one Fort FCN300-3E4Y power meter** over RS485 (Modbus RTU). More meters may be added later.
 - **5 V** from an adapter plugged into a socket in the panel. **No UPS for the trial.**
 - It goes online through the hotel's **staff WiFi network** (WPA2 password, no login page).
@@ -47,7 +49,8 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 | Power in | USB-C (5 V), **DC jack marked 7 to 15 V**, 5V/3V3 pins on the header | **The 5 V adapter goes to USB-C (or the 5V pin), never to the DC jack.** |
 | RTC | SOIC-16 chip (likely DS3231) + CR1220 coin cell | Keeps time through power cuts. |
 | Storage | microSD slot (SPI) | Header "SPI INTERFACE": GND 3V3 12 13 11 21 |
-| Temp/RH | Blue I2C breakout module on the board (AHT/HTU/SHT family) | Reads room air plus some board self-heat; check against a reference thermometer on site. |
+| Temp/RH 1 (`TH1`) | Blue I2C breakout module on the board (AHT/HTU/SHT family) | Reads room air plus some board self-heat; check against a reference thermometer on site. |
+| Temp/RH 2 (`TH2`) | **AM2301 (DHT21)**, added by the owner, on a cable | Single-wire digital sensor, not I2C. Details below. |
 | Analog in | ADS1115 (16-bit, 4 ch, I2C) | Spare for now. |
 | RS485 | 8-pin transceiver, **120 ohm termination jumper**, TX/RX LEDs, screw terminals | Modbus RTU master to the meter. |
 | I2C header | "I2C (OLED)" 4-pin | Optional local display. |
@@ -59,6 +62,17 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 | I2C SDA / SCL | 8 / 9 |
 | SD SCK / MISO / MOSI / CS | 12 / 13 / 11 / 10 or 21 |
 | RS485 TX / RX / DE-RE | top 3 rows of the back table, to verify |
+| AM2301 data | **GPIO 4** proposed (free on the header, not a strapping pin); to confirm in S4 |
+
+**The AM2301 (`TH2`)**
+- **Signal:** one data wire with its own timing protocol (DHT family), not I2C or Modbus. It needs one free GPIO and a **pull-up resistor of 4.7 to 10 kohm from the data line to 3.3 V**. Many cased AM2301 have no pull-up inside; fit one at the board end.
+- **Power and the ESP32's 3.3 V limit:** the ESP32-S3 pins are **not 5 V tolerant**.
+  - Short cable (up to about 3 m): power the sensor from **3V3**.
+  - Longer cable (up to about 20 m): power it from **5V**, but keep the pull-up to **3.3 V**, never 5 V. The sensor pulls the line low, so the ESP32 only ever sees 3.3 V.
+- **Wiring:** red VCC, black GND, yellow DATA (the usual colours; check the sensor's label). Use a shielded or twisted cable, away from power cables.
+- **Reading:** at most once every 2 s; the logger reads it every 15 s with the meter. One retry on a checksum error. A bad read is logged and counted (alarm A14).
+- **Accuracy (maker's figures):** about plus or minus 0.5 C and 3 % RH. It has no self-heating from the board, so it is the better reference for the room air.
+- **Library:** the Adafruit "DHT sensor library" (type `DHT21`/`AM2301`), or an RMT-based DHT driver on the ESP32 if timing errors show up with WiFi active.
 
 ## 3. Review answers (30 October 2026)
 
@@ -142,7 +156,7 @@ The contract lives in `arkan-monitoring`. The firmware repository keeps a copy, 
 ## 5. Architecture
 
 ### 5.1 Logger firmware (ESP32-S3, PlatformIO + Arduino framework)
-- **Read:** Modbus RTU master (FCN300-3E4Y, register table in config: address, function code, type, word order, scale), I2C temp/RH, DS3231 RTC, ADS1115 (later).
+- **Read:** Modbus RTU master (FCN300-3E4Y, register table in config: address, function code, type, word order, scale), temperature and humidity from **`TH1`** (I2C, on the board) and **`TH2`** (AM2301, single wire), DS3231 RTC, ADS1115 (later). The sensors are a list in the config (id, type, pin or address, location label), so a third sensor is a config line.
 - **Timestamp:** RTC, set by NTP when online. Everything is in UTC.
 - **Store-and-forward:** every record is written to the **SD card first** (daily CSV + a send queue), then uploaded. The backlog is sent when the link comes back, so nothing is lost.
 - **Uplink:** **HTTPS POST of JSON batches to `/api/v1/ingest`** with a per-device token.
@@ -158,7 +172,8 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
   "device": "LOG-0001", "fw": "0.1.0",
   "records": [
     { "ts": "2026-11-05T00:00:00Z", "seq": 10234,
-      "env":   { "temp": 31.4, "hum": 62.0 },
+      "env":   [ { "id": "TH1", "temp": 31.4, "hum": 62.0 },
+                 { "id": "TH2", "temp": 29.8, "hum": 66.5 } ],
       "meters": [ { "id": "EM01",
         "ph":  [ { "v": 231.0, "i": 41.2, "p": 8.9, "pf": 0.93 }, { }, { } ],
         "vll": [ 400.1, 399.2, 400.6 ],
@@ -170,6 +185,7 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 - The site is found from the device token, so the payload carries no site name.
 - `e` is the meter's **cumulative kWh counter**, stored as it is. Consumption is computed on the server, so gaps never corrupt totals.
 - `seq` drops duplicates when the backlog is resent.
+- `env` is a **list of sensors**, one entry per sensor id. A sensor that failed its read sends `"err": "timeout"` (or `"checksum"`) instead of values, so a fault is never mistaken for a reading. The location of each id (for example "electrical room", "outside the box") is in `site.json`, not in the payload.
 
 ### 5.3 Platform (`arkan-monitoring`, Python 3.11 standard library)
 
@@ -205,8 +221,8 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
   | OED meter (site `adab`) | Unit in OED | Type | Graphs |
   |---|---|---|---|
   | `adab-EM01-energy` | kWh (from the meter's cumulative counter, `cumulative=yes`) | quantity | line (shown as kW), bar (kWh per day, week), compare, map, 3D |
-  | `adab-room-temp` | Celsius (built into OED) | raw | line, 3D, radar |
-  | `adab-room-hum` | **% RH** (a unit we add once, raw) | raw | line, 3D, radar |
+  | `adab-TH1-temp`, `adab-TH2-temp` | Celsius (built into OED) | raw | line, 3D, radar |
+  | `adab-TH1-hum`, `adab-TH2-hum` | **% RH** (a unit we add once, raw) | raw | line, 3D, radar |
   | `adab-EM01-I1/I2/I3`, `-V1/V2/V3`, `-PF` (optional) | A, V, PF (units we add, raw) | raw | line |
 
   - The group **`adab`** holds the site's meters; a group **"All sites"** holds the site groups.
@@ -311,6 +327,7 @@ The **meter register check** is the one uncertain step on that path: on a spare 
 - IP54 plastic enclosure, cable glands, mounting
 - Shielded twisted-pair cable for RS485 (length: logger to meter), ferrules
 - microSD card, industrial grade, 8 to 32 GB, FAT32
+- AM2301 (DHT21) sensor (owner's), a 4.7 kohm resistor, 3-core shielded cable (length: board to the sensor's spot), a cable gland
 - USB-RS485 adapter, for the bench test with a simulated meter and for site debugging
 - A spare CR1220 cell
 

@@ -19,6 +19,7 @@
 | `id` | A01, A02, ... Never reused once given |
 | `name` | Short name, used in the WhatsApp message |
 | `source` | Where the check runs: `meter` (meter values), `sensor` (temperature and humidity), `logger` (the logger's health), `platform` (the server's own checks) |
+| `applies_to` | Which device the alarm is checked on, one alarm per device: a meter id (`EM01`), sensor ids (`TH1,TH2`), `logger` or `site`. A message names the device: "A11 Room hot (TH2, outside the box)". **For a different threshold per sensor**, split the line: keep A11 for `TH1` and add a new id (for example A22) for `TH2` with its own threshold |
 | `condition`, `threshold`, `unit` | What raises the alarm |
 | `delay_min` | How long the condition must last before the alarm starts (filters short spikes). 0 = at once |
 | `clears_when` | What ends the alarm. The gap between the threshold and the clear value stops the alarm from flapping |
@@ -51,5 +52,6 @@ All phases back at 14:51 WITA (19 min)
 
 - **A05, A06:** the PLN supply voltage at the hotel (230 V assumed) and the limits wanted.
 - **A08:** the hotel's contracted kVA (`contracted_kva` in `site.json`).
-- **A11, A12, A13:** the limits for the electrical room.
+- **A11, A12, A13:** the limits for the electrical room, and whether they suit the AM2301's spot (`TH2`). If `TH2` is outdoors or in another room, split those lines per sensor.
+- **A21:** turn on only if both sensors are in the same room.
 - **A04 to A10** depend on the meter registers being verified (`docs/meter/README.md`).

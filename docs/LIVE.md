@@ -24,14 +24,15 @@ There is also **no plugin system** to add a live widget without changing OED's c
 ```json
 "live": {
   "refresh_s": 15,
-  "values": ["p", "s", "pf", "f", "v1", "v2", "v3", "i1", "i2", "i3", "temp", "hum"]
+  "values": ["p", "s", "pf", "f", "v1", "v2", "v3", "i1", "i2", "i3",
+             "TH1.temp", "TH1.hum", "TH2.temp", "TH2.hum"]
 }
 ```
 
 Default for Adab:
 - total kW and kVA, power factor, frequency;
 - voltage and current per phase;
-- room temperature and humidity;
+- temperature and humidity of both sensors (`TH1` on the board, `TH2` the AM2301), each with its location label;
 - logger status (online, last seen, WiFi signal).
 
 **Logger:**
