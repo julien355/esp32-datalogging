@@ -53,6 +53,10 @@ All phases back at 14:51 WITA (19 min)
 - **A05, A06:** the PLN supply voltage at the hotel (230 V assumed) and the limits wanted.
 - **A08:** the hotel's contracted kVA (`contracted_kva` in `site.json`).
 - **A11, A12, A13:** the limits for the electrical room (`TH1`, the board's sensor).
-- **A22, A23:** the limits for the AM2301 (`TH2`), which is outdoors or in another room. Both are off until its spot is known.
+- **A22 to A25:** the outdoor sensor (`TH2`, the AM2301 beside the panel room). Proposed 5 November 2026:
+  - **A22 Outdoor very hot:** above 36 C for 30 min. Information only, no WhatsApp.
+  - **A23 Condensation risk in the electrical room:** the outdoor dew point comes within 2 C of the room temperature for 30 min. Logged only at first; turn WhatsApp on if the room is air-conditioned.
+  - **A24 Electrical room much warmer than outdoors:** room more than 8 C above outdoors for 30 min. **WhatsApp yes**: the most useful of the four, as it points to failed ventilation or cooling. Tune after the first week, once the `TH1` offset is set.
+  - **A25 Outdoor sensor wet or stuck:** 99 % RH or more for 24 h. Information only.
 - **A21:** off at adab (the two sensors are not in the same room).
 - **A04 to A10** depend on the meter registers being verified (`docs/meter/README.md`).

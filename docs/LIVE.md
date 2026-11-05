@@ -32,7 +32,7 @@ There is also **no plugin system** to add a live widget without changing OED's c
 Default for Adab:
 - total kW and kVA, power factor, frequency;
 - voltage and current per phase;
-- temperature and humidity of both sensors (`TH1` on the board, `TH2` the AM2301), each with its location label;
+- temperature and humidity of the electrical room (`TH1`, on the board) and outdoors (`TH2`, the AM2301), with the room-minus-outdoor difference and the outdoor dew point;
 - logger status (online, last seen, WiFi signal).
 
 **Logger:**
