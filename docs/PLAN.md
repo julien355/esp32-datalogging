@@ -1,6 +1,7 @@
 # Adab Hotel Energy Logger: Installation Plan
 
-Status: **DRAFT v0.7, 5 November 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+Status: **DRAFT v0.8, 5 November 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+v0.8: the AM2301 (`TH2`) goes **outdoors or in another room**, not in the electrical room: longer cable, outdoor protection if outside, its own alarm lines (A22, A23).
 v0.7: a **second temperature and humidity sensor, AM2301**, on a cable (§2, §5); the sensors become a list (`TH1`, `TH2`) in the data, OED, the live page and the alarms (`applies_to` column, new A21).
 v0.6: **live data every 15 s** on a live page beside OED (`docs/LIVE.md`); **alarm register** with a WhatsApp yes/no column (`docs/alarms/`); **RAM plan** for hermes-vps (`docs/VPS-MEMORY.md`); one register map for the 3E4Y and 3EH4Y.
 v0.5: **Open Energy Dashboard (OED) is the platform's dashboard** (§4.2, §5.3); the Arkan design (CMMS, Hub) is left for a later integration. Meter variant to confirm (3E4Y or 3EH4Y). No spare meter yet. Alerts to the owner's WhatsApp group.
@@ -15,7 +16,7 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 
 **On site (Adab hotel, main distribution panel in the back-of-house area)**
 - The **Bluino ESP32-S3 TMP/RH RS485 RTC AI** board, with its built-in temperature and humidity sensor (it reads the **electrical room's air**), an SD card, a real-time clock and WiFi.
-- A **second temperature and humidity sensor, AM2301** (also sold as DHT21), on a cable from the board (added 5 November 2026; location to confirm).
+- A **second temperature and humidity sensor, AM2301** (also sold as DHT21), on a cable from the board (added 5 November 2026). It goes **outdoors or in another room** (owner, 5 November 2026); exact spot and cable length to confirm.
 - It reads **one Fort FCN300-3E4Y power meter** over RS485 (Modbus RTU). More meters may be added later.
 - **5 V** from an adapter plugged into a socket in the panel. **No UPS for the trial.**
 - It goes online through the hotel's **staff WiFi network** (WPA2 password, no login page).
@@ -72,6 +73,12 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 - **Wiring:** red VCC, black GND, yellow DATA (the usual colours; check the sensor's label). Use a shielded or twisted cable, away from power cables.
 - **Reading:** at most once every 2 s; the logger reads it every 15 s with the meter. One retry on a checksum error. A bad read is logged and counted (alarm A14).
 - **Accuracy (maker's figures):** about plus or minus 0.5 C and 3 % RH. It has no self-heating from the board, so it is the better reference for the room air.
+- **Placement: outdoors or in another room** (owner, 5 November 2026), so the cable will be long:
+  - Plan on **5 V power with the pull-up to 3.3 V**, and a 4.7 kohm pull-up (the lower value helps on long cables).
+  - **Up to about 20 m** is the usual limit for this sensor. Measure the route before buying cable.
+  - **Beyond 20 m**, or if reads fail often (alarm A14): use an **RS485 Modbus temperature and humidity sensor** on the meter's bus instead. It needs its own Modbus address, but has no practical length limit and the firmware already speaks Modbus.
+  - **If outdoors:** the AM2301's case is not waterproof and direct sun distorts the reading. Mount it in a **radiation shield** (louvred screen), in the shade, sensor opening down, with a drip loop on the cable and a gland at the box.
+  - **If in another room:** at about 1.5 m height, away from AC outlets, windows in the sun and heat sources.
 - **Library:** the Adafruit "DHT sensor library" (type `DHT21`/`AM2301`), or an RMT-based DHT driver on the ESP32 if timing errors show up with WiFi active.
 
 ## 3. Review answers (30 October 2026)
@@ -327,7 +334,8 @@ The **meter register check** is the one uncertain step on that path: on a spare 
 - IP54 plastic enclosure, cable glands, mounting
 - Shielded twisted-pair cable for RS485 (length: logger to meter), ferrules
 - microSD card, industrial grade, 8 to 32 GB, FAT32
-- AM2301 (DHT21) sensor (owner's), a 4.7 kohm resistor, 3-core shielded cable (length: board to the sensor's spot), a cable gland
+- AM2301 (DHT21) sensor (owner's), a 4.7 kohm resistor, 3-core shielded cable (length: board to the sensor's spot, up to about 20 m), cable glands
+- If the AM2301 is outdoors: a radiation shield (louvred screen) and a mounting bracket
 - USB-RS485 adapter, for the bench test with a simulated meter and for site debugging
 - A spare CR1220 cell
 

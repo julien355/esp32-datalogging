@@ -52,6 +52,7 @@ All phases back at 14:51 WITA (19 min)
 
 - **A05, A06:** the PLN supply voltage at the hotel (230 V assumed) and the limits wanted.
 - **A08:** the hotel's contracted kVA (`contracted_kva` in `site.json`).
-- **A11, A12, A13:** the limits for the electrical room, and whether they suit the AM2301's spot (`TH2`). If `TH2` is outdoors or in another room, split those lines per sensor.
-- **A21:** turn on only if both sensors are in the same room.
+- **A11, A12, A13:** the limits for the electrical room (`TH1`, the board's sensor).
+- **A22, A23:** the limits for the AM2301 (`TH2`), which is outdoors or in another room. Both are off until its spot is known.
+- **A21:** off at adab (the two sensors are not in the same room).
 - **A04 to A10** depend on the meter registers being verified (`docs/meter/README.md`).

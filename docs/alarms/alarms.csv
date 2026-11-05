@@ -9,9 +9,9 @@ A07,Frequency out of range,meter,EM01,frequency outside,49.5 to 50.5,Hz,1,back i
 A08,High demand,meter,EM01,apparent power above % of contracted kVA,90,%,5,below 85 %,warning,yes,6,yes,Contracted kVA to set in site.json
 A09,Low power factor,meter,EM01,15-minute mean power factor below,0.85,PF,15,above 0.87,warning,no,24,yes,PLN bills excess kVArh below 0.85
 A10,Current imbalance,meter,EM01,max phase current deviation from the mean above,20,%,15,below 15 %,warning,no,24,yes,Ignored when the mean current is below 5 A
-A11,Room hot,sensor,"TH1,TH2",temperature above,35,C,10,below 33 C,warning,yes,6,yes,
-A12,Room very hot,sensor,"TH1,TH2",temperature above,40,C,5,below 38 C,critical,yes,1,yes,
-A13,Room humid,sensor,"TH1,TH2",humidity above,80,%RH,60,below 75 %RH,warning,no,24,yes,Condensation risk
+A11,Electrical room hot,sensor,TH1,temperature above,35,C,10,below 33 C,warning,yes,6,yes,
+A12,Electrical room very hot,sensor,TH1,temperature above,40,C,5,below 38 C,critical,yes,1,yes,
+A13,Electrical room humid,sensor,TH1,humidity above,80,%RH,60,below 75 %RH,warning,no,24,yes,Condensation risk
 A14,Temp/RH sensor fault,logger,"TH1,TH2",no valid reading (timeout or checksum) for,10,min,0,valid readings again,warning,no,24,yes,
 A15,SD card error,logger,logger,write to SD card failing,1,event,0,writes succeed,warning,no,24,yes,Data is still sent while online but not kept locally
 A16,Backlog growing,logger,logger,unsent records older than,60,min,0,backlog below 5 min,warning,no,24,yes,Logger online but uploads failing
@@ -19,4 +19,6 @@ A17,Weak WiFi,logger,logger,mean RSSI below,-80,dBm,60,above -75 dBm,info,no,24,
 A18,Clock not set,logger,logger,RTC time invalid or more than 2 min off NTP,2,min,0,clock corrected,warning,no,24,yes,
 A19,Energy counter went backwards,platform,site,cumulative kWh lower than the previous reading,0,kWh,0,event only,warning,no,0,yes,Meter reset or wrong register
 A20,Push to OED failing,platform,site,no successful push to OED for,30,min,0,a push succeeds,warning,no,24,yes,Data is safe in the site folder; OED is behind
-A21,Sensors disagree,sensor,"TH1,TH2",difference between TH1 and TH2 temperature above,5,C,30,below 3 C,info,no,24,no,Enable only when both sensors are in the same room; a sign that one sensor drifts
+A21,Sensors disagree,sensor,"TH1,TH2",difference between TH1 and TH2 temperature above,5,C,30,below 3 C,info,no,24,no,Not used at adab: TH2 is outdoors or in another room. Keep for sites with both sensors in one room
+A22,TH2 hot,sensor,TH2,temperature above,40,C,15,below 38 C,warning,no,24,no,Turn on and set the limit once the spot is known (outdoors or which room)
+A23,TH2 humid,sensor,TH2,humidity above,90,%RH,60,below 85 %RH,info,no,24,no,Outdoors humidity often passes 90 %; useful only for an indoor room
