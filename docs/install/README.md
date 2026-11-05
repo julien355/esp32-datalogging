@@ -318,6 +318,7 @@ The three-phase total is the sum of the phases. For a **balanced** load:
 - **Q = sqrt(S^2 - P^2) = sqrt(3) x V_LL x I x sin(phi)**
 
 Worked example: V_LL = 400 V, I = 41.2 A on each phase, PF = 0.93.
+
 - S = 1.732 x 400 x 41.2 = 28,544 VA = **28.5 kVA**
 - P = 28.5 x 0.93 = **26.5 kW**
 - Q = sqrt(28.54^2 - 26.55^2) = **10.5 kVAr**
@@ -369,6 +370,7 @@ Worked example: outdoors T = 29.8 C, RH = 66.5 %: gamma = ln(0.665) + 17.62 x 29
 10. **Clean up:** unplug USB, store the board in its ESD bag.
 
 **Expected result.**
+
 - Rails within limits, no shorts.
 - I2C scan shows at least the RTC (0x68) and the temp/RH module (0x38, 0x40 or 0x44); ADS1115 at 0x48 to 0x4B.
 - RTC keeps time through a power cycle, drift under about 2 s per day (DS3231 spec is about plus or minus 2 ppm, about 0.2 s per day, at 0 to 40 C).
@@ -396,6 +398,7 @@ Worked example: outdoors T = 29.8 C, RH = 66.5 %: gamma = ln(0.665) + 17.62 x 29
 | Supervisor signature, date | | | |
 
 **Questions.**
+
 1. Why must the 5 V adapter never go to the DC jack? What does the regulator behind the jack need, and what would happen with 5 V?
 2. The I2C lines are open drain. What would happen if two devices drove the line with push-pull outputs at the same time?
 3. Why set the RTC to UTC rather than WITA? What goes wrong with daylight saving in other countries, and why does it not matter in Makassar?
@@ -428,6 +431,7 @@ Worked example: outdoors T = 29.8 C, RH = 66.5 %: gamma = ln(0.665) + 17.62 x 29
 10. **Dew point.** Compute the dew point by hand for one reading with the formula of 4.7, and compare with the sketch's value.
 
 **Expected result.**
+
 - DATA idle at 3.2 to 3.4 V; never above.
 - TH2 within about plus or minus 0.5 C and 3 % RH of the reference after the offset (maker's figures); TH1 reads warmer than the room by about 1 to 3 C before its offset (board self-heating, plan section 2).
 - Error rate under 1 % with the pull-up; many errors or no reading without it.
@@ -459,6 +463,7 @@ Worked example: outdoors T = 29.8 C, RH = 66.5 %: gamma = ln(0.665) + 17.62 x 29
 | Dew point by hand vs sketch | | |
 
 **Questions.**
+
 1. Calculate the rise time constant with 10 kohm and 300 pF. Is the shortest "high" (26 us) still safe? What cable length would make it marginal?
 2. Why is the pull-up at the board end, not the sensor end, in this design? Would either work?
 3. The plan allows a 5 V supply for cables longer than about 3 m, but keeps the pull-up at 3.3 V. Explain why the ESP32 pin is still safe.
@@ -507,6 +512,7 @@ Do this on the first short visit, before the install (plan, session S4).
 4. Optional, back on the bench: run the board's own dump (`d` in `lab3_modbus_dump.ino`) on the meter, once the electrician has installed the cable, and compare with the laptop's dump.
 
 **Expected result.**
+
 - Part A: echo works; the pin map for RS485 is confirmed; no errors with or without termination at this length and speed.
 - Part B and C: every LCD value matched to a register; the table filled in; the power check agrees within about 1 %.
 
@@ -559,6 +565,7 @@ Meter label: FCN300-______ . Slave ID ____ . Baud ____ . Parity ____ . CT ____ /
 | sqrt(3) x V_LL x I_mean x PF (kW) | | | | | (estimate) | |
 
 **Questions.**
+
 1. Decode this request byte by byte: `01 03 00 18 00 02 44 0C`. What does the meter send back if 0x0018 holds 2 and 0x0019 holds 53429? What is the energy in kWh?
 2. At 9600 baud 8-N-1, how long does one byte take? How long does the request above plus a 17-register answer take on the wire?
 3. Your current register reads 206 and the LCD shows 41.2 A, with a 100/5 CT. Which scale and which (primary or secondary) is it?
@@ -631,6 +638,7 @@ Meter label: FCN300-______ . Slave ID ____ . Baud ____ . Parity ____ . CT ____ /
 | OED shows the site's meters | | |
 
 **Questions.**
+
 1. The mean RSSI is -72 dBm. By how much (as a ratio) must the received power increase to reach -66 dBm? What could you change on site?
 2. Why does the logger write to the SD card **before** uploading?
 3. Why does the payload carry `seq`? What would happen on resend without it?
@@ -690,6 +698,7 @@ Meter label: FCN300-______ . Slave ID ____ . Baud ____ . Parity ____ . CT ____ /
 | Supervisor signature, date | | |
 
 **Questions.**
+
 1. Why is the box beside the panel and not inside it? Give two reasons (one about safety, one about radio).
 2. Why must the `TH2` spot be in shade all day, even with a radiation shield?
 3. What could make the outdoor sensor read high in the evening, after a sunny day? How do you avoid it?
@@ -762,6 +771,7 @@ Meter label: FCN300-______ . Slave ID ____ . Baud ____ . Parity ____ . CT ____ /
 | Photos taken (numbers) | | | |
 
 **Questions.**
+
 1. Why are all the glands on the bottom face?
 2. Why does the shield get bonded at one end only, and why is that end the logger end in this design (or why not)?
 3. What does a reading of 60 ohm between A and B tell you? And 120 ohm? And an open circuit?
@@ -833,6 +843,7 @@ After 24 hours (from 00:00 WITA to 00:00 WITA, which is 16:00 to 16:00 UTC):
 ### Part F: alarm tests from `alarms.csv`
 
 Rules for the tests:
+
 - **Never create a real fault on the supply.** Meter alarms (A04 to A10) are tested by temporarily changing the threshold in the **per-site copy** `/srv/arkan-monitoring/data/sites/adab/alarms.csv` (the platform reloads it within a minute), done by the supervisor or the owner, then put back. Record the original line and restore it.
 - **WhatsApp sending stays off** (`alerts.send`) unless the owner turns it on for the test. With it off, check `events.jsonl` and the live page instead.
 - Note the start and clear time of each test in WITA.
@@ -866,6 +877,7 @@ Rules for the tests:
 **Expected result.** All meter values within 1 %, sensors within their accuracy after offsets, 1440 records in 24 h with no gap or duplicate, each alarm raised and cleared as the register says. Then hand over to the 7-day validation (phase P7).
 
 **Questions.**
+
 1. The LCD shows 41.2 A and the logger 41.6 A. Pass or fail? What would you check first?
 2. Why test the meter alarms by changing thresholds rather than by creating the real condition?
 3. Why does each alarm have a clear value different from its threshold (for example A11: alarm above 35 C, clear below 33 C)?
