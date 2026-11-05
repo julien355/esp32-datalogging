@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="720" viewBox="0 0 1300 720" font-family="Arial, Helvetica, sans-serif" font-size="14">
+  <title>(c) RS485 wiring: logger to meter, termination and shield</title>
+  <rect x="0" y="0" width="1300" height="720" fill="#fff"/>
+  <text x="20" y="32" font-size="20" font-weight="bold">(c) RS485 wiring: logger to FCN300 meter</text>
+  <text x="20" y="54" fill="#333">Modbus RTU, slave 1, 9600 baud, 8-N-1 (defaults from the guide, to verify on the meter menu).</text>
+
+  <!-- ===== Logger side ===== -->
+  <rect x="20" y="80" width="450" height="380" fill="none" stroke="#000" stroke-width="2"/>
+  <text x="32" y="102" font-weight="bold">Logger box: Bluino board (students)</text>
+
+  <rect x="40" y="120" width="160" height="210" fill="#f2f2f2" stroke="#000" stroke-width="2"/>
+  <text x="50" y="142" font-weight="bold">ESP32-S3</text>
+  <text x="50" y="186" font-size="12">TX    GPIO ____</text>
+  <text x="50" y="216" font-size="12">RX    GPIO ____</text>
+  <text x="50" y="246" font-size="12">DE/RE GPIO ____</text>
+  <text x="50" y="276" font-size="12">GND</text>
+  <text x="50" y="304" font-size="11" font-style="italic">GPIOs: TO VERIFY</text>
+  <text x="50" y="318" font-size="11" font-style="italic">(back silkscreen, Lab 1)</text>
+
+  <rect x="240" y="150" width="100" height="150" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="248" y="168" font-size="13" font-weight="bold">RS485</text>
+  <text x="248" y="184" font-size="13" font-weight="bold">transceiver</text>
+  <text x="246" y="210" font-size="11">DI</text>
+  <text x="246" y="230" font-size="11">RO</text>
+  <text x="246" y="250" font-size="11">DE,/RE</text>
+  <text x="246" y="280" font-size="11">GND</text>
+  <text x="322" y="204" font-size="11">A</text>
+  <text x="322" y="264" font-size="11">B</text>
+  <!-- MCU to transceiver -->
+  <polyline points="200,182 220,182 220,206 240,206" fill="none" stroke="#000" stroke-width="1.5"/>
+  <polyline points="200,212 226,212 226,226 240,226" fill="none" stroke="#000" stroke-width="1.5"/>
+  <line x1="200" y1="246" x2="240" y2="246" stroke="#000" stroke-width="1.5"/>
+  <line x1="200" y1="276" x2="240" y2="276" stroke="#000" stroke-width="1.5" stroke-dasharray="2 3"/>
+
+  <!-- A and B inside the box -->
+  <line x1="340" y1="200" x2="431" y2="200" stroke="#000" stroke-width="3"/>
+  <line x1="340" y1="260" x2="431" y2="260" stroke="#000" stroke-width="3" stroke-dasharray="10 4"/>
+  <polyline points="340,290 360,290 360,320 431,320" fill="none" stroke="#000" stroke-width="2" stroke-dasharray="2 3"/>
+
+  <!-- on-board termination: jumper + resistor between A and B -->
+  <line x1="385" y1="200" x2="385" y2="208" stroke="#000" stroke-width="2"/>
+  <circle cx="385" cy="211" r="3" fill="#000"/>
+  <circle cx="385" cy="221" r="3" fill="#000"/>
+  <rect x="380" y="207" width="10" height="18" fill="none" stroke="#000" stroke-width="2"/>
+  <path d="M385,225 l0,3 l-7,3 l14,5 l-14,5 l14,5 l-7,3 l0,3" fill="none" stroke="#000" stroke-width="2"/>
+  <line x1="385" y1="252" x2="385" y2="260" stroke="#000" stroke-width="2"/>
+
+  <!-- terminal block -->
+  <rect x="420" y="170" width="40" height="170" fill="#fff" stroke="#000" stroke-width="2"/>
+  <circle cx="440" cy="200" r="9" fill="#fff" stroke="#000" stroke-width="2"/>
+  <circle cx="440" cy="260" r="9" fill="#fff" stroke="#000" stroke-width="2"/>
+  <circle cx="440" cy="320" r="9" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="434" y="186" font-size="12" font-weight="bold">A</text>
+  <text x="434" y="246" font-size="12" font-weight="bold">B</text>
+  <text x="434" y="306" font-size="12" font-weight="bold">G</text>
+  <text x="405" y="164" font-size="11">screw terminal</text>
+
+  <text x="40" y="360" font-size="12"><tspan font-weight="bold">Termination at the logger end:</tspan> the board's "120" jumper</text>
+  <text x="40" y="376" font-size="12">connects a 120 ohm resistor across A and B. Jumper ON,</text>
+  <text x="40" y="392" font-size="12">because the logger is one physical end of the bus.</text>
+  <text x="40" y="416" font-size="12"><tspan font-weight="bold">Shield:</tspan> bonded at THIS end only, proposed to the G (GND)</text>
+  <text x="40" y="432" font-size="12">terminal. Confirm the bonding point with the supervising</text>
+  <text x="40" y="448" font-size="12">engineer. Terminal labels A, B, G: TO VERIFY on the board.</text>
+
+  <!-- ===== Cable ===== -->
+  <line x1="449" y1="200" x2="841" y2="200" stroke="#000" stroke-width="3"/>
+  <line x1="449" y1="260" x2="841" y2="260" stroke="#000" stroke-width="3" stroke-dasharray="10 4"/>
+  <line x1="449" y1="320" x2="841" y2="320" stroke="#000" stroke-width="2" stroke-dasharray="2 3"/>
+  <rect x="530" y="175" width="230" height="110" rx="40" fill="none" stroke="#000" stroke-width="1.5" stroke-dasharray="6 3"/>
+  <path d="M560,200 C575,260 590,200 605,260 C620,200 635,260 650,200 C665,260 680,200 695,260 C710,200 725,260 735,200" fill="none" stroke="#000" stroke-width="1"/>
+  <text x="530" y="166" font-size="12">shielded twisted pair (dashed outline = shield)</text>
+  <!-- shield drain to logger G -->
+  <polyline points="545,280 545,350 440,350 440,329" fill="none" stroke="#000" stroke-width="1.5" stroke-dasharray="6 3"/>
+  <text x="552" y="345" font-size="11">shield drain wire to G</text>
+  <!-- shield cut at meter end -->
+  <line x1="752" y1="275" x2="770" y2="292" stroke="#000" stroke-width="1.5" stroke-dasharray="6 3"/>
+  <line x1="764" y1="298" x2="778" y2="286" stroke="#000" stroke-width="3"/>
+  <text x="640" y="304" font-size="11">cut and taped here</text>
+  <text x="486" y="312" font-size="11">signal ground (third core)</text>
+  <text x="490" y="392" font-size="12">Cable: 1 twisted pair + 1 core, overall shield,</text>
+  <text x="490" y="408" font-size="12">120 ohm type (for example Belden 3105A or similar).</text>
+  <text x="490" y="424" font-size="12">Length logger to meter: ______ m.</text>
+  <text x="490" y="440" font-size="12">Keep 20 cm from power cables, cross them at 90 deg.</text>
+
+  <!-- ===== Meter side ===== -->
+  <rect x="800" y="80" width="480" height="380" fill="#eeeeee" stroke="#000" stroke-width="2" stroke-dasharray="12 6"/>
+  <text x="812" y="102" font-weight="bold">Inside the MDP: ELECTRICIAN ONLY, panel isolated</text>
+
+  <circle cx="850" cy="200" r="9" fill="#fff" stroke="#000" stroke-width="2"/>
+  <circle cx="850" cy="260" r="9" fill="#fff" stroke="#000" stroke-width="2"/>
+  <line x1="859" y1="200" x2="960" y2="200" stroke="#000" stroke-width="3"/>
+  <line x1="859" y1="260" x2="960" y2="260" stroke="#000" stroke-width="3" stroke-dasharray="10 4"/>
+  <!-- termination at meter end -->
+  <line x1="910" y1="200" x2="910" y2="212" stroke="#000" stroke-width="2"/>
+  <path d="M910,212 l0,4 l-7,3 l14,5 l-14,5 l14,5 l-7,3 l0,4" fill="none" stroke="#000" stroke-width="2"/>
+  <line x1="910" y1="241" x2="910" y2="260" stroke="#000" stroke-width="2"/>
+  <text x="922" y="236" font-size="11" font-weight="bold">R 120</text>
+
+  <rect x="960" y="140" width="300" height="200" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="970" y="162" font-weight="bold">FORT FCN300 (3E4Y or 3EH4Y)</text>
+  <text x="970" y="180" font-size="12">Meter EM01, rear terminals</text>
+  <text x="970" y="204" font-size="12">A (485+)  terminal no. ____</text>
+  <text x="970" y="264" font-size="12">B (485-)  terminal no. ____</text>
+  <text x="970" y="290" font-size="12">RS485 port present, terminal numbers:</text>
+  <text x="970" y="306" font-size="12">TO VERIFY from a photo of the meter back</text>
+  <text x="970" y="322" font-size="12">(docs/meter/README.md, issue 7)</text>
+  <circle cx="850" cy="320" r="9" fill="#fff" stroke="#000" stroke-width="2"/><text x="866" y="324" font-size="11">meter GND if any,</text>
+  <text x="866" y="338" font-size="11">else insulate</text>
+
+  <text x="812" y="380" font-size="12"><tspan font-weight="bold">Termination at the meter end:</tspan> 120 ohm, 0.25 W, across A and B,</text>
+  <text x="812" y="396" font-size="12">only if the meter has no built-in termination. With a short run</text>
+  <text x="812" y="412" font-size="12">(under about 10 m) at 9600 baud it may work without one:</text>
+  <text x="812" y="428" font-size="12">Lab 3 tests both and records the error count.</text>
+
+  <!-- ===== Legend ===== -->
+  <rect x="20" y="480" width="1260" height="225" fill="#fff" stroke="#000"/>
+  <text x="32" y="502" font-weight="bold">Legend and rules</text>
+  <line x1="40" y1="524" x2="90" y2="524" stroke="#000" stroke-width="3"/>
+  <text x="98" y="528" font-size="12">A (also "D+", "485+")</text>
+  <line x1="270" y1="524" x2="320" y2="524" stroke="#000" stroke-width="3" stroke-dasharray="10 4"/>
+  <text x="328" y="528" font-size="12">B (also "D-", "485-")</text>
+  <line x1="500" y1="524" x2="550" y2="524" stroke="#000" stroke-width="2" stroke-dasharray="2 3"/>
+  <text x="558" y="528" font-size="12">signal ground (common reference)</text>
+  <line x1="800" y1="524" x2="850" y2="524" stroke="#000" stroke-width="1.5" stroke-dasharray="6 3"/>
+  <text x="858" y="528" font-size="12">cable shield and drain wire</text>
+  <path d="M50,540 l0,4 l-7,3 l14,5 l-14,5 l14,5 l-7,3 l0,4" fill="none" stroke="#000" stroke-width="2"/>
+  <text x="70" y="560" font-size="12">resistor (120 ohm termination)</text>
+  <rect x="280" y="545" width="10" height="18" fill="none" stroke="#000" stroke-width="2"/>
+  <circle cx="285" cy="549" r="3" fill="#000"/><circle cx="285" cy="559" r="3" fill="#000"/>
+  <text x="300" y="560" font-size="12">jumper (on board, marked "120")</text>
+  <rect x="540" y="545" width="40" height="18" fill="#eeeeee" stroke="#000" stroke-dasharray="12 6"/>
+  <text x="588" y="560" font-size="12">hazardous zone, electrician only</text>
+  <circle cx="830" cy="554" r="8" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="846" y="560" font-size="12">screw terminal</text>
+  <text x="40" y="594" font-size="12">1. Daisy chain only: one cable from the logger to meter 1, then on to meter 2 later. No star wiring, no stubs longer than about 30 cm.</text>
+  <text x="40" y="612" font-size="12">2. Termination only at the two physical ends of the bus. A device in the middle never has a 120 ohm resistor.</text>
+  <text x="40" y="630" font-size="12">3. A and B names differ between makers. If the meter does not answer and everything else is right, swap A and B once (this does no damage).</text>
+  <text x="40" y="648" font-size="12">4. Shield bonded at one end only, so no ground loop current flows in it. Never use the shield as the signal ground.</text>
+  <text x="40" y="666" font-size="12">5. RS485 GPIO numbers, the board's terminal labels and the meter's terminal numbers are TO VERIFY (Lab 1 and Lab 3).</text>
+  <text x="40" y="684" font-size="12">6. Drawn for clarity, not to scale. The transceiver's internal pins (DI, RO, DE, /RE) are shown to explain the circuit; they are not wired by students.</text>
+</svg>

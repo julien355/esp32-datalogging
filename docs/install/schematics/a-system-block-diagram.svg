@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="700" viewBox="0 0 1100 700" font-family="Arial, Helvetica, sans-serif" font-size="14">
+  <title>(a) System block diagram: Adab energy and environment logger</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1100" height="700" fill="#fff"/>
+  <text x="20" y="32" font-size="20" font-weight="bold">(a) System block diagram</text>
+  <text x="20" y="54" fill="#333">Adab hotel pilot. Site side on the left, platform on hermes-vps on the right.</text>
+
+  <!-- Site boundary -->
+  <rect x="20" y="75" width="560" height="470" fill="none" stroke="#000" stroke-width="1.5" stroke-dasharray="10 6"/>
+  <text x="32" y="96" font-weight="bold">SITE: adab, back of house (WITA, UTC+8)</text>
+
+  <!-- MDP -->
+  <rect x="40" y="115" width="200" height="190" fill="#f2f2f2" stroke="#000" stroke-width="2"/>
+  <text x="50" y="137" font-weight="bold">Main distribution panel</text>
+  <text x="50" y="155">(steel, 400/230 V, live)</text>
+  <text x="50" y="173" font-style="italic">Electrician only</text>
+  <rect x="52" y="185" width="176" height="50" fill="#fff" stroke="#000" stroke-width="1.5"/>
+  <text x="60" y="205" font-weight="bold">Meter EM01</text>
+  <text x="60" y="223" font-size="11">FORT FCN300 (3E4Y or 3EH4Y)</text>
+  <rect x="52" y="248" width="176" height="40" fill="#fff" stroke="#000" stroke-width="1.5"/>
+  <text x="60" y="266" font-weight="bold">Socket 230 V AC</text>
+  <text x="60" y="282" font-size="12">+ 5 V / 2 A USB-C adapter</text>
+
+  <!-- Logger box -->
+  <rect x="330" y="115" width="240" height="240" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="340" y="137" font-weight="bold">Logger box (IP54, beside MDP)</text>
+  <rect x="345" y="150" width="212" height="190" fill="#f2f2f2" stroke="#000" stroke-width="1.5"/>
+  <text x="355" y="170" font-weight="bold">Bluino ESP32-S3 board</text>
+  <text x="355" y="192">ESP32-S3-WROOM (WiFi)</text>
+  <text x="355" y="212">RS485 transceiver</text>
+  <text x="355" y="232">DS3231 RTC + CR1220</text>
+  <text x="355" y="252">microSD (store and forward)</text>
+  <text x="355" y="272">TH1: on-board temp/RH (I2C)</text>
+  <text x="355" y="292">ADS1115 (spare)</text>
+  <text x="355" y="318" font-style="italic">USB-C 5 V in</text>
+
+  <!-- RS485 link -->
+  <line x1="228" y1="210" x2="345" y2="210" stroke="#000" stroke-width="3"/>
+  <text x="250" y="202" font-size="11">RS485 A/B</text>
+  <text x="250" y="226" font-size="11">Modbus RTU</text>
+  <!-- Power link -->
+  <line x1="228" y1="275" x2="300" y2="275" stroke="#000" stroke-width="2"/>
+  <line x1="300" y1="275" x2="300" y2="318" stroke="#000" stroke-width="2"/>
+  <line x1="300" y1="318" x2="345" y2="318" stroke="#000" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="240" y="340" font-size="11">5 V USB-C</text>
+
+  <!-- TH2 -->
+  <rect x="320" y="420" width="240" height="100" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="330" y="442" font-weight="bold">TH2: AM2301 (DHT21)</text>
+  <text x="330" y="462">Outdoors, beside panel room</text>
+  <text x="330" y="482">In radiation shield, 1.5 m high</text>
+  <text x="330" y="502">1 m cable, GPIO 4 (to verify)</text>
+  <line x1="440" y1="355" x2="440" y2="420" stroke="#000" stroke-width="2" stroke-dasharray="4 3"/>
+  <text x="448" y="395" font-size="12">3V3, GND, DATA</text>
+
+  <!-- WiFi AP -->
+  <rect x="40" y="420" width="200" height="100" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="50" y="442" font-weight="bold">Hotel staff WiFi</text>
+  <text x="50" y="462">WPA2, no login page</text>
+  <text x="50" y="482">RSSI at box better</text>
+  <text x="50" y="500">than -70 dBm</text>
+  <path d="M345,330 Q290,380 240,450" fill="none" stroke="#000" stroke-width="2" stroke-dasharray="2 4" marker-end="url(#arr)"/>
+  <text x="250" y="390" font-size="12">WiFi 2.4 GHz</text>
+
+  <!-- Internet -->
+  <path d="M140,520 L140,600 L640,600" fill="none" stroke="#000" stroke-width="2" stroke-dasharray="2 4" marker-end="url(#arr)"/>
+  <text x="160" y="590" font-size="12">Internet, HTTPS POST with a device token</text>
+  <text x="160" y="620" font-size="12">/api/v1/ingest (1 min records), /api/v1/live (15 s snapshot)</text>
+
+  <!-- VPS boundary -->
+  <rect x="640" y="75" width="440" height="560" fill="none" stroke="#000" stroke-width="1.5" stroke-dasharray="10 6"/>
+  <text x="652" y="96" font-weight="bold">hermes-vps (Hostinger, Ubuntu)</text>
+  <text x="652" y="114" font-size="12">https://arkan-monitoring.duckdns.org/  (NOT BUILT YET)</text>
+
+  <rect x="660" y="540" width="400" height="70" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="670" y="562" font-weight="bold">Caddy (TLS, shared Arkan login)</text>
+  <text x="670" y="582" font-size="12">/api/v1/* : no basicauth, device token checked by the app</text>
+  <text x="670" y="598" font-size="12">/ and /live/ : basicauth (hub-users.caddy)</text>
+
+  <rect x="660" y="390" width="400" height="120" fill="#f2f2f2" stroke="#000" stroke-width="2"/>
+  <text x="670" y="412" font-weight="bold">Ingest service (arkan-monitoring, Python)</text>
+  <text x="670" y="432" font-size="12">Checks token and schema, appends to the site folder</text>
+  <text x="670" y="450" font-size="12">/srv/arkan-monitoring/data/sites/adab/</text>
+  <text x="670" y="468" font-size="12">Live page /live/adab/ (15 s, in memory)</text>
+  <text x="670" y="486" font-size="12">Alarms from alarms.csv; pushes CSV to OED every 5 min</text>
+  <line x1="860" y1="540" x2="860" y2="510" stroke="#000" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="660" y="250" width="190" height="100" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="670" y="272" font-weight="bold">Open Energy</text>
+  <text x="670" y="290" font-weight="bold">Dashboard (OED)</text>
+  <text x="670" y="310" font-size="12">History graphs, groups,</text>
+  <text x="670" y="326" font-size="12">compare, export</text>
+  <line x1="755" y1="390" x2="755" y2="350" stroke="#000" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="762" y="374" font-size="12">CSV upload</text>
+
+  <rect x="870" y="250" width="190" height="100" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="880" y="272" font-weight="bold">Hermes</text>
+  <text x="880" y="290" font-size="12">Webhook route, port 8644</text>
+  <text x="880" y="306" font-size="12">(closed to internet)</text>
+  <text x="880" y="322" font-size="12">deliver_only: true</text>
+  <line x1="965" y1="390" x2="965" y2="350" stroke="#000" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="972" y="374" font-size="12">alarm, HMAC</text>
+
+  <rect x="870" y="140" width="190" height="70" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="880" y="162" font-weight="bold">WhatsApp group</text>
+  <text x="880" y="182" font-size="12">Alarms with whatsapp=yes</text>
+  <text x="880" y="198" font-size="12">(sending off by default)</text>
+  <line x1="965" y1="250" x2="965" y2="210" stroke="#000" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="660" y="140" width="190" height="70" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="670" y="162" font-weight="bold">Users (browser)</text>
+  <text x="670" y="182" font-size="12">Engineer, owner, laptop</text>
+  <text x="670" y="198" font-size="12">over SSH for files</text>
+  <line x1="755" y1="210" x2="755" y2="250" stroke="#000" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Legend -->
+  <rect x="20" y="640" width="560" height="50" fill="#fff" stroke="#000"/>
+  <text x="30" y="658" font-weight="bold">Legend</text>
+  <line x1="90" y1="654" x2="130" y2="654" stroke="#000" stroke-width="3"/>
+  <text x="136" y="658" font-size="12">RS485 data</text>
+  <line x1="220" y1="654" x2="260" y2="654" stroke="#000" stroke-width="2"/>
+  <text x="266" y="658" font-size="12">power</text>
+  <line x1="320" y1="654" x2="360" y2="654" stroke="#000" stroke-width="2" stroke-dasharray="4 3"/>
+  <text x="366" y="658" font-size="12">sensor cable</text>
+  <line x1="460" y1="654" x2="500" y2="654" stroke="#000" stroke-width="2" stroke-dasharray="2 4"/>
+  <text x="506" y="658" font-size="12">wireless/IP</text>
+  <rect x="90" y="666" width="20" height="14" fill="#f2f2f2" stroke="#000"/>
+  <text x="116" y="678" font-size="12">grey box = main unit; dashed frame = location boundary</text>
+</svg>

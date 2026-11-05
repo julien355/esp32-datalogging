@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" font-family="Arial, Helvetica, sans-serif" font-size="14">
+  <title>(e) Enclosure layout and cable entries beside the MDP</title>
+  <defs>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#000" stroke-width="1"/>
+    </pattern>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1200" height="760" fill="#fff"/>
+  <text x="20" y="32" font-size="20" font-weight="bold">(e) Enclosure layout and cable entries beside the panel</text>
+  <text x="20" y="54" fill="#333">Left: wall elevation (front view). Right: inside the logger box. Dimensions are proposals, to confirm in the site survey (Lab 5).</text>
+
+  <!-- ===== Wall elevation ===== -->
+  <text x="20" y="84" font-weight="bold">View 1: wall, front elevation</text>
+  <rect x="20" y="95" width="560" height="560" fill="none" stroke="#000" stroke-width="1"/>
+  <!-- floor -->
+  <rect x="20" y="640" width="560" height="15" fill="url(#hatch)" stroke="#000"/>
+  <text x="30" y="634" font-size="12">floor</text>
+
+  <!-- MDP -->
+  <rect x="50" y="140" width="220" height="440" fill="#eeeeee" stroke="#000" stroke-width="3"/>
+  <text x="62" y="164" font-weight="bold">MDP (steel)</text>
+  <text x="62" y="182" font-size="12">Main distribution panel</text>
+  <text x="62" y="198" font-size="12">ELECTRICIAN ONLY inside</text>
+  <rect x="100" y="240" width="96" height="96" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="108" y="280" font-size="12" font-weight="bold">EM01</text>
+  <text x="108" y="296" font-size="11">FCN300</text>
+  <text x="108" y="312" font-size="11">96 x 96 mm</text>
+  <rect x="100" y="380" width="110" height="40" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="106" y="398" font-size="11" font-weight="bold">Socket + adapter</text>
+  <text x="106" y="412" font-size="11">5 V / 2 A USB-C</text>
+  <!-- panel gland -->
+  <rect x="244" y="540" width="26" height="22" fill="#ddd" stroke="#000" stroke-width="2"/>
+  <text x="200" y="600" font-size="11">panel entry P1</text>
+  <text x="200" y="614" font-size="11">(electrician)</text>
+
+  <!-- Logger box -->
+  <rect x="380" y="260" width="160" height="120" fill="#fff" stroke="#000" stroke-width="3"/>
+  <text x="390" y="282" font-weight="bold">Logger box</text>
+  <text x="390" y="300" font-size="12">IP54, plastic</text>
+  <text x="390" y="316" font-size="12">about 200 x 150</text>
+  <text x="390" y="332" font-size="12">x 100 mm (to confirm)</text>
+  <text x="390" y="350" font-size="11">label: "ADAB LOGGER</text>
+  <text x="390" y="364" font-size="11">LOG-0001, 5 V only"</text>
+  <!-- glands on box bottom -->
+  <rect x="396" y="380" width="18" height="14" fill="#ddd" stroke="#000" stroke-width="1.5"/>
+  <rect x="428" y="380" width="18" height="14" fill="#ddd" stroke="#000" stroke-width="1.5"/>
+  <rect x="460" y="380" width="18" height="14" fill="#ddd" stroke="#000" stroke-width="1.5"/>
+  <rect x="492" y="380" width="18" height="14" fill="#ddd" stroke="#000" stroke-width="1.5"/>
+  <text x="397" y="408" font-size="11">G1</text>
+  <text x="429" y="408" font-size="11">G2</text>
+  <text x="461" y="408" font-size="11">G3</text>
+  <text x="493" y="408" font-size="11">G4</text>
+
+  <!-- trunking from panel to box -->
+  <rect x="270" y="545" width="180" height="14" fill="#fff" stroke="#000" stroke-width="2"/>
+  <rect x="436" y="420" width="14" height="139" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="290" y="580" font-size="11">PVC trunking or conduit</text>
+  <text x="290" y="594" font-size="11">(USB-C cable + RS485 cable)</text>
+  <line x1="405" y1="394" x2="405" y2="420" stroke="#000" stroke-width="2"/>
+  <line x1="437" y1="394" x2="437" y2="420" stroke="#000" stroke-width="2"/>
+  <line x1="405" y1="420" x2="437" y2="420" stroke="#000" stroke-width="2"/>
+  <!-- TH2 cable to wall pass -->
+  <path d="M469,394 L469,450 Q469,470 489,470 L520,470 Q540,470 540,450 L540,430 L570,430" fill="none" stroke="#000" stroke-width="2" stroke-dasharray="10 4"/>
+  <circle cx="570" cy="430" r="8" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="462" y="530" font-size="11">TH2 cable to</text>
+  <text x="462" y="544" font-size="11">wall pass W1</text>
+  <text x="494" y="452" font-size="11">W1</text>
+
+  <!-- dimension: spacing panel to box -->
+  <line x1="270" y1="225" x2="380" y2="225" stroke="#000" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text x="282" y="218" font-size="11">30 cm or more</text>
+  <text x="282" y="244" font-size="11">(antenna clear</text>
+  <text x="282" y="258" font-size="11">of the steel)</text>
+  <!-- dimension: height -->
+  <line x1="560" y1="320" x2="560" y2="640" stroke="#000" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text x="550" y="480" font-size="11" text-anchor="middle" transform="rotate(-90 550 480)">box centre about 1.5 m above floor</text>
+
+  <!-- antenna keep-out -->
+  <rect x="470" y="225" width="70" height="35" fill="none" stroke="#000" stroke-width="1.5" stroke-dasharray="3 3"/>
+  <text x="470" y="218" font-size="11">antenna end up</text>
+
+  <!-- ===== Inside the box ===== -->
+  <text x="620" y="84" font-weight="bold">View 2: inside the logger box (lid removed)</text>
+  <rect x="620" y="110" width="560" height="430" rx="10" fill="#fff" stroke="#000" stroke-width="3"/>
+  <!-- mounting plate -->
+  <rect x="640" y="130" width="520" height="350" fill="#f7f7f7" stroke="#000" stroke-width="1"/>
+  <text x="648" y="148" font-size="11">plastic back plate (no metal)</text>
+
+  <!-- board -->
+  <rect x="700" y="170" width="300" height="160" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="712" y="192" font-weight="bold">Bluino ESP32-S3 board</text>
+  <text x="712" y="210" font-size="11">on 4 nylon standoffs (M3), components up</text>
+  <rect x="930" y="175" width="62" height="40" fill="none" stroke="#000" stroke-width="1.5" stroke-dasharray="3 3"/>
+  <text x="886" y="248" font-size="11">PCB antenna end</text>
+  <text x="886" y="262" font-size="11">(check on board) up,</text>
+  <text x="886" y="276" font-size="11">no cable over it</text>
+  <rect x="700" y="290" width="40" height="30" fill="#ddd" stroke="#000" stroke-width="1.5"/>
+  <text x="704" y="309" font-size="10">USB-C</text>
+  <rect x="760" y="290" width="44" height="30" fill="#ddd" stroke="#000" stroke-width="1.5"/>
+  <text x="763" y="304" font-size="10">microSD</text>
+  <rect x="820" y="290" width="54" height="30" fill="#ddd" stroke="#000" stroke-width="1.5"/>
+  <text x="824" y="304" font-size="10">RS485</text>
+  <text x="824" y="316" font-size="10">A B G</text>
+  <rect x="712" y="222" width="70" height="40" fill="#ddd" stroke="#000" stroke-width="1.5"/>
+  <text x="716" y="240" font-size="10">TH1 (I2C)</text>
+  <text x="716" y="254" font-size="10">on board</text>
+
+  <!-- terminal strip for TH2 -->
+  <rect x="1030" y="260" width="110" height="70" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="1038" y="278" font-size="11" font-weight="bold">TS1 terminal strip</text>
+  <text x="1038" y="294" font-size="10">3V3 / DATA / GND</text>
+  <text x="1038" y="308" font-size="10">R1 4.7 kohm fitted</text>
+  <text x="1038" y="322" font-size="10">here (drawing d)</text>
+  <line x1="1000" y1="295" x2="1030" y2="295" stroke="#000" stroke-width="2" stroke-dasharray="10 4"/>
+
+  <!-- vent / desiccant -->
+  <rect x="1050" y="160" width="90" height="60" fill="#fff" stroke="#000" stroke-width="1.5"/>
+  <text x="1056" y="180" font-size="10">desiccant bag</text>
+  <text x="1056" y="194" font-size="10">(optional), and</text>
+  <text x="1056" y="208" font-size="10">"5 V only" label</text>
+
+  <!-- cables in from bottom -->
+  <line x1="720" y1="320" x2="720" y2="540" stroke="#000" stroke-width="4"/>
+  <line x1="847" y1="320" x2="847" y2="540" stroke="#000" stroke-width="3"/>
+  <line x1="1085" y1="330" x2="1085" y2="540" stroke="#000" stroke-width="2" stroke-dasharray="10 4"/>
+  <!-- cable ties -->
+  <rect x="712" y="430" width="16" height="6" fill="#000"/>
+  <rect x="839" y="430" width="16" height="6" fill="#000"/>
+  <rect x="1077" y="430" width="16" height="6" fill="#000"/>
+  <text x="870" y="436" font-size="11">cable ties to tie points (strain relief)</text>
+
+  <!-- glands on bottom wall -->
+  <rect x="706" y="540" width="28" height="22" fill="#ddd" stroke="#000" stroke-width="2"/>
+  <rect x="833" y="540" width="28" height="22" fill="#ddd" stroke="#000" stroke-width="2"/>
+  <rect x="1071" y="540" width="28" height="22" fill="#ddd" stroke="#000" stroke-width="2"/>
+  <rect x="960" y="540" width="28" height="22" fill="#ddd" stroke="#000" stroke-width="2"/>
+  <text x="680" y="582" font-size="12" font-weight="bold">G1 M16</text>
+  <text x="680" y="597" font-size="11">USB-C 5 V cable</text>
+  <text x="808" y="582" font-size="12" font-weight="bold">G2 M16</text>
+  <text x="808" y="597" font-size="11">RS485 cable</text>
+  <text x="935" y="582" font-size="12" font-weight="bold">G4</text>
+  <text x="935" y="597" font-size="11">spare, blanked</text>
+  <text x="1048" y="582" font-size="12" font-weight="bold">G3 M12</text>
+  <text x="1048" y="597" font-size="11">TH2 cable</text>
+  <text x="680" y="622" font-size="11">All entries on the BOTTOM face only, so water runs away from them. Gland sizes are proposals:</text>
+  <text x="680" y="636" font-size="11">match each gland to the cable outer diameter. A USB-C plug does not pass an M16 gland:</text>
+  <text x="680" y="650" font-size="11">use a split gland or fit the plug after passing the cable (to decide at the bench).</text>
+
+  <!-- Legend -->
+  <rect x="20" y="670" width="1160" height="80" fill="#fff" stroke="#000"/>
+  <text x="32" y="692" font-weight="bold">Legend</text>
+  <line x1="100" y1="688" x2="150" y2="688" stroke="#000" stroke-width="4"/>
+  <text x="158" y="692" font-size="12">5 V USB-C cable</text>
+  <line x1="290" y1="688" x2="340" y2="688" stroke="#000" stroke-width="3"/>
+  <text x="348" y="692" font-size="12">RS485 cable</text>
+  <line x1="460" y1="688" x2="510" y2="688" stroke="#000" stroke-width="2" stroke-dasharray="10 4"/>
+  <text x="518" y="692" font-size="12">TH2 sensor cable</text>
+  <rect x="660" y="680" width="22" height="16" fill="#ddd" stroke="#000" stroke-width="1.5"/>
+  <text x="690" y="692" font-size="12">cable gland</text>
+  <rect x="800" y="680" width="40" height="16" fill="none" stroke="#000" stroke-width="1.5" stroke-dasharray="3 3"/>
+  <text x="848" y="692" font-size="12">antenna keep-out zone</text>
+  <rect x="100" y="708" width="40" height="16" fill="#eeeeee" stroke="#000" stroke-width="3"/>
+  <text x="148" y="720" font-size="12">steel panel: blocks WiFi, ELECTRICIAN ONLY inside</text>
+  <circle cx="520" cy="716" r="7" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="534" y="720" font-size="12">W1 wall pass (sleeve, sealed, sloped down outwards)</text>
+  <text x="32" y="742" font-size="11">Not to scale. Positions and sizes to confirm in Lab 5; the final layout goes in the as-built record.</text>
+</svg>

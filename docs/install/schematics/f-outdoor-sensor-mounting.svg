@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1150" height="760" viewBox="0 0 1150 760" font-family="Arial, Helvetica, sans-serif" font-size="14">
+  <title>(f) Outdoor sensor mounting: radiation shield, drip loop, wall pass</title>
+  <defs>
+    <pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="10" stroke="#000" stroke-width="1"/>
+    </pattern>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1150" height="760" fill="#fff"/>
+  <text x="20" y="32" font-size="20" font-weight="bold">(f) Outdoor sensor TH2 (AM2301): mounting, drip loop, wall pass</text>
+  <text x="20" y="54" fill="#333">Section through the panel room wall, seen from the side. Not to scale. Distances are proposals, to confirm in Lab 5.</text>
+
+  <!-- ground -->
+  <rect x="20" y="640" width="1110" height="18" fill="url(#hatch)" stroke="#000"/>
+  <text x="30" y="676" font-size="12">floor / ground level</text>
+
+  <!-- wall -->
+  <rect x="400" y="120" width="60" height="520" fill="url(#hatch)" stroke="#000" stroke-width="2"/>
+  <text x="400" y="112" font-size="12" font-weight="bold">wall</text>
+  <text x="120" y="100" font-weight="bold">INSIDE: panel room</text>
+  <text x="620" y="100" font-weight="bold">OUTSIDE: shaded face (north or east if possible)</text>
+
+  <!-- eaves -->
+  <path d="M460,150 L900,190 L900,205 L460,165 z" fill="#eeeeee" stroke="#000" stroke-width="2"/>
+  <text x="700" y="160" font-size="12">roof eaves / overhang: permanent shade</text>
+  <!-- sun -->
+  <circle cx="1060" cy="110" r="22" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="1046" y="116" font-size="12">sun</text>
+  <line x1="1040" y1="130" x2="905" y2="198" stroke="#000" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <text x="935" y="236" font-size="11">direct sun blocked by eaves;</text>
+  <text x="935" y="250" font-size="11">no sun on the shield at any hour</text>
+
+  <!-- logger box inside -->
+  <rect x="200" y="300" width="120" height="110" fill="#fff" stroke="#000" stroke-width="3"/>
+  <text x="210" y="322" font-weight="bold">Logger box</text>
+  <text x="210" y="340" font-size="12">TS1: 3V3, DATA,</text>
+  <text x="210" y="356" font-size="12">GND + R1 4.7k</text>
+  <rect x="290" y="410" width="20" height="14" fill="#ddd" stroke="#000" stroke-width="1.5"/>
+  <text x="252" y="440" font-size="11">gland G3</text>
+  <!-- cable inside to wall pass -->
+  <path d="M300,424 L300,470 Q300,490 320,490 L360,490 Q380,490 380,470 L380,440 L400,436" fill="none" stroke="#000" stroke-width="2.5" stroke-dasharray="10 4"/>
+  <text x="120" y="506" font-size="11">indoor run clipped to the wall,</text>
+  <text x="120" y="520" font-size="11">low point before the box gland</text>
+
+  <!-- wall pass sleeve sloping down outwards -->
+  <polygon points="400,428 460,440 460,452 400,440" fill="#fff" stroke="#000" stroke-width="2"/>
+  <line x1="400" y1="434" x2="470" y2="448" stroke="#000" stroke-width="2.5" stroke-dasharray="10 4"/>
+  <text x="150" y="580" font-size="12" font-weight="bold">W1 wall pass</text>
+  <text x="150" y="596" font-size="11">PVC sleeve, sloped DOWN towards the</text>
+  <text x="150" y="610" font-size="11">outside (about 5 to 10 degrees), sealed</text>
+  <text x="150" y="624" font-size="11">both ends with outdoor sealant</text>
+  <line x1="300" y1="570" x2="425" y2="452" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- outdoor cable: from wall pass down to drip loop then up to shield -->
+  <path d="M470,448 L520,448 Q540,448 540,470 L540,540 Q540,575 575,575 Q610,575 610,540 L610,470 Q610,452 630,452 L700,452 L700,440" fill="none" stroke="#000" stroke-width="2.5" stroke-dasharray="10 4"/>
+  <text x="548" y="600" font-size="12" font-weight="bold">drip loop</text>
+  <text x="548" y="614" font-size="11">lowest point of the cable,</text>
+  <text x="548" y="628" font-size="11">below both the wall pass and the shield</text>
+  <!-- drop -->
+  <line x1="575" y1="582" x2="575" y2="590" stroke="#000" stroke-width="1"/>
+  <path d="M575,590 q-4,6 0,10 q4,-4 0,-10" fill="#000"/>
+  <!-- cable clips -->
+  <rect x="514" y="442" width="10" height="12" fill="#000"/>
+  <rect x="660" y="446" width="10" height="12" fill="#000"/>
+  <text x="640" y="476" font-size="11">UV-resistant clips</text>
+
+  <!-- bracket -->
+  <rect x="460" y="300" width="14" height="40" fill="#fff" stroke="#000" stroke-width="2"/>
+  <line x1="474" y1="320" x2="660" y2="320" stroke="#000" stroke-width="5"/>
+  <text x="480" y="312" font-size="11">bracket (stainless or UV-stable plastic)</text>
+
+  <!-- radiation shield (stack of louvres) -->
+  <g stroke="#000" stroke-width="2" fill="#fff">
+    <path d="M640,330 L760,330 L770,342 L630,342 z"/>
+    <path d="M640,350 L760,350 L770,362 L630,362 z"/>
+    <path d="M640,370 L760,370 L770,382 L630,382 z"/>
+    <path d="M640,390 L760,390 L770,402 L630,402 z"/>
+    <path d="M640,410 L760,410 L770,422 L630,422 z"/>
+  </g>
+  <rect x="660" y="320" width="80" height="10" fill="#fff" stroke="#000" stroke-width="2"/>
+  <!-- sensor inside shield -->
+  <rect x="682" y="346" width="36" height="70" fill="#ddd" stroke="#000" stroke-width="2"/>
+  <text x="684" y="376" font-size="10" font-weight="bold">AM</text>
+  <text x="684" y="390" font-size="10" font-weight="bold">2301</text>
+  <line x1="700" y1="416" x2="700" y2="440" stroke="#000" stroke-width="2.5" stroke-dasharray="10 4"/>
+  <text x="814" y="340" font-size="12" font-weight="bold">Radiation shield (louvred screen)</text>
+  <text x="814" y="356" font-size="11">white, ventilated, rain-proof from above</text>
+  <text x="814" y="374" font-size="12" font-weight="bold">AM2301 inside, opening / cable DOWN</text>
+  <text x="814" y="390" font-size="11">so rain cannot run into the sensor case</text>
+  <text x="814" y="408" font-size="11">air moves freely; sensor not touching the louvres</text>
+
+  <!-- dimensions -->
+  <line x1="800" y1="380" x2="800" y2="640" stroke="#000" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <line x1="718" y1="380" x2="806" y2="380" stroke="#000" stroke-width="0.8" stroke-dasharray="2 3"/>
+  <text x="808" y="604" font-size="12" font-weight="bold">about 1.5 m</text>
+  <text x="808" y="618" font-size="11">sensor centre above</text>
+  <text x="808" y="632" font-size="11">ground</text>
+  <line x1="460" y1="270" x2="640" y2="270" stroke="#000" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text x="480" y="262" font-size="11">10 to 15 cm from the wall (proposal)</text>
+
+  <!-- keep away notes -->
+  <rect x="830" y="440" width="295" height="140" fill="#fff" stroke="#000" stroke-width="1.5"/>
+  <text x="842" y="462" font-weight="bold">Keep away from (2 m or more, proposal)</text>
+  <text x="842" y="482" font-size="12">- AC condenser outlets (hot air)</text>
+  <text x="842" y="500" font-size="12">- genset exhaust and its radiator air</text>
+  <text x="842" y="518" font-size="12">- walls and roofs in direct sun</text>
+  <text x="842" y="536" font-size="12">- kitchen vents, dryer vents, drains</text>
+  <text x="842" y="554" font-size="12">- sprinkler or hose spray, roof drip line</text>
+  <text x="842" y="572" font-size="12">Mark the spot in the site survey (Lab 5).</text>
+
+  <!-- Legend -->
+  <rect x="20" y="690" width="1110" height="60" fill="#fff" stroke="#000"/>
+  <text x="32" y="712" font-weight="bold">Legend</text>
+  <line x1="100" y1="708" x2="150" y2="708" stroke="#000" stroke-width="2.5" stroke-dasharray="10 4"/>
+  <text x="158" y="712" font-size="12">TH2 cable: 3-core shielded outdoor cable, about 1 m (2 m bought)</text>
+  <rect x="580" y="700" width="40" height="16" fill="url(#hatch)" stroke="#000"/>
+  <text x="628" y="712" font-size="12">wall / ground (section)</text>
+  <rect x="800" y="701" width="10" height="12" fill="#000"/>
+  <text x="818" y="712" font-size="12">cable clip</text>
+  <rect x="920" y="700" width="20" height="14" fill="#ddd" stroke="#000"/>
+  <text x="948" y="712" font-size="12">gland / sensor</text>
+  <text x="32" y="738" font-size="11">Total cable length must cover: box gland to wall pass, wall thickness, drip loop, and up to the shield. Measure it in Lab 5 before cutting; if more than about 3 m, see the plan (5 V supply, pull-up still to 3.3 V).</text>
+</svg>
