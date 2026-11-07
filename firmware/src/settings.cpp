@@ -33,6 +33,7 @@ const Def DEFS[] = {
     {"mb_format", "8N1", "Meter", "RS485 frame: 8N1, 8E1, 8O1 or 8N2", 0},
     {"ct_mult", "1", "Meter", "Multiplier for currents and powers if the meter gives secondary values (CT ratio), else 1", 0},
     // Sensors
+    {"th_avg_min", "5", "Sensors", "Minutes averaged per temperature/humidity record (1, 5, 10, 15, 30 or 60)", 0},
     {"th1_type", "auto", "Sensors", "TH1 on-board I2C sensor: auto, aht, sht3x, htu21, none", 0},
     {"th1_off_t", "0", "Sensors", "TH1 temperature offset (C), from the install-day calibration", 0},
     {"th1_off_rh", "0", "Sensors", "TH1 humidity offset (%RH)", 0},

@@ -99,10 +99,12 @@ def cmd_add_site(store, a):
                                               "EM01_v3", "EM01_i1", "EM01_i2", "EM01_i3",
                                               "TH1_t", "TH1_rh", "TH2_t", "TH2_rh"]},
         "sensors": {"TH1": "electrical room (on the board)", "TH2": "outdoor, beside the panel room"},
-        "nominal_v": 230,
+        "grid": "PLN 3-phase 4-wire, 230/400 V nominal (SNI), contracts on 220/380 V",
+        "nominal_v": a.nominal_v,
         "nominal_hz": 50,
-        "contracted_kva": None,
-        "rated_a": None,
+        "contracted_kva": a.contracted_kva,
+        "contract_v_ln": 220,
+        "rated_a": a.rated_a,
     }
     atomic_write(p, json.dumps(prof, indent=2) + "\n")
     print(f"site {a.code} created: {p}")
@@ -203,6 +205,30 @@ def num(x):
         return None
 
 
+SENSOR_COL = re.compile(r"^TH\d+_(t|rh)$")
+
+
+def alarm_counts(store, site):
+    """(local date, device) -> {"dips": n, "swells": n, "power_interruptions": n, "alarms_started": n}"""
+    out = {}
+    d = os.path.join(store.site_dir(site), "alarms")
+    if not os.path.isdir(d):
+        return out
+    names = {"A26": "dips", "A27": "swells", "A02": "power_interruptions"}
+    for fn in sorted(os.listdir(d)):
+        if not fn.endswith(".csv"):
+            continue
+        with open(os.path.join(d, fn), encoding="utf-8", newline="") as f:
+            for r in csv.DictReader(f):
+                key = (r["local_time"][:10], r["device"])
+                c = out.setdefault(key, {"dips": 0, "swells": 0, "power_interruptions": 0, "alarms_started": 0})
+                if r["state"] == "start":
+                    c["alarms_started"] += 1
+                if r["id"] in names and r["state"] in ("start", "event"):
+                    c[names[r["id"]]] += 1
+    return out
+
+
 def cmd_daily(store, a):
     tz = site_offset(store, a.site)
     days = {}   # (local date, device) -> stats
@@ -210,13 +236,16 @@ def cmd_daily(store, a):
         for t, row in read_rows(store, a.site, dev):
             lt = t.astimezone(tz)
             key = (lt.strftime("%Y-%m-%d"), dev)
+            # Sensor values are 5-minute means that END at the row's time: the 00:00 row belongs to the day before.
+            skey = ((t - timedelta(seconds=1)).astimezone(tz).strftime("%Y-%m-%d"), dev)
             s = days.setdefault(key, {"minutes": 0, "cols": {}})
             s["minutes"] += 1
             for col, val in row.items():
                 v = num(val)
                 if v is None or col in ("ts", "rssi", "heap_kb", "up_s", "backlog_min", "sd", "boot"):
                     continue
-                c = s["cols"].setdefault(col, {"n": 0, "sum": 0.0, "min": v, "max": v, "first": v, "last": v,
+                target = days.setdefault(skey, {"minutes": 0, "cols": {}}) if SENSOR_COL.match(col) else s
+                c = target["cols"].setdefault(col, {"n": 0, "sum": 0.0, "min": v, "max": v, "first": v, "last": v,
                                                "tmax": lt})
                 c["n"] += 1
                 c["sum"] += v
@@ -224,10 +253,13 @@ def cmd_daily(store, a):
                 c["min"] = min(c["min"], v)
                 if v > c["max"]:
                     c["max"], c["tmax"] = v, lt
-    out_rows, header = [], ["date", "device", "minutes", "coverage_pct"]
+    counts = alarm_counts(store, a.site)
+    out_rows, header = [], ["date", "device", "minutes", "coverage_pct", "dips", "swells", "power_interruptions",
+                            "alarms_started"]
     prev = {}   # (device, column) -> (date, last counter value): the day's kWh runs from the previous day's last reading
     for (day, dev), s in sorted(days.items()):
         r = {"date": day, "device": dev, "minutes": s["minutes"], "coverage_pct": round(s["minutes"] / 14.4, 1)}
+        r.update(counts.get((day, dev), {"dips": 0, "swells": 0, "power_interruptions": 0, "alarms_started": 0}))
         for col, c in sorted(s["cols"].items()):
             if col.endswith("_n"):
                 continue
@@ -259,7 +291,8 @@ def cmd_daily(store, a):
         lines.append(",".join(str(r.get(k, "")) for k in header))
     p = os.path.join(store.site_dir(a.site), "daily.csv")
     atomic_write(p, "\n".join(lines) + "\n")
-    print(f"{p}: {len(out_rows)} day(s); energy columns end in _e_delta (kWh), local time {tz}")
+    print(f"{p}: {len(out_rows)} day(s); energy columns end in _e_delta (kWh), local time {tz}; "
+          f"dips, swells, power_interruptions counted from the alarm log")
 
 
 OED_NAMES = {"e": "energy", "eq": "reactive-energy", "t": "temp", "rh": "hum"}
@@ -278,6 +311,7 @@ def cmd_export_oed(store, a):
     os.makedirs(out_dir, exist_ok=True)
     keep = re.compile(r"^(EM\d+_e|TH\d+_t|TH\d+_rh)$") if not a.all else re.compile(r"^(?!.*_n$)[A-Za-z0-9]+_.+$")
     files = {}
+    last_sensor = {}   # (device, column) -> time of the previous sensor value
     for dev in store.site_devices(a.site):
         for t, row in read_rows(store, a.site, dev, a.date_from, a.date_to):
             start = t.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
@@ -287,12 +321,20 @@ def cmd_export_oed(store, a):
                     continue
                 if num(val) is None:
                     continue
+                if SENSOR_COL.match(col):   # a 5-minute mean ending at the row's time
+                    p_t = last_sensor.get((dev, col))
+                    w_start = p_t if p_t and t - p_t <= timedelta(minutes=60) else t - timedelta(minutes=5)
+                    last_sensor[(dev, col)] = t
+                    start_s = w_start.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
+                    end_s = t.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    start_s, end_s = start, end
                 name = oed_meter_name(a.site, col)
                 if name not in files:
                     f = open(os.path.join(out_dir, name + ".csv"), "w", encoding="utf-8", newline="")
                     f.write("reading,start_timestamp,end_timestamp\n")
                     files[name] = f
-                files[name].write(f"{val},{start},{end}\n")
+                files[name].write(f"{val},{start_s},{end_s}\n")
     for f in files.values():
         f.close()
     print(f"{len(files)} file(s) in {out_dir} (header row: yes; *-energy files: cumulative=yes)")
@@ -406,6 +448,9 @@ def main():
     sub.add_parser("init")
     p = sub.add_parser("add-site"); p.add_argument("code"); p.add_argument("--name")
     p.add_argument("--tz", default="Asia/Makassar"); p.add_argument("--utc-offset", type=float, default=8)
+    p.add_argument("--contracted-kva", type=float, help="PLN contract, e.g. 82.5 (A08, A37)")
+    p.add_argument("--rated-a", type=float, help="main breaker or CT rating in A, e.g. 200 (A29)")
+    p.add_argument("--nominal-v", type=float, default=230, help="nominal phase voltage L-N")
     p = sub.add_parser("add-device"); p.add_argument("site"); p.add_argument("device")
     p.add_argument("--sd-settings", help="also write a settings.txt for the logger's SD card")
     p.add_argument("--server", default="https://arkan-monitoring.duckdns.org")

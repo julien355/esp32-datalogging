@@ -39,6 +39,12 @@ def num(x):
         return None
 
 
+def boot_of(row):
+    """The boot column is "reason@firmware" on the first record after a boot (logger 0.3.0+)."""
+    reason, _, fw = (row.get("boot") or "").partition("@")
+    return reason, fw
+
+
 def parse_ts(s):
     return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
 
@@ -139,6 +145,16 @@ def r_pf_low(row, a, ctx):
     return abs(pf)
 
 
+def r_i_pct_contract(row, a, ctx):
+    """Highest 15 s phase current against the PLN limiter of the contract (82.5 kVA = 3 x 125 A at 220 V)."""
+    kva = num(ctx["site"].get("contracted_kva"))
+    v_ln = num(ctx["site"].get("contract_v_ln")) or 220.0
+    i = _phase_q(row, a, "i", "max")
+    if not kva or not i:
+        return None
+    return max(i) / (kva * 1000 / (3 * v_ln)) * 100
+
+
 def r_i_max_pct_rated(row, a, ctx):
     rated = num(ctx["site"].get("rated_a"))
     i = _phase_q(row, a, "i", "max")
@@ -181,10 +197,16 @@ def r_rh_above(row, a, ctx):
 
 
 def r_sensor_missing(row, a, ctx):
-    present = [s for s in _sensors(a) if f"{s}_t" in row]
-    if not present:
+    """Sensors are recorded every 5 min: empty = not a sensor row, "err" = no valid reading in the window.
+    (Before logger 0.3.0, every row had sensor values and an empty one meant a fault.)"""
+    vals = [row.get(f"{s}_t") for s in _sensors(a) if f"{s}_t" in row]
+    if not vals:
         return None
-    return any(num(row.get(f"{s}_t")) is None for s in present)
+    if any(v == "err" for v in vals):
+        return True
+    if all(v == "" for v in vals):
+        return None
+    return False
 
 
 def r_temp_diff(row, a, ctx):
@@ -223,7 +245,7 @@ def r_wifi_weak(row, a, ctx):
 # events --------------------------------------------------------------
 
 def e_power_interruption(row, a, ctx):
-    boot = row.get("boot") or ""
+    boot, _ = boot_of(row)
     if boot not in POWER_BOOTS:
         return None
     prev = ctx.get("prev_ts")
@@ -235,7 +257,7 @@ def e_power_interruption(row, a, ctx):
 
 
 def e_logger_crash(row, a, ctx):
-    boot = row.get("boot") or ""
+    boot, _ = boot_of(row)
     return f"logger restarted by {boot}" if boot in CRASH_BOOTS else None
 
 
@@ -249,7 +271,7 @@ def e_e_backwards(row, a, ctx):
 
 
 def e_frequent_restarts(row, a, ctx):
-    boot = row.get("boot") or ""
+    boot, _ = boot_of(row)
     if not boot or boot in PLANNED_BOOTS:
         return None
     t = parse_ts(row["ts"]).timestamp()
@@ -262,12 +284,28 @@ def e_frequent_restarts(row, a, ctx):
     return None
 
 
+def e_firmware_updated(row, a, ctx):
+    boot, fw = boot_of(row)
+    old = ctx.get("fw_prev")
+    if not fw or not old or fw == old or boot == "sw:ota_rollback":
+        return None
+    how = "by remote update (OTA)" if boot == "sw:ota" else f"flashed by hand (boot {boot})"
+    return f"firmware {old} -> {fw}, {how}"
+
+
+def e_firmware_rollback(row, a, ctx):
+    boot, fw = boot_of(row)
+    if boot != "sw:ota_rollback":
+        return None
+    return f"new firmware kept restarting: back to {fw or 'the previous version'} (was {ctx.get('fw_prev') or '?'})"
+
+
 LEVEL = {
     "v_min_phase": ("below", r_v_min_phase), "v_max_phase": ("above", r_v_max_phase),
     "v_mean_low": ("below", r_v_mean_low), "v_mean_high": ("above", r_v_mean_high),
     "v_unbalance_pct": ("above", r_v_unbalance_pct), "i_imbalance_pct": ("above", r_i_imbalance_pct),
     "f_dev": ("above", r_f_dev), "s_pct_contract": ("above", r_s_pct_contract), "pf_low": ("below", r_pf_low),
-    "i_max_pct_rated": ("above", r_i_max_pct_rated), "p_phase_negative": ("below", r_p_phase_negative),
+    "i_max_pct_rated": ("above", r_i_max_pct_rated), "i_pct_contract": ("above", r_i_pct_contract), "p_phase_negative": ("below", r_p_phase_negative),
     "meter_no_answer": ("flag", r_meter_no_answer), "e_frozen": ("flag", r_e_frozen),
     "temp_above": ("above", r_temp_above), "rh_above": ("above", r_rh_above),
     "sensor_missing": ("flag", r_sensor_missing), "temp_diff": ("above", r_temp_diff),
@@ -277,6 +315,7 @@ LEVEL = {
 EVENT = {
     "power_interruption": e_power_interruption, "logger_crash": e_logger_crash,
     "e_backwards": e_e_backwards, "frequent_restarts": e_frequent_restarts,
+    "firmware_updated": e_firmware_updated, "firmware_rollback": e_firmware_rollback,
 }
 # Rules not evaluated on records: offline and clock_skew (below), oed_push and grid_lost (not built).
 
@@ -396,7 +435,8 @@ class AlarmEngine:
             t = parse_ts(ts).timestamp()
             prev_ts = state.get("last_ts")
             gap = prev_ts is not None and t - parse_ts(prev_ts).timestamp() > GAP_S
-            ctx = {"site": prof, "prev": state.get("prev"), "prev_ts": prev_ts, "state": state}
+            ctx = {"site": prof, "prev": state.get("prev"), "prev_ts": prev_ts, "state": state,
+                   "fw_prev": state.get("fw")}
             for a in reg:
                 rule = (a.get("rule") or "").strip()
                 if rule in EVENT:
@@ -450,6 +490,9 @@ class AlarmEngine:
                                               f"cleared after {dur} min; worst value {self._fmt(st['worst'])}",
                                               str(dur)))
                         st.update(active=False, since=None, worst=None)
+            fw = boot_of(row)[1]
+            if fw:
+                state["fw"] = fw
             state["last_ts"] = ts
             state["prev"] = row
             state["prev_ts"] = ts
@@ -463,7 +506,7 @@ class AlarmEngine:
             return min(old, new)
         if kind == "above":
             return max(old, new)
-        return new
+        return bool(old) or bool(new)   # flag: it was on
 
     def process(self, site, device, header, lines):
         """Called after each upload with the rows just stored: evaluates those newer than the state."""

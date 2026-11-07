@@ -125,8 +125,9 @@ class AlarmTest(unittest.TestCase):
         return self.s.ingest("adab", "LOG-0001", PQ_HEADER + "\n" + "\n".join(rows) + "\n")
 
     def log(self):
-        with open(os.path.join(self.s.site_dir("adab"), "alarms", "2026.csv")) as f:
-            return [ln.split(",") for ln in f.read().splitlines()[1:]]
+        import csv
+        with open(os.path.join(self.s.site_dir("adab"), "alarms", "2026.csv"), newline="") as f:
+            return list(csv.reader(f))[1:]
 
     def test_undervoltage_with_delay_and_dip(self):
         rows = [pq_row(self.t(m), e=100 + m) for m in range(5)]
@@ -179,6 +180,44 @@ class AlarmTest(unittest.TestCase):
         self.send(rows)
         self.assertFalse(os.path.exists(os.path.join(self.s.site_dir("adab"), "alarms", "2026.csv"))
                          and "A16" in [x[3] for x in self.log()])
+
+
+    def test_firmware_update_and_rollback(self):
+        rows = [pq_row(self.t(0), boot="poweron@0.3.0"), pq_row(self.t(1)),
+                pq_row(self.t(5), boot="sw:ota@0.3.1"), pq_row(self.t(6)),
+                pq_row(self.t(9), boot="sw:ota_rollback@0.3.0"),
+                pq_row(self.t(20), boot="poweron@0.3.2")]          # flashed by hand
+        self.send(rows)
+        ev = {(x[3], x[0]): x[11] for x in self.log() if x[3] in ("A35", "A36")}
+        self.assertIn("0.3.0 -> 0.3.1, by remote update (OTA)", ev[("A35", self.t(5))])
+        self.assertIn("back to 0.3.0", ev[("A36", self.t(9))])
+        self.assertIn("flashed by hand", ev[("A35", self.t(20))])
+        self.assertEqual(len(ev), 3)                                  # no A35 for the rollback itself
+        self.assertEqual(len([x for x in self.log() if x[3] == "A02"]), 2)   # poweron@... still a power interruption
+
+    def test_sensor_rows_every_5_min_and_err(self):
+        def row5(m, th):
+            r = pq_row(self.t(m), e=100 + m).split(",")
+            r[16:20] = th
+            return ",".join(r)
+        rows = [row5(m, ["30", "60", "28", "70"] if m % 5 == 0 else ["", "", "", ""]) for m in range(0, 30)]
+        self.send(rows)                                               # empty rows between: no fault
+        self.assertFalse(os.path.exists(os.path.join(self.s.site_dir("adab"), "alarms", "2026.csv"))
+                         and "A14" in [x[3] for x in self.log()])
+        rows = [row5(m, ["30", "60", "err", "err"] if m % 5 == 0 else ["", "", "", ""]) for m in range(30, 50)]
+        self.send(rows)
+        starts = [x for x in self.log() if x[3] == "A14" and x[6] == "start"]
+        self.assertEqual(starts[0][0], self.t(30))
+
+    def test_pln_limit_per_phase(self):
+        os.makedirs(self.s.site_dir("adab"), exist_ok=True)
+        with open(os.path.join(self.s.site_dir("adab"), "site.json"), "w") as f:
+            json.dump({"contracted_kva": 82.5, "contract_v_ln": 220}, f)
+        h = "ts,EM01_i1,EM01_i1_max,EM01_i2,EM01_i2_max,EM01_i3,EM01_i3_max,EM01_n"
+        rows = [f"{self.t(m)},60,{120 if 3 <= m < 10 else 70},60,70,60,70,4" for m in range(14)]   # 120 A = 96 %
+        self.s.ingest("adab", "LOG-0001", h + "\n" + "\n".join(rows) + "\n")
+        a37 = [(x[6], x[0]) for x in self.log() if x[3] == "A37"]
+        self.assertEqual(a37, [("start", self.t(3)), ("clear", self.t(10))])
 
 
 class ToolsAndHttpTest(unittest.TestCase):
@@ -283,6 +322,7 @@ class ToolsAndHttpTest(unittest.TestCase):
         hdr = lines[0].split(",")
         d7 = dict(zip(hdr, lines[2].split(",")))
         self.assertEqual(d7["date"], "2026-11-07")
+        self.assertIn("dips", hdr)
         self.assertEqual(d7["minutes"], "60")
         self.assertEqual(float(d7["EM01_e_delta"]), 30.0)   # 60 minutes x 0.5 kWh, from the 6th's last reading
         out = self.manage("export-oed", "adab", "--out", os.path.join(self.data, "oed"))

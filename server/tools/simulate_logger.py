@@ -8,8 +8,9 @@ Use it to test the VPS before the board is ready, and to rehearse an outage:
 --backlog-hours N  first sends N hours of past records in batches of 60 (as after an outage)
 --live             then keeps going: a snapshot every 15 s, a record every minute
 --resend           sends the last batch twice (the server must count duplicates, not store them)
---event dip|hot|ct during the backlog, simulates a voltage dip on L2 (A26, then A05 for 6 min),
-                   a hot electrical room (A11), or a CT fitted backwards on L3 (A30): to test the alarm log
+--event dip|hot|ct|ota|sensor  during the backlog, simulates a voltage dip on L2 (A26, then A05 for 6 min),
+                   a hot electrical room (A11), a CT fitted backwards on L3 (A30), a remote firmware update
+                   (A35), or a failed outdoor sensor (A14): to test the alarm log
 """
 
 import argparse
@@ -33,7 +34,7 @@ class Sim:
         self.minute_no = 0
         self.e = 184522.70
         self.eq = 40210.10
-        self.boot = "poweron"
+        self.boot = "poweron@0.3.0"
         self.t0 = time.time()
 
     def values(self, t, advance=False):
@@ -73,12 +74,21 @@ class Sim:
                 mm["p3"] = (v["p3"] * 1.01, v["p3"] * 0.99)
         if self.event == "hot" and 30 <= self.minute_no < 50:
             v["TH1_t"] = 37.5
+        if self.event == "ota" and self.minute_no == 40:
+            self.boot = "sw:ota@0.3.1"
         ts = datetime.fromtimestamp(minute_ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         parts = []
         for c in MINMAX:
             parts += [f"{v[c]:.3f}", f"{mm[c][0]:.3f}", f"{mm[c][1]:.3f}"]
         parts += [f"{v['e']:.2f}", f"{v['eq']:.2f}"]
-        r = (f"{ts},{','.join(parts)},4,{v['TH1_t']:.2f},{v['TH1_rh']:.1f},{v['TH2_t']:.2f},{v['TH2_rh']:.1f},"
+        # Sensors: 5-minute means on the rows at :00, :05, ... only (logger 0.3.0); "err" = sensor fault
+        if minute_ts % 300:
+            th = ",,,"
+        elif self.event == "sensor" and 30 <= self.minute_no < 60:
+            th = f"{v['TH1_t']:.2f},{v['TH1_rh']:.1f},err,err"
+        else:
+            th = f"{v['TH1_t']:.2f},{v['TH1_rh']:.1f},{v['TH2_t']:.2f},{v['TH2_rh']:.1f}"
+        r = (f"{ts},{','.join(parts)},4,{th},"
              f"-63,180,{int(time.time() - self.t0)},{backlog},1,{self.boot}")
         self.boot = ""
         return r, v
@@ -87,7 +97,7 @@ class Sim:
 def post(url, token, path, body, ctype):
     req = urllib.request.Request(url.rstrip("/") + path, data=body.encode(), method="POST",
                                  headers={"Authorization": "Bearer " + token, "Content-Type": ctype,
-                                          "X-Fw": "sim-0.1.0", "X-Schema": "1"})
+                                          "X-Fw": "0.3.0", "X-Schema": "1"})
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             return r.status, r.read().decode()
@@ -103,7 +113,7 @@ def main():
     ap.add_argument("--backlog-hours", type=float, default=0)
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--resend", action="store_true")
-    ap.add_argument("--event", choices=["dip", "hot", "ct"])
+    ap.add_argument("--event", choices=["dip", "hot", "ct", "ota", "sensor"])
     a = ap.parse_args()
     sim = Sim(a.event)
     now = int(time.time())

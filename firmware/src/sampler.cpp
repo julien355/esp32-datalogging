@@ -28,7 +28,10 @@ struct Acc {
 
 static Acc accM[MAX_METERS][MAX_REGS];
 static uint16_t meterSamples[MAX_METERS];
-static Acc acc1T, acc1H, acc2T, acc2H;
+static Acc acc1T, acc1H, acc2T, acc2H;          // sensors: current window (th_avg_min, 5 min)
+static Acc done1T, done1H, done2T, done2H;       // sensors: the window that just ended
+static bool thReady = false;                     // a finished window waits for its row
+static int thWindowS = 300;
 static time_t accMinute = 0;
 static String hdr;
 static bool th1Col = true, th2Col = true;
@@ -59,7 +62,9 @@ static String buildHeader() {
     }
     h += "," + id + "_n";
   }
-  // Sensors: 1-minute average only (owner, 7 November 2026). Empty = no valid reading that minute.
+  // Sensors: 5-minute average only (owner, 7 November 2026), written on the rows at :00, :05, :10...
+  // (the mean of the 5 minutes BEFORE that time). Empty on the other rows; "err" = no valid reading
+  // in the whole window (sensor fault).
   if (th1Col) h += ",TH1_t,TH1_rh";
   if (th2Col) h += ",TH2_t,TH2_rh";
   h += ",rssi,heap_kb,up_s,backlog_min,sd,boot";
@@ -71,6 +76,16 @@ String header() { return hdr; }
 static void num(String &s, const Acc &a, bool useMean, int dec) {
   s += ',';
   if (a.n) s += String(useMean ? a.mean() : a.last, dec);
+}
+
+static void thCols(String &row, bool thRow, const Acc &t, const Acc &h) {
+  if (!thRow) {
+    row += ",,";
+  } else if (!t.n) {
+    row += ",err,err";
+  } else {
+    row += "," + String(t.mean(), 2) + "," + String(h.mean(), 1);
+  }
 }
 
 static void flushMinute(time_t minute) {
@@ -92,14 +107,10 @@ static void flushMinute(time_t minute) {
     row += ',';
     row += String(meterSamples[m]);
   }
-  if (th1Col) {
-    num(row, acc1T, true, 2);
-    num(row, acc1H, true, 1);
-  }
-  if (th2Col) {
-    num(row, acc2T, true, 2);
-    num(row, acc2H, true, 1);
-  }
+  bool thRow = thReady && minute % thWindowS == 0;
+  if (thRow) thReady = false;
+  if (th1Col) thCols(row, thRow, done1T, done1H);
+  if (th2Col) thCols(row, thRow, done2T, done2H);
   row += ',';
   if (st.wifiUp) row += String((int)st.rssi);
   row += "," + String(ESP.getFreeHeap() / 1024);
@@ -107,7 +118,10 @@ static void flushMinute(time_t minute) {
   row += "," + String((int)st.backlogMin);
   row += st.sdOk ? ",1" : ",0";        // 0: the SD card was failing, the row came from the RAM queue
   row += ',';
-  if (firstRow) row += st.bootReason;   // only on the first record after a boot
+  if (firstRow) {   // only on the first record after a boot: reason@firmware, e.g. sw:ota@0.3.0
+    row += st.bootReason;
+    row += "@" FW_VERSION;
+  }
   firstRow = false;
   store::appendRow(minute, hdr, row);
   st.lastRowTs = minute;
@@ -118,6 +132,16 @@ static void resetAcc() {
     meterSamples[m] = 0;
     for (int j = 0; j < MAX_REGS; j++) accM[m][j].reset();
   }
+}
+
+// At the start of each sensor window: keep the finished window for the row of this minute.
+static void rollSensorWindow(time_t minute) {
+  if (minute % thWindowS) return;
+  done1T = acc1T;
+  done1H = acc1H;
+  done2T = acc2T;
+  done2H = acc2H;
+  thReady = true;
   acc1T.reset();
   acc1H.reset();
   acc2T.reset();
@@ -133,6 +157,7 @@ static void tick() {
     if (minute != accMinute) {
       if (accMinute) flushMinute(accMinute);
       resetAcc();
+      if (accMinute) rollSensorWindow(minute);   // not on the first minute after boot: nothing to close yet
       accMinute = minute;
     }
   }
@@ -245,6 +270,9 @@ void begin() {
   if (periodS < 5 || periodS > 60 || 60 % periodS) periodS = 15;
   th1Col = cfg::get("th1_type") != "none";
   th2Col = sensors::th2Enabled();
+  int w = cfg::getInt("th_avg_min");
+  if (w < 1 || w > 60 || 60 % w) w = 5;
+  thWindowS = w * 60;
   hdr = buildHeader();
   int cols = 1;
   for (size_t i = 0; i < hdr.length(); i++) cols += hdr[i] == ',';

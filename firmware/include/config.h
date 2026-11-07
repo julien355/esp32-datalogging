@@ -3,8 +3,8 @@
 // the setup portal or /config/settings.txt on the SD card.
 #pragma once
 
-#define FW_VERSION "0.2.0"
-#define CSV_SCHEMA 2            // bump when the meaning of the CSV columns changes (2: min/max, sd column)
+#define FW_VERSION "0.3.0"
+#define CSV_SCHEMA 3            // bump when the meaning of the CSV columns changes (3: sensors every 5 min, boot@fw)
 
 #define MAX_METERS 4            // meters per logger on the RS485 bus
 #define MAX_REGS 32             // values read per meter (register table lines)
