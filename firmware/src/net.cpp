@@ -22,7 +22,10 @@ static bool https = true;
 static String baseUrl, token, devId;
 static uint32_t uploadPeriodMs = 60000, otaPeriodMs = 6UL * 3600000UL;
 static int batchRows = 60;
-static bool liveOn = true, otaOn = false;
+static bool liveOn = true, otaOn = false, rcfgOn = true;
+static uint32_t rcfgPeriodMs = 15UL * 60000UL, lastRcfg = 0;
+static bool rcfgReported = false;
+static volatile bool forceRcfg = false;
 
 static volatile bool forceUpload = false, forceOta = false;
 static uint32_t lastUploadTry = 0, lastOta = 0, authBlockedUntil = 0, liveBlockedUntil = 0;
@@ -269,6 +272,81 @@ static void doOta() {
   safeRestart("ota");
 }
 
+// ---------------------------------------------------------------- remote settings
+
+// Never changed from the platform: a wrong value here would cut the logger off for good.
+static const char *REMOTE_BLOCKED[] = {"dev_id", "dev_token", "srv_url", "tls_verify", "wifi_ssid",
+                                       "wifi_pass", "wifi_ssid2", "wifi_pass2", "portal_pass"};
+
+static bool remoteAllowed(const char *key) {
+  const cfg::Def *d = cfg::find(key);
+  if (!d || (d->flags & cfg::SECRET)) return false;
+  for (const char *b : REMOTE_BLOCKED)
+    if (strcmp(b, key) == 0) return false;
+  return true;
+}
+
+// After each boot: tell the platform the firmware, settings (secrets left out) and sensors found.
+static void reportSettings() {
+  JsonDocument doc;
+  doc["fw"] = FW_VERSION;
+  doc["schema"] = CSV_SCHEMA;
+  doc["cfg_version"] = cfg::getCounter("cfg_ver");
+  doc["boot"] = st.bootReason;
+  doc["th1_chip"] = st.th1Chip;
+  doc["header"] = sampler::header();
+  JsonObject set = doc["settings"].to<JsonObject>();
+  for (size_t i = 0; i < cfg::NDEFS; i++) {
+    const cfg::Def &d = cfg::DEFS[i];
+    if (d.flags & cfg::SECRET) set[d.key] = cfg::get(d.key).length() ? "(set)" : "(empty)";
+    else set[d.key] = cfg::get(d.key);
+  }
+  String js, resp;
+  serializeJson(doc, js);
+  int code = request("POST", "/api/v1/config/report", "application/json", js, resp, HTTP_TIMEOUT_MS);
+  if (code == 200 || code == 204) rcfgReported = true;
+}
+
+static void doRemoteConfig() {
+  if (!token.length()) return;
+  if (!rcfgReported) reportSettings();
+  if (!rcfgOn && !forceRcfg) return;
+  if (!forceRcfg && lastRcfg && millis() - lastRcfg < rcfgPeriodMs) return;
+  forceRcfg = false;
+  lastRcfg = millis();
+  String resp;
+  int code = request("GET", "/api/v1/config", "", "", resp, HTTP_TIMEOUT_MS);
+  if (code != 200) return;   // 204: nothing set on the platform
+  JsonDocument doc;
+  if (deserializeJson(doc, resp)) return;
+  long ver = doc["version"] | 0L;
+  if (ver <= cfg::getCounter("cfg_ver")) return;
+  int changed = 0;
+  for (JsonPair kv : doc["settings"].as<JsonObject>()) {
+    const char *key = kv.key().c_str();
+    String val = kv.value().as<String>();
+    if (!remoteAllowed(key)) {
+      evlog("Remote setting %s refused (unknown or not allowed remotely)", key);
+      continue;
+    }
+    if (val == "@default") {
+      if (!cfg::isDefault(key)) {
+        cfg::unset(key);
+        evlog("Remote setting %s back to default", key);
+        changed++;
+      }
+    } else if (val != cfg::get(key)) {
+      evlog("Remote setting %s: %s -> %s", key, cfg::get(key).c_str(), val.c_str());
+      cfg::set(key, val);
+      changed++;
+    }
+  }
+  cfg::setCounter("cfg_ver", ver);
+  evlog("Remote settings version %ld applied: %d change(s)", ver, changed);
+  if (changed) safeRestart("remote_cfg");
+  rcfgReported = false;   // report the new version
+}
+
 // ---------------------------------------------------------------- task
 
 static void task(void *) {
@@ -307,6 +385,7 @@ static void task(void *) {
     rtclock::poll();
     doLive();
     doUpload();
+    doRemoteConfig();
     doOta();
     wdtDelay(200);
   }
@@ -323,18 +402,21 @@ void begin() {
   liveOn = cfg::getInt("live_on") == 1;
   otaOn = cfg::getInt("ota_on") == 1;
   otaPeriodMs = max(1L, cfg::getInt("ota_check_h")) * 3600000UL;
+  rcfgOn = cfg::getInt("rcfg_on") == 1;
+  rcfgPeriodMs = max(1L, cfg::getInt("rcfg_check_m")) * 60000UL;
   if (https) {
     if (cfg::getInt("tls_verify") == 1) tls.setCACert(CA_BUNDLE);
     else tls.setInsecure();
   }
-  evlog("Server %s (%s), upload every %lu s, live %s, OTA %s", baseUrl.c_str(),
+  evlog("Server %s (%s), upload every %lu s, live %s, OTA %s, remote settings %s", baseUrl.c_str(),
         https ? (cfg::getInt("tls_verify") == 1 ? "TLS verified" : "TLS NOT verified") : "plain HTTP",
-        (unsigned long)(uploadPeriodMs / 1000), liveOn ? "on" : "off", otaOn ? "on" : "off");
+        (unsigned long)(uploadPeriodMs / 1000), liveOn ? "on" : "off", otaOn ? "on" : "off", rcfgOn ? "on" : "off");
   xTaskCreatePinnedToCore(task, "net", 16384, nullptr, 1, nullptr, 0);
 }
 
 void uploadNow() { forceUpload = true; }
 void otaCheckNow() { forceOta = true; }
+void configCheckNow() { forceRcfg = true; }
 
 String statusText() {
   String s;

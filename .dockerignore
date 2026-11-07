@@ -1,0 +1,6 @@
+# Docker build context is the repository root (server/docker-compose.yml): send only what the image needs.
+*
+!server/app
+!server/tools
+!docs/alarms/alarms.csv
+**/__pycache__

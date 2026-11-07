@@ -21,8 +21,10 @@ const Def DEFS[] = {
     {"upload_s", "60", "Server", "Seconds between upload attempts", 0},
     {"batch_rows", "60", "Server", "Records per upload request", 0},
     {"live_on", "1", "Server", "1 = send a live snapshot after every sample", 0},
-    {"ota_on", "0", "Server", "1 = check the platform for firmware updates", 0},
+    {"ota_on", "1", "Server", "1 = check the platform for firmware updates", 0},
     {"ota_check_h", "6", "Server", "Hours between firmware update checks", 0},
+    {"rcfg_on", "1", "Server", "1 = take settings from the platform (manage.py set-config)", 0},
+    {"rcfg_check_m", "15", "Server", "Minutes between remote settings checks", 0},
     // Sampling
     {"sample_s", "15", "Sampling", "Seconds between samples (meter and sensors), divides 60", 0},
     // Meter

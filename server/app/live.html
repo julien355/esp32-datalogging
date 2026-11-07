@@ -19,6 +19,9 @@
   table{border-collapse:collapse;background:#fff;width:100%}
   td,th{padding:6px 10px;border-bottom:1px solid #e4e7eb;text-align:left}
   h2{font-size:1.05em;margin:18px 0 6px}
+  .al{padding:6px 10px;border-radius:6px;margin:4px 0;background:#fff}
+  .critical{border-left:6px solid #b42318}.warning{border-left:6px solid #d97706}.info{border-left:6px solid #2563eb}
+  .log td{font-size:.85em}
 </style>
 </head>
 <body>
@@ -67,7 +70,22 @@ async function loadSite() {
     }
     html += '</div>';
   }
-  el('content').innerHTML = html;
+  // Open alarms first, the alarm log last
+  const al = j.alarms || [];
+  let top = al.length ? '<h2>Open alarms</h2>' : '<h2>No open alarm</h2>';
+  for (const a of al) top += `<div class="al ${esc(a.severity)}"><b>${esc(a.id)} ${esc(a.name)}</b> (${esc(a.severity)}) since ${localTime(a.since, off)}, worst ${esc(a.worst ?? '-')} ${esc(a.unit)}</div>`;
+  let log = '';
+  try {
+    const lj = await (await fetch(`/api/v1/alarms/${site}`, {cache: 'no-store'})).json();
+    const rows = lj.log.slice(-20).reverse();
+    log = '<h2>Alarm log (last 20, local time)</h2><table class="log"><tr><th>Time</th><th>Alarm</th><th>State</th><th>Value</th><th>Message</th></tr>';
+    for (const r of rows) {
+      const c = r.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(x => x.replace(/,$/, '').replace(/^"|"$/g, '').replace(/""/g, '"'));
+      log += `<tr><td>${esc(c[1])}</td><td>${esc(c[3])} ${esc(c[4])}</td><td>${esc(c[6])}</td><td>${esc(c[7])} ${esc(c[9])}</td><td>${esc(c[11])}</td></tr>`;
+    }
+    log += '</table>';
+  } catch (e) {}
+  el('content').innerHTML = top + html + log;
   el('status').innerHTML = worst < 60 ? `<span class="ok">Live, updated ${worst} s ago</span>`
                                       : `<span class="bad">No data for ${Math.round(worst / 60)} min</span>`;
 }

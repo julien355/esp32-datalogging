@@ -13,10 +13,11 @@
 namespace sampler {
 
 struct Acc {
-  double sum = 0, max = -1e300, last = 0;
+  double sum = 0, min = 1e300, max = -1e300, last = 0;
   uint16_t n = 0;
   void add(double v) {
     sum += v;
+    if (v < min) min = v;
     if (v > max) max = v;
     last = v;
     n++;
@@ -54,13 +55,14 @@ static String buildHeader() {
     for (int j = 0; j < meter::regCount(); j++) {
       const meter::Reg &r = meter::reg(j);
       h += "," + id + "_" + r.name;
-      if (r.agg == meter::MEANMAX) h += "," + id + "_" + r.name + "_max";
+      if (r.agg == meter::MINMAX) h += "," + id + "_" + r.name + "_min," + id + "_" + r.name + "_max";
     }
     h += "," + id + "_n";
   }
-  if (th1Col) h += ",TH1_t,TH1_rh,TH1_n";
-  if (th2Col) h += ",TH2_t,TH2_rh,TH2_n";
-  h += ",rssi,heap_kb,up_s,backlog_min,boot";
+  // Sensors: 1-minute average only (owner, 7 November 2026). Empty = no valid reading that minute.
+  if (th1Col) h += ",TH1_t,TH1_rh";
+  if (th2Col) h += ",TH2_t,TH2_rh";
+  h += ",rssi,heap_kb,up_s,backlog_min,sd,boot";
   return h;
 }
 
@@ -79,9 +81,12 @@ static void flushMinute(time_t minute) {
       bool mean = r.agg != meter::LAST;
       int dec = decimalsFor(r.scale, mean);
       num(row, accM[m][j], mean, dec);
-      if (r.agg == meter::MEANMAX) {
+      if (r.agg == meter::MINMAX) {   // min and max of the 15 s samples (power quality)
+        int d = decimalsFor(r.scale, false);
         row += ',';
-        if (accM[m][j].n) row += String(accM[m][j].max, dec);
+        if (accM[m][j].n) row += String(accM[m][j].min, d);
+        row += ',';
+        if (accM[m][j].n) row += String(accM[m][j].max, d);
       }
     }
     row += ',';
@@ -90,18 +95,17 @@ static void flushMinute(time_t minute) {
   if (th1Col) {
     num(row, acc1T, true, 2);
     num(row, acc1H, true, 1);
-    row += "," + String(acc1T.n);
   }
   if (th2Col) {
     num(row, acc2T, true, 2);
     num(row, acc2H, true, 1);
-    row += "," + String(acc2T.n);
   }
   row += ',';
   if (st.wifiUp) row += String((int)st.rssi);
   row += "," + String(ESP.getFreeHeap() / 1024);
   row += "," + String(millis() / 1000);
   row += "," + String((int)st.backlogMin);
+  row += st.sdOk ? ",1" : ",0";        // 0: the SD card was failing, the row came from the RAM queue
   row += ',';
   if (firstRow) row += st.bootReason;   // only on the first record after a boot
   firstRow = false;

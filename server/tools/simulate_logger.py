@@ -8,6 +8,8 @@ Use it to test the VPS before the board is ready, and to rehearse an outage:
 --backlog-hours N  first sends N hours of past records in batches of 60 (as after an outage)
 --live             then keeps going: a snapshot every 15 s, a record every minute
 --resend           sends the last batch twice (the server must count duplicates, not store them)
+--event dip|hot|ct during the backlog, simulates a voltage dip on L2 (A26, then A05 for 6 min),
+                   a hot electrical room (A11), or a CT fitted backwards on L3 (A30): to test the alarm log
 """
 
 import argparse
@@ -19,14 +21,16 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
-METER = ["v1", "v2", "v3", "v12", "v23", "v31", "i1", "i2", "i3", "f", "p1", "p2", "p3", "p", "p_max",
-         "q", "s", "pf", "e", "eq"]
-HEADER = ("ts," + ",".join("EM01_" + c for c in METER) + ",EM01_n,TH1_t,TH1_rh,TH1_n,TH2_t,TH2_rh,TH2_n,"
-          "rssi,heap_kb,up_s,backlog_min,boot")
+MINMAX = ["v1", "v2", "v3", "v12", "v23", "v31", "i1", "i2", "i3", "f", "p1", "p2", "p3", "p", "q", "s", "pf"]
+METER_COLS = [c for v in MINMAX for c in (v, v + "_min", v + "_max")] + ["e", "eq"]
+HEADER = ("ts," + ",".join("EM01_" + c for c in METER_COLS) + ",EM01_n,TH1_t,TH1_rh,TH2_t,TH2_rh,"
+          "rssi,heap_kb,up_s,backlog_min,sd,boot")
 
 
 class Sim:
-    def __init__(self):
+    def __init__(self, event=None):
+        self.event = event
+        self.minute_no = 0
         self.e = 184522.70
         self.eq = 40210.10
         self.boot = "poweron"
@@ -44,7 +48,7 @@ class Sim:
         q = math.sqrt(max(0, s * s - p * p))
         out = {"v1": v[0], "v2": v[1], "v3": v[2], "v12": v[0] * 1.732, "v23": v[1] * 1.732, "v31": v[2] * 1.732,
                "i1": i[0], "i2": i[1], "i3": i[2], "f": 50 + random.uniform(-0.05, 0.05),
-               "p1": p_ph[0], "p2": p_ph[1], "p3": p_ph[2], "p": p, "p_max": p * 1.05, "q": q, "s": s, "pf": pf}
+               "p1": p_ph[0], "p2": p_ph[1], "p3": p_ph[2], "p": p, "q": q, "s": s, "pf": pf}
         if advance:   # one minute of energy, only when a record is made
             self.e += p / 60
             self.eq += q / 60
@@ -57,10 +61,25 @@ class Sim:
 
     def row(self, minute_ts, backlog):
         v = self.values(minute_ts, advance=True)
+        self.minute_no += 1
+        mm = {k: (v[k] * 0.99, v[k] * 1.01) for k in MINMAX}
+        mm["f"] = (v["f"] - 0.03, v["f"] + 0.03)
+        if self.event and 30 <= self.minute_no < 36:       # six minutes of trouble, 30 min into the backlog
+            if self.event == "dip":
+                v["v2"] = 195.0
+                mm["v2"] = (180.0, 205.0)
+            elif self.event == "ct":
+                v["p3"] = -abs(v["p3"])
+                mm["p3"] = (v["p3"] * 1.01, v["p3"] * 0.99)
+        if self.event == "hot" and 30 <= self.minute_no < 50:
+            v["TH1_t"] = 37.5
         ts = datetime.fromtimestamp(minute_ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        meter = ",".join(f"{v[c]:.2f}" if c in ("e", "eq") else f"{v[c]:.3f}" for c in METER)
-        r = (f"{ts},{meter},4,{v['TH1_t']:.2f},{v['TH1_rh']:.1f},4,{v['TH2_t']:.2f},{v['TH2_rh']:.1f},4,"
-             f"-63,180,{int(time.time() - self.t0)},{backlog},{self.boot}")
+        parts = []
+        for c in MINMAX:
+            parts += [f"{v[c]:.3f}", f"{mm[c][0]:.3f}", f"{mm[c][1]:.3f}"]
+        parts += [f"{v['e']:.2f}", f"{v['eq']:.2f}"]
+        r = (f"{ts},{','.join(parts)},4,{v['TH1_t']:.2f},{v['TH1_rh']:.1f},{v['TH2_t']:.2f},{v['TH2_rh']:.1f},"
+             f"-63,180,{int(time.time() - self.t0)},{backlog},1,{self.boot}")
         self.boot = ""
         return r, v
 
@@ -84,8 +103,9 @@ def main():
     ap.add_argument("--backlog-hours", type=float, default=0)
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--resend", action="store_true")
+    ap.add_argument("--event", choices=["dip", "hot", "ct"])
     a = ap.parse_args()
-    sim = Sim()
+    sim = Sim(a.event)
     now = int(time.time())
     first = now - now % 60 - int(a.backlog_hours * 3600)
     rows = []

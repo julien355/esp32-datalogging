@@ -38,7 +38,8 @@ static const char HELP[] =
     "  tail <file> [n]        last n lines (default 10)\n"
     "  upload                 try an upload now\n"
     "  resend <YYYY-MM-DD>    send again from that day (server drops duplicates)\n"
-    "  ota                    check for a firmware update now\n";
+    "  ota                    check for a firmware update now\n"
+    "  config                 check for remote settings now\n";
 
 static void cmdStatus() {
   Serial.printf("Logger %s, firmware %s, CSV schema %d, up %lu s, boot %s%s\n", cfg::get("dev_id").c_str(),
@@ -193,6 +194,9 @@ static void exec(String cmd) {
   } else if (c == "ota") {
     net::otaCheckNow();
     Serial.println("OTA check requested");
+  } else if (c == "config") {
+    net::configCheckNow();
+    Serial.println("remote settings check requested");
   } else Serial.println("unknown command: type 'help'");
 }
 

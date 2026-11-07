@@ -46,4 +46,4 @@ jobs:
       - name: Unit tests
         run: python -m unittest discover -s server/tests -v
       - name: Docker image builds
-        run: docker build -t arkan-monitoring-ingest:ci server
+        run: docker build -f server/Dockerfile -t arkan-monitoring-ingest:ci .

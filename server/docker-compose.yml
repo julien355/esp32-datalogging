@@ -4,7 +4,9 @@
 # Published on the loopback only: Caddy on the host is the only way in from the internet.
 services:
   ingest:
-    build: .
+    build:
+      context: ..                      # repository root: the image also takes docs/alarms/alarms.csv
+      dockerfile: server/Dockerfile
     image: arkan-monitoring-ingest:local
     container_name: arkan-monitoring-ingest
     restart: unless-stopped            # comes back after a crash or a VPS reboot

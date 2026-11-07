@@ -9,7 +9,7 @@ Commands:
   init                                  create the folder layout
   add-site <code> --name "Adab hotel" [--tz Asia/Makassar] [--utc-offset 8]
   add-device <site> <device> [--sd-settings FILE --server URL]
-                                        register a logger, print its token ONCE
+                                        register a logger, print its token and setup WiFi password ONCE
   rotate-token <device>                 new token (the old one stops working at once)
   disable-device <device> / enable-device <device>
   list                                  sites, loggers, last record
@@ -19,6 +19,10 @@ Commands:
   backfill <site> <device> <folder>     merge an SD card copy (its /data folder) into the site
   publish-fw <file.bin> --version X [--device D]
                                         offer a firmware image to the loggers (OTA)
+  set-config <device> key=value ...     settings sent to the logger (value @default = back to default)
+  show-config <device>                  settings asked for, and the settings the logger reported
+  alarms <site> [--rebuild]             open alarms and the last lines of the alarm log;
+                                        --rebuild replays every record (after a backfill or a register change)
 """
 
 import argparse
@@ -33,6 +37,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app"))
+from alarms import AlarmEngine  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, atomic_write, iso_now, token_hash  # noqa: E402
 
 
@@ -61,6 +66,10 @@ def cmd_init(store, a):
         os.makedirs(os.path.join(store.root, d), exist_ok=True)
     if not os.path.exists(store.devices_path()):
         store.save_devices({"devices": {}})
+    reg = os.path.join(store.root, "alarm-register.csv")
+    if not os.path.exists(reg):
+        shutil.copyfile(AlarmEngine(store).default_register, reg)
+        print(f"alarm register copied to {reg} (edit it in Excel; changes apply at once)")
     print(f"data folder ready: {store.root}")
 
 
@@ -82,6 +91,7 @@ def cmd_add_site(store, a):
             "EM01_p": "Total power (kW)", "EM01_s": "Apparent power (kVA)", "EM01_pf": "Power factor",
             "EM01_f": "Frequency (Hz)", "EM01_v1": "V L1-N", "EM01_v2": "V L2-N", "EM01_v3": "V L3-N",
             "EM01_i1": "I L1 (A)", "EM01_i2": "I L2 (A)", "EM01_i3": "I L3 (A)", "EM01_e": "Energy counter (kWh)",
+            "EM01_v1_min": "V L1-N min", "EM01_p_max": "Peak power (kW)",
             "TH1_t": "Electrical room (C)", "TH1_rh": "Electrical room (%RH)",
             "TH2_t": "Outdoor (C)", "TH2_rh": "Outdoor (%RH)",
         },
@@ -89,7 +99,10 @@ def cmd_add_site(store, a):
                                               "EM01_v3", "EM01_i1", "EM01_i2", "EM01_i3",
                                               "TH1_t", "TH1_rh", "TH2_t", "TH2_rh"]},
         "sensors": {"TH1": "electrical room (on the board)", "TH2": "outdoor, beside the panel room"},
+        "nominal_v": 230,
+        "nominal_hz": 50,
         "contracted_kva": None,
+        "rated_a": None,
     }
     atomic_write(p, json.dumps(prof, indent=2) + "\n")
     print(f"site {a.code} created: {p}")
@@ -109,13 +122,15 @@ def cmd_add_device(store, a):
     store.save_devices(data)
     os.makedirs(store.device_dir(a.site, a.device), exist_ok=True)
     store.event(a.site, a.device, "device_added")
+    portal = secrets.token_urlsafe(9)
     print(f"device {a.device} added to site {a.site}")
     print(f"TOKEN (shown once, keep it secret): {token}")
+    print(f"SETUP WIFI PASSWORD for ARKAN-{a.device} (portal_pass, keep it with the token): {portal}")
     if a.sd_settings:
-        write_sd_settings(a.sd_settings, a.device, token, a.server)
+        write_sd_settings(a.sd_settings, a.device, token, a.server, portal)
 
 
-def write_sd_settings(path, device, token, server):
+def write_sd_settings(path, device, token, server, portal):
     lines = [
         "# Copy this file to the SD card as /config/settings.txt, add the WiFi lines,",
         "# insert the card and power the logger: it applies the settings, DELETES this file",
@@ -123,6 +138,7 @@ def write_sd_settings(path, device, token, server):
         f"dev_id={device}",
         f"dev_token={token}",
         f"srv_url={server}",
+        f"portal_pass={portal}",
         "# wifi_ssid=",
         "# wifi_pass=",
         "# wifi_ssid2=",
@@ -198,7 +214,7 @@ def cmd_daily(store, a):
             s["minutes"] += 1
             for col, val in row.items():
                 v = num(val)
-                if v is None or col in ("ts", "rssi", "heap_kb", "up_s", "backlog_min", "boot"):
+                if v is None or col in ("ts", "rssi", "heap_kb", "up_s", "backlog_min", "sd", "boot"):
                     continue
                 c = s["cols"].setdefault(col, {"n": 0, "sum": 0.0, "min": v, "max": v, "first": v, "last": v,
                                                "tmax": lt})
@@ -223,9 +239,12 @@ def cmd_daily(store, a):
                     first = plast
                 r[col + "_delta"] = round(c["last"] - first, 2)
                 prev[(dev, col)] = (day, c["last"])
-            elif col.endswith("_p_max"):                         # peak demand
+            elif col.endswith("_max"):                           # highest 15 s sample of the day
                 r[col] = round(c["max"], 3)
-                r[col + "_time"] = c["tmax"].strftime("%H:%M")
+                if col.endswith("_p_max") or col.endswith("_s_max"):
+                    r[col + "_time"] = c["tmax"].strftime("%H:%M")
+            elif col.endswith("_min"):                           # lowest 15 s sample of the day
+                r[col] = round(c["min"], 3)
             else:
                 r[col + "_mean"] = round(c["sum"] / c["n"], 3)
                 if col.endswith("_t") or col.endswith("_rh"):
@@ -264,7 +283,7 @@ def cmd_export_oed(store, a):
             start = t.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
             end = (t + timedelta(minutes=1)).astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
             for col, val in row.items():
-                if col in ("ts", "rssi", "heap_kb", "up_s", "backlog_min", "boot") or not keep.match(col):
+                if col in ("ts", "rssi", "heap_kb", "up_s", "backlog_min", "sd", "boot") or not keep.match(col):
                     continue
                 if num(val) is None:
                     continue
@@ -294,11 +313,13 @@ def cmd_backfill(store, a):
             except ValueError as e:
                 print(f"  {fn}: skipped ({e})")
                 continue
-            s, d = store.store_rows(a.site, a.device, header, good)
+            s, d, _ = store.store_rows(a.site, a.device, header, good)
             total, dup, bad = total + s, dup + d, bad + nbad
             print(f"  {fn}: {s} new, {d} already there, {nbad} bad")
     store.event(a.site, a.device, "backfill", {"rows": total, "from": os.path.abspath(a.folder)})
     print(f"backfill done: {total} new row(s), {dup} duplicate(s), {bad} bad row(s)")
+    if total:
+        print(f"older rows are not in the alarm log yet: run  manage.py alarms {a.site} --rebuild")
 
 
 def cmd_publish_fw(store, a):
@@ -316,6 +337,66 @@ def cmd_publish_fw(store, a):
                                   "size": os.path.getsize(dst), "published": iso_now()}
     atomic_write(p, json.dumps(man, indent=2) + "\n")
     print(f"{name} offered to {a.device or 'every logger'} (md5 {md5}). Loggers with ota_on=1 take it at their next check.")
+
+
+def device_site(store, device):
+    info = store.load_devices().get("devices", {}).get(device) or die(f"no device {device}")
+    return info["site"]
+
+
+def cmd_set_config(store, a):
+    site = device_site(store, a.device)
+    changes = {}
+    for kv in a.pairs:
+        if "=" not in kv:
+            die(f"expected key=value, got {kv!r}")
+        k, v = kv.split("=", 1)
+        changes[k.strip()] = v.strip()
+    rep = os.path.join(store.device_dir(site, a.device), "settings-reported.json")
+    if os.path.exists(rep):
+        known = json.load(open(rep)).get("settings", {})
+        for k in changes:
+            if k not in known:
+                die(f"{k}: not a setting of this logger (see show-config)")
+    blocked = {"dev_id", "dev_token", "srv_url", "tls_verify", "wifi_ssid", "wifi_pass", "wifi_ssid2", "wifi_pass2",
+               "portal_pass"}
+    for k in changes:
+        if k in blocked:
+            die(f"{k} cannot be changed remotely (it could cut the logger off): use the setup portal on site")
+    ver = store.set_config(site, a.device, changes)
+    print(f"settings version {ver} for {a.device}: the logger takes it at its next check (15 min, or console 'config')")
+    print("it restarts if anything changed; check with show-config")
+
+
+def cmd_show_config(store, a):
+    site = device_site(store, a.device)
+    cfg = store.get_config(site, a.device)
+    print("asked by the platform:", json.dumps(cfg, indent=2) if cfg else "nothing")
+    rep = os.path.join(store.device_dir(site, a.device), "settings-reported.json")
+    if os.path.exists(rep):
+        r = json.load(open(rep))
+        print(f"reported by the logger at {r.get('received')}: fw {r.get('fw')}, settings version "
+              f"{r.get('cfg_version')}, boot {r.get('boot')}, TH1 chip {r.get('th1_chip')}")
+        for k, v in sorted(r.get("settings", {}).items()):
+            print(f"  {k} = {v}")
+    else:
+        print("the logger has not reported its settings yet")
+
+
+def cmd_alarms(store, a):
+    eng = AlarmEngine(store)
+    if a.rebuild:
+        lines = eng.rebuild(a.site, lambda dev: (row for _, row in read_rows(store, a.site, dev)))
+        print(f"alarm log rebuilt: {len(lines)} line(s)")
+    for o in eng.open_alarms(a.site):
+        print(f"OPEN {o['severity']:8} {o['id']} {o['name']} on {o['device']} since {o['since']} (worst {o['worst']})")
+    d = os.path.join(store.site_dir(a.site), "alarms")
+    files = sorted(f for f in os.listdir(d) if f.endswith(".csv")) if os.path.isdir(d) else []
+    if files:
+        lines = open(os.path.join(d, files[-1]), encoding="utf-8").read().splitlines()
+        print(f"last lines of {os.path.join(d, files[-1])}:")
+        for ln in lines[-a.lines:]:
+            print("  " + ln)
 
 
 def main():
@@ -340,6 +421,10 @@ def main():
     p = sub.add_parser("backfill"); p.add_argument("site"); p.add_argument("device"); p.add_argument("folder")
     p = sub.add_parser("publish-fw"); p.add_argument("file"); p.add_argument("--version", required=True)
     p.add_argument("--device")
+    p = sub.add_parser("set-config"); p.add_argument("device"); p.add_argument("pairs", nargs="+")
+    p = sub.add_parser("show-config"); p.add_argument("device")
+    p = sub.add_parser("alarms"); p.add_argument("site"); p.add_argument("--rebuild", action="store_true")
+    p.add_argument("--lines", type=int, default=20)
     a = ap.parse_args()
     store = DataStore(a.data)
     {
@@ -347,6 +432,7 @@ def main():
         "rotate-token": cmd_rotate_token, "disable-device": lambda s, x: cmd_enable(s, x, True),
         "enable-device": lambda s, x: cmd_enable(s, x, False), "list": cmd_list, "daily": cmd_daily,
         "export-oed": cmd_export_oed, "backfill": cmd_backfill, "publish-fw": cmd_publish_fw,
+        "set-config": cmd_set_config, "show-config": cmd_show_config, "alarms": cmd_alarms,
     }[a.cmd](store, a)
 
 

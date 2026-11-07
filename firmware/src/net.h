@@ -7,5 +7,6 @@ namespace net {
 void begin();               // starts the task
 void uploadNow();           // console: try an upload at once
 void otaCheckNow();         // console: check for a firmware update at once
+void configCheckNow();      // console: check for remote settings at once
 String statusText();
 }  // namespace net

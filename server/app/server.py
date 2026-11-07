@@ -5,11 +5,14 @@ Device endpoints (token in "Authorization: Bearer <token>", no web login in Cadd
   POST /api/v1/live            JSON snapshot every 15 s, kept in memory only (last 60 min)
   GET  /api/v1/ota?fw=x.y.z    204 = up to date, 200 = {"version","url","md5","size"}
   GET  /api/v1/firmware/<file> firmware image for the OTA update
+  GET  /api/v1/config          204 = nothing set, 200 = {"version", "settings"} (manage.py set-config)
+  POST /api/v1/config/report   JSON: the logger's firmware, settings (no secrets), columns, after each boot
 
 People endpoints (behind the Caddy web login, never published without it):
   GET  /health                 {"ok": true}
   GET  /api/v1/status          every site and logger: last record, last live, firmware
-  GET  /api/v1/live/<site>     live values and 60-minute history of a site
+  GET  /api/v1/live/<site>     live values, 60-minute history and open alarms of a site
+  GET  /api/v1/alarms/<site>   open alarms and the last 200 lines of the alarm log
   GET  /live/  /live/<site>/   live page (refresh every 15 s)
 
 Settings (environment): DATA_DIR (/data), PORT (8800), BIND (0.0.0.0 in the container),
@@ -27,9 +30,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from alarms import AlarmEngine  # noqa: E402
 from store import CODE_RE, DataStore, IngestError, iso_now  # noqa: E402
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
@@ -135,6 +139,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(400, {"ok": False, "error": "bad JSON"})
             snap["device"] = device
             self.live.add(site, device, snap)
+            self.store.alarms.check_clock(site, device, snap.get("ts"))
+            return self.send_empty(204)
+        if path == "/api/v1/config/report":
+            try:
+                rep = json.loads(body or b"{}")
+                if not isinstance(rep, dict):
+                    raise ValueError
+            except ValueError:
+                return self.send_json(400, {"ok": False, "error": "bad JSON"})
+            self.store.save_report(site, device, rep)
             return self.send_empty(204)
         return self.send_json(404, {"ok": False, "error": "not found"})
 
@@ -149,7 +163,11 @@ class Handler(BaseHTTPRequestHandler):
         if m and CODE_RE.match(m.group(1)):
             site = m.group(1)
             return self.send_json(200, {"site": site, "profile": self.public_profile(site),
-                                        "devices": self.live.site(site), "time": iso_now()})
+                                        "devices": self.live.site(site),
+                                        "alarms": self.store.alarms.open_alarms(site), "time": iso_now()})
+        m = re.match(r"^/api/v1/alarms/([a-z0-9-]+)$", path)
+        if m and CODE_RE.match(m.group(1)):
+            return self.send_json(200, self.alarm_view(m.group(1)))
         if path in ("/live", "/live/") or re.match(r"^/live/[a-z0-9-]+/?$", path):
             with open(os.path.join(HERE, "live.html"), "rb") as f:
                 page = f.read()
@@ -160,6 +178,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.wfile.write(page)
         if path == "/api/v1/ota":
             return self.ota(parse_qs(u.query).get("fw", [""])[0])
+        if path == "/api/v1/config":
+            who = self.device()
+            if not who:
+                return self.send_json(401, {"ok": False, "error": "unknown or missing device token"})
+            cfg = self.store.get_config(who[1], who[0])
+            if not cfg or not cfg.get("settings"):
+                return self.send_empty(204)
+            return self.send_json(200, {"version": cfg["version"], "settings": cfg["settings"]})
         m = re.match(r"^/api/v1/firmware/([A-Za-z0-9._-]+\.bin)$", path)
         if m:
             return self.firmware(m.group(1))
@@ -184,6 +210,19 @@ class Handler(BaseHTTPRequestHandler):
                 }
             out["sites"][site] = devs
         return out
+
+    def alarm_view(self, site):
+        d = os.path.join(self.store.site_dir(site), "alarms")
+        lines = []
+        if os.path.isdir(d):
+            for fn in sorted(os.listdir(d), reverse=True):
+                if fn.endswith(".csv"):
+                    with open(os.path.join(d, fn), encoding="utf-8") as f:
+                        lines = f.read().splitlines()[1:] + lines
+                if len(lines) >= 200:
+                    break
+        return {"site": site, "open": self.store.alarms.open_alarms(site), "log_header": "ts_utc,local_time,device,id,"
+                "name,severity,state,value,threshold,unit,duration_min,message", "log": lines[-200:]}
 
     def ota(self, fw):
         who = self.device()
@@ -223,7 +262,9 @@ class Handler(BaseHTTPRequestHandler):
 
 def make_server(data_dir, bind="127.0.0.1", port=8800):
     os.makedirs(os.path.join(data_dir, "sites"), exist_ok=True)
-    Handler.store = DataStore(data_dir)
+    store = DataStore(data_dir)
+    store.alarms = AlarmEngine(store)
+    Handler.store = store
     Handler.live = Live()
     srv = ThreadingHTTPServer((bind, port), Handler)
     srv.daemon_threads = True
@@ -234,6 +275,16 @@ def main():
     bind = os.environ.get("BIND", "0.0.0.0")
     port = int(os.environ.get("PORT", "8800"))
     srv = make_server(DATA_DIR, bind, port)
+
+    def offline_watch():   # A01: a logger that sends nothing
+        while True:
+            time.sleep(60)
+            try:
+                Handler.store.alarms.check_offline()
+            except Exception as e:   # never let the watcher die
+                sys.stderr.write(f"{iso_now()} offline check failed: {e!r}\n")
+
+    threading.Thread(target=offline_watch, daemon=True).start()
     sys.stderr.write(f"{iso_now()} arkan-ingest {VERSION} on {bind}:{port}, data in {DATA_DIR}\n")
     try:
         srv.serve_forever()

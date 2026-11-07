@@ -6,9 +6,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends tzdata \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 1000 --create-home --shell /usr/sbin/nologin app
 
+# Built from the repository root (see docker-compose.yml): the alarm register comes from docs/alarms/.
 WORKDIR /srv/app
-COPY app/ app/
-COPY tools/ tools/
+COPY server/app/ app/
+COPY server/tools/ tools/
+COPY docs/alarms/alarms.csv app/alarm-register.csv
 
 ENV DATA_DIR=/data PORT=8800 BIND=0.0.0.0 PYTHONUNBUFFERED=1 TZ=UTC
 USER 1000:1000

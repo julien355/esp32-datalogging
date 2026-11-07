@@ -18,6 +18,7 @@ import server as server_mod  # noqa: E402
 from server import make_server  # noqa: E402
 
 server_mod.Handler.log_message = lambda *a: None   # quiet tests
+from alarms import AlarmEngine  # noqa: E402
 from store import DataStore, IngestError, token_hash  # noqa: E402
 
 MANAGE = os.path.join(HERE, "..", "tools", "manage.py")
@@ -97,6 +98,89 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(ev[0]["reason"], "sw:daily")
 
 
+PQ_HEADER = ("ts,EM01_v1,EM01_v1_min,EM01_v1_max,EM01_v2,EM01_v2_min,EM01_v2_max,EM01_v3,EM01_v3_min,EM01_v3_max,"
+             "EM01_p1,EM01_p2,EM01_p3,EM01_p,EM01_e,EM01_n,TH1_t,TH1_rh,TH2_t,TH2_rh,rssi,backlog_min,sd,boot")
+
+
+def pq_row(t, v2=230.0, v2min=None, p3=3.0, e=100.0, th1=30.0, n=4, sd=1, boot="", rssi=-60):
+    v2min = v2 if v2min is None else v2min
+    return (f"{t},230,229,231,{v2},{v2min},{v2},230,229,231,3,3,{p3},{6 + p3},{e:.2f},{n},{th1},60,28,70,"
+            f"{rssi},0,{sd},{boot}")
+
+
+class AlarmTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.s = DataStore(self.tmp.name)
+        self.s.alarms = AlarmEngine(self.s)
+        self.base = datetime(2026, 11, 7, 3, 0, tzinfo=timezone.utc)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def t(self, m):
+        return (self.base + timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def send(self, rows):
+        return self.s.ingest("adab", "LOG-0001", PQ_HEADER + "\n" + "\n".join(rows) + "\n")
+
+    def log(self):
+        with open(os.path.join(self.s.site_dir("adab"), "alarms", "2026.csv")) as f:
+            return [ln.split(",") for ln in f.read().splitlines()[1:]]
+
+    def test_undervoltage_with_delay_and_dip(self):
+        rows = [pq_row(self.t(m), e=100 + m) for m in range(5)]
+        rows += [pq_row(self.t(m), v2=200, v2min=190, e=100 + m) for m in range(5, 12)]   # 7 min low
+        rows += [pq_row(self.t(m), e=100 + m) for m in range(12, 15)]
+        self.send(rows)
+        got = [(x[3], x[6], x[0]) for x in self.log()]
+        self.assertIn(("A26", "start", self.t(5)), got)      # dip: immediate
+        self.assertIn(("A05", "start", self.t(5)), got)      # undervoltage: start time = when it began
+        self.assertIn(("A05", "clear", self.t(12)), got)
+        self.assertNotIn("A05", [o["id"] for o in self.s.alarms.open_alarms("adab")])
+
+    def test_short_low_voltage_is_not_undervoltage(self):
+        rows = [pq_row(self.t(m), v2=200 if 2 <= m < 5 else 230, e=100 + m) for m in range(8)]   # 3 min only
+        self.send(rows)
+        self.assertNotIn("A05", [x[3] for x in self.log()])
+
+    def test_events_power_interruption_and_ct(self):
+        rows = [pq_row(self.t(m), e=100 + m) for m in range(3)]
+        rows += [pq_row(self.t(m), e=100 + m, boot="poweron", p3=-2.0 if m < 20 else 3.0) for m in (13,)]
+        rows += [pq_row(self.t(m), e=100 + m, p3=-2.0) for m in range(14, 20)]
+        self.send(rows)
+        log = self.log()
+        power = [x for x in log if x[3] == "A02"]
+        self.assertEqual(len(power), 1)
+        self.assertIn("outage about 10 min", ",".join(power[0]))
+        self.assertIn("A30", [x[3] for x in log if x[6] == "start"])   # CT backwards on L3
+
+    def test_open_alarm_survives_restart_and_rebuild_is_identical(self):
+        rows = [pq_row(self.t(m), th1=37.0, e=100 + m) for m in range(15)]
+        self.send(rows[:8])
+        self.send(rows[8:])                                  # state carried between uploads
+        self.assertIn("A11", [o["id"] for o in self.s.alarms.open_alarms("adab")])
+        before = self.log()
+        self.s.alarms.rebuild("adab", lambda dev: [dict(zip(PQ_HEADER.split(","), r.split(","))) for r in rows])
+        self.assertEqual([x[:7] for x in self.log()], [x[:7] for x in before])
+
+    def test_offline_then_back(self):
+        self.s.save_devices({"devices": {"LOG-0001": {"site": "adab", "token_sha256": "x"}}})
+        self.send([pq_row(self.t(0))])
+        self.s.alarms.last_rx[("adab", "LOG-0001")] = time.time() - 3600
+        self.s.alarms.check_offline()
+        self.assertIn("A01", [o["id"] for o in self.s.alarms.open_alarms("adab")])
+        self.send([pq_row(self.t(1))])
+        self.assertNotIn("A01", [o["id"] for o in self.s.alarms.open_alarms("adab")])
+        self.assertEqual([x[6] for x in self.log() if x[3] == "A01"], ["start", "clear"])
+
+    def test_backlog_alarm_ignores_wifi_outage(self):
+        rows = [pq_row(self.t(m), rssi="").replace(",0,1,", ",90,1,") for m in range(5)]
+        self.send(rows)
+        self.assertFalse(os.path.exists(os.path.join(self.s.site_dir("adab"), "alarms", "2026.csv"))
+                         and "A16" in [x[3] for x in self.log()])
+
+
 class ToolsAndHttpTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -167,6 +251,21 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(code, 200)
         code, _ = self.req("GET", "/api/v1/ota?fw=0.1.1", token=self.token)
         self.assertEqual(code, 204)
+
+    def test_remote_config(self):
+        code, _ = self.req("GET", "/api/v1/config", token=self.token)
+        self.assertEqual(code, 204)
+        rep = {"fw": "0.2.0", "cfg_version": 0, "settings": {"th1_off_t": "0", "reboot_hr": "19"}}
+        code, _ = self.req("POST", "/api/v1/config/report", json.dumps(rep), self.token, "application/json")
+        self.assertEqual(code, 204)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.manage("set-config", "LOG-0001", "wifi_ssid=other")       # never remotely
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.manage("set-config", "LOG-0001", "no_such_key=1")          # not reported by the logger
+        self.manage("set-config", "LOG-0001", "th1_off_t=-1.5")
+        code, body = self.req("GET", "/api/v1/config", token=self.token)
+        self.assertEqual(json.loads(body), {"version": 1, "settings": {"th1_off_t": "-1.5"}})
+        self.assertIn("th1_off_t = 0", self.manage("show-config", "LOG-0001"))
 
     def test_daily_backfill_export(self):
         base = datetime(2026, 11, 6, 15, 0, tzinfo=timezone.utc)   # 23:00 WITA

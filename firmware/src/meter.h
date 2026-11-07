@@ -10,7 +10,11 @@
 namespace meter {
 
 enum Type : uint8_t { U16, S16, U32, S32, U32SW, S32SW, F32, F32SW };
-enum Agg : uint8_t { MEAN, LAST, MEANMAX };   // how the 1-minute record summarises the samples
+// How the 1-minute record summarises the 15 s samples:
+//   MEAN    one column, the mean
+//   LAST    one column, the last value (energy counters)
+//   MINMAX  three columns: mean, _min, _max (power quality)
+enum Agg : uint8_t { MEAN, LAST, MINMAX };
 
 struct Reg {
   char name[8];   // column suffix: EM01_<name>

@@ -3,8 +3,8 @@
 // the setup portal or /config/settings.txt on the SD card.
 #pragma once
 
-#define FW_VERSION "0.1.0"
-#define CSV_SCHEMA 1            // bump when the meaning of the CSV columns changes
+#define FW_VERSION "0.2.0"
+#define CSV_SCHEMA 2            // bump when the meaning of the CSV columns changes (2: min/max, sd column)
 
 #define MAX_METERS 4            // meters per logger on the RS485 bus
 #define MAX_REGS 32             // values read per meter (register table lines)
@@ -17,7 +17,7 @@
 #define BOOTLOOP_LIMIT 5        // unstable boots in a row before safe mode
 #define HTTP_TIMEOUT_MS 15000
 #define LIVE_TIMEOUT_MS 5000
-#define MAX_BATCH_BYTES 24000   // upload body limit per POST
+#define MAX_BATCH_BYTES 48000   // upload body limit per POST (60 rows of about 650 bytes)
 #define CATCHUP_BATCHES 20      // batches sent back to back when there is a backlog
 
 // SD card layout (same day-file layout as the server, see docs/DATA-FORMAT.md)

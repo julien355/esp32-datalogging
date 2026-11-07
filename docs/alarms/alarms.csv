@@ -1,26 +1,35 @@
-id,name,source,applies_to,condition,threshold,unit,delay_min,clears_when,severity,whatsapp,repeat_h,enabled,note
-A01,Logger offline,platform,site,no record received for,15,min,0,a record arrives,critical,yes,6,yes,Also the sign of a power cut at the panel (no UPS for the trial)
-A02,Power interruption detected,logger,logger,logger restarted after a power loss (boot=poweron after a gap),1,event,0,event only,info,no,0,yes,Sent on return; gives the outage start and end from the gap
-A03,Meter not answering,logger,EM01,Modbus timeouts in a row,3,reads,0,meter answers again,critical,yes,6,yes,Wiring or meter address problem
-A04,Phase lost,meter,EM01,any phase voltage L-N below,100,V,0.5,all phases above 180 V,critical,yes,1,yes,One phase down while the meter still runs on another
-A05,Undervoltage,meter,EM01,any phase voltage L-N below,207,V,5,all phases above 210 V,warning,yes,6,yes,230 V nominal -10%; confirm against the PLN supply
-A06,Overvoltage,meter,EM01,any phase voltage L-N above,242,V,5,all phases below 240 V,warning,yes,6,yes,230 V nominal +5%; confirm against the PLN supply
-A07,Frequency out of range,meter,EM01,frequency outside,49.5 to 50.5,Hz,1,back inside 49.6 to 50.4,warning,yes,6,yes,Usually means the genset is supplying
-A08,High demand,meter,EM01,apparent power above % of contracted kVA,90,%,5,below 85 %,warning,yes,6,yes,Contracted kVA to set in site.json
-A09,Low power factor,meter,EM01,15-minute mean power factor below,0.85,PF,15,above 0.87,warning,no,24,yes,PLN bills excess kVArh below 0.85
-A10,Current imbalance,meter,EM01,max phase current deviation from the mean above,20,%,15,below 15 %,warning,no,24,yes,Ignored when the mean current is below 5 A
-A11,Electrical room hot,sensor,TH1,temperature above,35,C,10,below 33 C,warning,yes,6,yes,
-A12,Electrical room very hot,sensor,TH1,temperature above,40,C,5,below 38 C,critical,yes,1,yes,
-A13,Electrical room humid,sensor,TH1,humidity above,80,%RH,60,below 75 %RH,warning,no,24,yes,Condensation risk
-A14,Temp/RH sensor fault,logger,"TH1,TH2",no valid reading (timeout or checksum) for,10,min,0,valid readings again,warning,no,24,yes,
-A15,SD card error,logger,logger,write to SD card failing,1,event,0,writes succeed,warning,no,24,yes,Data is still sent while online but not kept locally
-A16,Backlog growing,logger,logger,unsent records older than,60,min,0,backlog below 5 min,warning,no,24,yes,Logger online but uploads failing
-A17,Weak WiFi,logger,logger,mean RSSI below,-80,dBm,60,above -75 dBm,info,no,24,yes,
-A18,Clock not set,logger,logger,RTC time invalid or more than 2 min off NTP,2,min,0,clock corrected,warning,no,24,yes,
-A19,Energy counter went backwards,platform,site,cumulative kWh lower than the previous reading,0,kWh,0,event only,warning,no,0,yes,Meter reset or wrong register
-A20,Push to OED failing,platform,site,no successful push to OED for,30,min,0,a push succeeds,warning,no,24,yes,Data is safe in the site folder; OED is behind
-A21,Sensors disagree,sensor,"TH1,TH2",difference between TH1 and TH2 temperature above,5,C,30,below 3 C,info,no,24,no,Not used at adab: TH2 is outdoors or in another room. Keep for sites with both sensors in one room
-A22,Outdoor very hot,sensor,TH2,outdoor temperature above,36,C,30,below 34 C,info,no,24,yes,Above the usual daytime range of the WITA zone (about 22 to 34 C); the room and the cooling work harder
-A23,Condensation risk in the electrical room,sensor,"TH1,TH2",outdoor dew point (from TH2) less than this below the electrical room temperature (TH1),2,C,30,gap above 3 C,warning,no,24,yes,Humid outdoor air entering a cooler room condenses on cold surfaces and switchgear; most likely if the room is air-conditioned
-A24,Electrical room much warmer than outdoors,sensor,"TH1,TH2",electrical room temperature (TH1) above outdoor temperature (TH2) by more than,8,C,30,difference below 6 C,warning,yes,6,yes,"Points to failed ventilation or cooling of the panel room. TH1 reads 1 to 3 C warm from the board: set its offset in site.json, then tune this limit after the first week"
-A25,Outdoor sensor wet or stuck,sensor,TH2,outdoor humidity at 99 % RH or more without a break for,24,h,0,below 97 % RH,info,no,24,yes,Short spells at 100 % after rain are normal; a full day means a wet sensor or a failing one
+id,name,group,rule,applies_to,threshold,clear_at,unit,delay_min,severity,whatsapp,repeat_h,enabled,evaluated_on,condition,note
+A01,Logger offline,logger,offline,logger,15,,min,0,critical,yes,6,yes,reception,no record received for 15 min,Also the sign of a power cut at the panel (no UPS for the trial). Clears when records arrive again
+A02,Power interruption,logger,power_interruption,logger,,,event,0,info,no,0,yes,1-min record,logger restarted after a power loss (boot = poweron or brownout); the gap before it is the outage,Logged with the outage start and end from the gap in the records
+A03,Meter not answering,meter,meter_no_answer,EM01,0.5,0.5,reads,1,critical,yes,6,yes,1-min record,no good meter read in a whole minute (4 Modbus failures),Wiring or meter address problem; or the meter lost its supply
+A04,Phase lost,power quality,v_min_phase,EM01,100,180,V,0,critical,yes,1,yes,1-min record,lowest 15 s phase voltage L-N below 100 V,Clears when every phase is above 180 V
+A05,Undervoltage,power quality,v_mean_low,EM01,207,210,V,5,warning,yes,6,yes,1-min record,a phase voltage L-N (1-min mean) below 207 V for 5 min,230 V nominal -10% (SPLN); confirm against the PLN supply
+A06,Overvoltage,power quality,v_mean_high,EM01,242,240,V,5,warning,yes,6,yes,1-min record,a phase voltage L-N (1-min mean) above 242 V for 5 min,230 V nominal +5% (SPLN); confirm against the PLN supply
+A07,Frequency out of range,power quality,f_dev,EM01,0.5,0.4,Hz,1,warning,yes,6,yes,1-min record,frequency min or max more than 0.5 Hz from 50 Hz,Usually means the genset is supplying
+A08,High demand,load,s_pct_contract,EM01,90,85,%,5,warning,yes,6,yes,1-min record,highest kVA in the minute above 90 % of the contracted kVA for 5 min,Needs contracted_kva in site.json; off until it is set
+A09,Low power factor,power quality,pf_low,EM01,0.85,0.87,PF,15,warning,no,24,yes,1-min record,power factor (1-min mean) below 0.85 for 15 min,PLN bills excess kVArh below 0.85. Ignored below 1 kW of load
+A10,Current imbalance,power quality,i_imbalance_pct,EM01,20,15,%,15,warning,no,24,yes,1-min record,largest phase current deviation from the mean above 20 % for 15 min,Ignored when the mean current is below 5 A
+A11,Electrical room hot,environment,temp_above,TH1,35,33,C,10,warning,yes,6,yes,1-min record,electrical room temperature above 35 C for 10 min,
+A12,Electrical room very hot,environment,temp_above,TH1,40,38,C,5,critical,yes,1,yes,1-min record,electrical room temperature above 40 C for 5 min,
+A13,Electrical room humid,environment,rh_above,TH1,80,75,%RH,60,warning,no,24,yes,1-min record,electrical room humidity above 80 % for 60 min,Condensation risk
+A14,Temp/RH sensor fault,logger,sensor_missing,"TH1,TH2",0.5,0.5,,10,warning,no,24,yes,1-min record,no valid reading of a sensor for 10 min,Wiring or failed sensor
+A15,SD card error,logger,sd_error,logger,0.5,0.5,,0,warning,no,24,yes,1-min record,records come from the RAM queue (SD card failing),Data is still sent while online but not kept locally
+A16,Backlog growing,logger,backlog,logger,60,5,min,0,warning,no,24,yes,1-min record,oldest unsent record older than 60 min,Logger online but uploads failing
+A17,Weak WiFi,logger,wifi_weak,logger,-80,-75,dBm,60,info,no,24,yes,1-min record,WiFi signal below -80 dBm for 60 min,
+A18,Clock wrong,logger,clock_skew,logger,2,1,min,0,warning,no,24,yes,live snapshot,logger clock more than 2 min away from the server clock,Checked on the live snapshots; the records would carry the wrong times
+A19,Energy counter went backwards,meter,e_backwards,EM01,0.01,,kWh,0,warning,no,0,yes,1-min record,cumulative kWh lower than the previous record,Meter reset or wrong register
+A20,Push to OED failing,platform,oed_push,site,30,,min,0,warning,no,24,no,reception,no successful push to OED for 30 min,Not built yet: enable when the push to OED exists
+A21,Sensors disagree,environment,temp_diff_abs,"TH1,TH2",5,3,C,30,info,no,24,no,1-min record,difference between TH1 and TH2 temperature above 5 C for 30 min,Not used at adab: TH2 is outdoors. Keep for sites with both sensors in one room
+A22,Outdoor very hot,environment,temp_above,TH2,36,34,C,30,info,no,24,yes,1-min record,outdoor temperature above 36 C for 30 min,Above the usual daytime range of the WITA zone (about 22 to 34 C)
+A23,Condensation risk in the electrical room,environment,dewpoint_margin,"TH1,TH2",2,3,C,30,warning,no,24,yes,1-min record,electrical room temperature (TH1) less than 2 C above the outdoor dew point (TH2) for 30 min,Humid outdoor air entering a cooler room condenses on cold surfaces and switchgear
+A24,Electrical room much warmer than outdoors,environment,temp_diff,"TH1,TH2",8,6,C,30,warning,yes,6,yes,1-min record,electrical room temperature above outdoor temperature by more than 8 C for 30 min,"Failed ventilation or cooling of the panel room. Set TH1's offset in the settings first, then tune this limit after the first week"
+A25,Outdoor sensor wet or stuck,environment,rh_above,TH2,99,97,%RH,1440,info,no,24,yes,1-min record,outdoor humidity at 99 % RH or more for 24 h,Short spells at 100 % after rain are normal; a full day means a wet or failing sensor
+A26,Voltage dip,power quality,v_min_phase,EM01,207,210,V,0,info,no,0,yes,1-min record,a 15 s phase voltage sample below 207 V (-10 %),"Counts dips for the power quality review. A 15 s sample catches dips that last, not every short sag"
+A27,Voltage swell,power quality,v_max_phase,EM01,253,250,V,0,info,no,0,yes,1-min record,a 15 s phase voltage sample above 253 V (+10 %),For the power quality review
+A28,Voltage unbalance,power quality,v_unbalance_pct,EM01,2,1.5,%,10,warning,no,24,yes,1-min record,largest phase voltage deviation from the mean above 2 % for 10 min,2 % is the EN 50160 limit; above it motors and pumps run hot
+A29,Phase current near the rating,load,i_max_pct_rated,EM01,90,80,%,5,warning,yes,6,yes,1-min record,highest 15 s phase current above 90 % of the rated current for 5 min,Needs rated_a in site.json (main breaker or CT rating); off until it is set
+A30,Negative power on a phase,meter,p_phase_negative,EM01,-0.5,-0.2,kW,5,warning,no,24,yes,1-min record,a phase active power below -0.5 kW for 5 min,"A CT fitted backwards or on the wrong phase (commissioning check), or power exported"
+A31,Energy counter not moving,meter,e_frozen,EM01,1,,kW,30,warning,no,24,yes,1-min record,kWh counter unchanged for 30 min while the load is above 1 kW,Wrong energy register or scale
+A32,Mains lost (logger on UPS),power quality,grid_lost,EM01,,,,0,critical,yes,1,no,1-min record,grid supply lost while the logger runs on its UPS,Needs the UPS and a mains-sense signal: enable when the UPS is installed
+A33,Logger crash restart,logger,logger_crash,logger,,,event,0,warning,no,0,yes,1-min record,logger restarted by its watchdog or after a crash (boot = panic or a watchdog),Logged with the reason; repeated crashes raise A34
+A34,Frequent restarts,logger,frequent_restarts,logger,3,,boots/24 h,0,warning,yes,24,yes,1-min record,3 or more unplanned restarts within 24 h,"Unplanned = power loss, brownout, crash, watchdog. The daily reboot and remote updates do not count"

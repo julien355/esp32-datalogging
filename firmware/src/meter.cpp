@@ -13,23 +13,23 @@ namespace meter {
 // Units of the columns: V, A, Hz, kW, kvar, kVA, PF (no unit), kWh, kvarh.
 // Scales of currents and powers are guesses until the register check (docs/meter/README.md).
 static const Reg DEFAULT_TABLE[] = {
-    {"v1", 3, 0x0000, U16, 0.1, false, MEAN},
-    {"v2", 3, 0x0001, U16, 0.1, false, MEAN},
-    {"v3", 3, 0x0002, U16, 0.1, false, MEAN},
-    {"v12", 3, 0x0003, U16, 0.1, false, MEAN},
-    {"v23", 3, 0x0004, U16, 0.1, false, MEAN},
-    {"v31", 3, 0x0005, U16, 0.1, false, MEAN},
-    {"i1", 3, 0x0006, U16, 0.001, true, MEAN},
-    {"i2", 3, 0x0007, U16, 0.001, true, MEAN},
-    {"i3", 3, 0x0008, U16, 0.001, true, MEAN},
-    {"f", 3, 0x0009, U16, 0.01, false, MEAN},
-    {"p1", 3, 0x000A, S16, 0.001, true, MEAN},
-    {"p2", 3, 0x000B, S16, 0.001, true, MEAN},
-    {"p3", 3, 0x000C, S16, 0.001, true, MEAN},
-    {"p", 3, 0x000D, S16, 0.001, true, MEANMAX},
-    {"q", 3, 0x000E, S16, 0.001, true, MEAN},
-    {"s", 3, 0x000F, U16, 0.001, true, MEAN},
-    {"pf", 3, 0x0010, S16, 0.001, false, MEAN},
+    {"v1", 3, 0x0000, U16, 0.1, false, MINMAX},
+    {"v2", 3, 0x0001, U16, 0.1, false, MINMAX},
+    {"v3", 3, 0x0002, U16, 0.1, false, MINMAX},
+    {"v12", 3, 0x0003, U16, 0.1, false, MINMAX},
+    {"v23", 3, 0x0004, U16, 0.1, false, MINMAX},
+    {"v31", 3, 0x0005, U16, 0.1, false, MINMAX},
+    {"i1", 3, 0x0006, U16, 0.001, true, MINMAX},
+    {"i2", 3, 0x0007, U16, 0.001, true, MINMAX},
+    {"i3", 3, 0x0008, U16, 0.001, true, MINMAX},
+    {"f", 3, 0x0009, U16, 0.01, false, MINMAX},
+    {"p1", 3, 0x000A, S16, 0.001, true, MINMAX},
+    {"p2", 3, 0x000B, S16, 0.001, true, MINMAX},
+    {"p3", 3, 0x000C, S16, 0.001, true, MINMAX},
+    {"p", 3, 0x000D, S16, 0.001, true, MINMAX},
+    {"q", 3, 0x000E, S16, 0.001, true, MINMAX},
+    {"s", 3, 0x000F, U16, 0.001, true, MINMAX},
+    {"pf", 3, 0x0010, S16, 0.001, false, MINMAX},
     {"e", 3, 0x0018, U32, 0.01, false, LAST},
     {"eq", 3, 0x001A, U32, 0.01, false, LAST},
 };
@@ -71,7 +71,7 @@ static bool parseType(const String &s, Type &t) {
   return false;
 }
 
-// Line format: name,fc,addr,type,scale,ct,agg   e.g.  p,3,0x000D,s16,0.001,1,meanmax
+// Line format: name,fc,addr,type,scale,ct,agg   e.g.  p,3,0x000D,s16,0.001,1,minmax
 static bool loadOverride(fs::FS &fs) {
   File f = fs.open(FILE_REGISTERS, FILE_READ);
   if (!f) return false;
@@ -103,7 +103,7 @@ static bool loadOverride(fs::FS &fs) {
     r.scale = p[4].toFloat();
     r.ct = p[5].toInt() == 1;
     p[6].trim();
-    r.agg = p[6] == "last" ? LAST : p[6] == "meanmax" ? MEANMAX : MEAN;
+    r.agg = p[6] == "last" ? LAST : (p[6] == "minmax" || p[6] == "meanmax") ? MINMAX : MEAN;
     table[n++] = r;
   }
   f.close();
@@ -268,7 +268,7 @@ void dump(uint8_t slave, uint8_t fc, uint16_t start, uint16_t cnt, Print &out) {
 
 String describeTable() {
   const char *tn[] = {"u16", "s16", "u32", "s32", "u32sw", "s32sw", "f32", "f32sw"};
-  const char *an[] = {"mean", "last", "meanmax"};
+  const char *an[] = {"mean", "last", "minmax"};
   String s = "name,fc,addr,type,scale,ct,agg\n";
   char b[64];
   for (int i = 0; i < nRegs; i++) {

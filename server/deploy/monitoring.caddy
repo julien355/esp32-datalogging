@@ -15,7 +15,7 @@ arkan-monitoring.duckdns.org {
 
 	# Loggers: token checked by the service, body size capped here too.
 	@device {
-		path /api/v1/ingest /api/v1/ota /api/v1/firmware/*
+		path /api/v1/ingest /api/v1/ota /api/v1/firmware/* /api/v1/config /api/v1/config/report
 	}
 	@livepost {
 		method POST

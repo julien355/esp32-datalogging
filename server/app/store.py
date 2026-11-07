@@ -75,6 +75,7 @@ class DataStore:
         self._ts_cache = OrderedDict()   # (site, device, day) -> {part: (header, set of ts)}
         self._devices = None
         self._devices_mtime = None
+        self.alarms = None   # AlarmEngine, set by the server (evaluates each upload)
 
     # ------------------------------------------------------------------ paths
     def site_dir(self, site):
@@ -206,7 +207,8 @@ class DataStore:
         return header, cols, good, bad
 
     def store_rows(self, site, device, header, rows):
-        """rows: [(ts, line)]. Appends new rows to the right day file. Returns (stored, dup)."""
+        """rows: [(ts, line)]. Appends new rows to the right day file. Returns (stored, dup, new lines)."""
+        new_lines = []
         by_day = {}
         for ts, line in rows:
             by_day.setdefault(ts[:10], []).append((ts, line))
@@ -254,19 +256,59 @@ class DataStore:
                     atomic_write(path, header + "\n" + "".join(x + "\n" for x in merged))
                 tss.update(ts for ts, _ in fresh)
                 stored += len(fresh)
+                new_lines += [line for _, line in fresh]
                 boot_col = header.split(",").index("boot") if "boot" in header.split(",") else None
                 if boot_col is not None:
                     for ts, line in fresh:
                         reason = line.split(",")[boot_col]
                         if reason:
                             self.event(site, device, "boot", {"record": ts, "reason": reason})
-        return stored, dup
+        return stored, dup, new_lines
 
     def ingest(self, site, device, text):
         header, cols, good, bad = self.parse_csv(text)
-        stored, dup = self.store_rows(site, device, header, good)
+        stored, dup, new_lines = self.store_rows(site, device, header, good)
         last = max((ts for ts, _ in good), default=None)
-        return {"ok": True, "stored": stored, "duplicates": dup, "rejected_rows": bad, "last_ts": last}
+        res = {"ok": True, "stored": stored, "duplicates": dup, "rejected_rows": bad, "last_ts": last}
+        if self.alarms is not None:
+            res["alarms"] = len(self.alarms.process(site, device, header, new_lines))
+        return res
+
+    # ------------------------------------------------------------------ remote settings
+    def config_path(self, site, device):
+        return os.path.join(self.device_dir(site, device), "config.json")
+
+    def get_config(self, site, device):
+        """Settings the platform wants on the logger: {"version": n, "settings": {key: value}}."""
+        try:
+            with open(self.config_path(site, device), encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, ValueError):
+            return None
+
+    def set_config(self, site, device, changes):
+        """changes: {key: value}; value "@default" puts the logger's default back. Returns the new version."""
+        with self.lock:
+            cur = self.get_config(site, device) or {"version": 0, "settings": {}}
+            cur["settings"].update({k: str(v) for k, v in changes.items()})
+            cur["version"] = int(cur.get("version", 0)) + 1
+            cur["updated"] = iso_now()
+            atomic_write(self.config_path(site, device), json.dumps(cur, indent=2, sort_keys=True) + "\n")
+        self.event(site, device, "config_set", {"version": cur["version"], "keys": sorted(changes)})
+        return cur["version"]
+
+    def save_report(self, site, device, report):
+        report["received"] = iso_now()
+        p = os.path.join(self.device_dir(site, device), "settings-reported.json")
+        old = None
+        try:
+            with open(p, encoding="utf-8") as f:
+                old = json.load(f).get("cfg_version")
+        except (FileNotFoundError, ValueError):
+            pass
+        atomic_write(p, json.dumps(report, indent=2, sort_keys=True) + "\n")
+        if old != report.get("cfg_version"):
+            self.event(site, device, "config_applied", {"version": report.get("cfg_version")})
 
     # ------------------------------------------------------------------ reading
     def sites(self):
