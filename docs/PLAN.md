@@ -218,7 +218,7 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
       monthly.csv                   one row per month
     <next site>/
   devices.json                      device code -> site, token hash, firmware version, last seen (no token in clear)
-  logs/                             the app's own log, one file per day
+  logs/                             reserved (the service logs to docker logs: docker compose logs ingest)
 ```
 
 - **Plain CSV and JSON**: the files can be opened in Excel or read by Claude, Codex or PowerShell over SSH without the app, and copied site by site.

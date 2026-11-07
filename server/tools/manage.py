@@ -7,7 +7,8 @@ or anywhere with --data <folder> (for example a copy of the data folder on a lap
 
 Commands:
   init                                  create the folder layout
-  add-site <code> --name "Adab hotel" [--tz Asia/Makassar] [--utc-offset 8]
+  add-site <code> --name "Adab hotel" --contracted-kva 82.5 --rated-a 200 [--nominal-v 230]
+                                        [--tz Asia/Makassar] [--utc-offset 8]
   add-device <site> <device> [--sd-settings FILE --server URL]
                                         register a logger, print its token and setup WiFi password ONCE
   rotate-token <device>                 new token (the old one stops working at once)
@@ -17,9 +18,10 @@ Commands:
   export-oed <site> [--from D] [--to D] [--all] [--out DIR]
                                         one CSV per value in Open Energy Dashboard upload format
   backfill <site> <device> <folder>     merge an SD card copy (its /data folder) into the site
-  publish-fw <file.bin> --version X [--device D]
-                                        offer a firmware image to the loggers (OTA)
-  set-config <device> key=value ...     settings sent to the logger (value @default = back to default)
+  publish-fw <file.bin> --version X [--device D] [--force]
+                                        offer a firmware image to the loggers (OTA; only to older versions)
+  set-config <device> key=value ... [--force]
+                                        settings sent to the logger (value @default = back to default)
   show-config <device>                  settings asked for, and the settings the logger reported
   alarms <site> [--rebuild]             open alarms and the last lines of the alarm log;
                                         --rebuild replays every record (after a backfill or a register change)
@@ -371,12 +373,14 @@ def cmd_publish_fw(store, a):
     os.makedirs(fw_dir, exist_ok=True)
     name = f"logger-{a.version}.bin"
     dst = os.path.join(fw_dir, name)
+    if os.path.exists(dst) and not a.force:
+        die(f"{dst} exists already: give a new version number (or --force to replace it)")
     shutil.copyfile(a.file, dst)
     md5 = hashlib.md5(open(dst, "rb").read()).hexdigest()
     p = os.path.join(fw_dir, "manifest.json")
     man = json.load(open(p)) if os.path.exists(p) else {}
     man[a.device or "default"] = {"version": a.version, "file": name, "md5": md5,
-                                  "size": os.path.getsize(dst), "published": iso_now()}
+                                  "size": os.path.getsize(dst), "published": iso_now(), "force": bool(a.force)}
     atomic_write(p, json.dumps(man, indent=2) + "\n")
     print(f"{name} offered to {a.device or 'every logger'} (md5 {md5}). Loggers with ota_on=1 take it at their next check.")
 
@@ -400,6 +404,9 @@ def cmd_set_config(store, a):
         for k in changes:
             if k not in known:
                 die(f"{k}: not a setting of this logger (see show-config)")
+    elif not a.force:
+        die("the logger has not reported its settings yet, so the keys cannot be checked: "
+            "wait for its first connection (show-config), or add --force if you are sure of the key names")
     blocked = {"dev_id", "dev_token", "srv_url", "tls_verify", "wifi_ssid", "wifi_pass", "wifi_ssid2", "wifi_pass2",
                "portal_pass"}
     for k in changes:
@@ -466,7 +473,10 @@ def main():
     p = sub.add_parser("backfill"); p.add_argument("site"); p.add_argument("device"); p.add_argument("folder")
     p = sub.add_parser("publish-fw"); p.add_argument("file"); p.add_argument("--version", required=True)
     p.add_argument("--device")
+    p.add_argument("--force", action="store_true",
+                   help="replace an existing file, and offer it even to loggers with a newer version (step back)")
     p = sub.add_parser("set-config"); p.add_argument("device"); p.add_argument("pairs", nargs="+")
+    p.add_argument("--force", action="store_true", help="accept keys before the logger has reported its settings")
     p = sub.add_parser("show-config"); p.add_argument("device")
     p = sub.add_parser("alarms"); p.add_argument("site"); p.add_argument("--rebuild", action="store_true")
     p.add_argument("--lines", type=int, default=20)

@@ -58,7 +58,7 @@ async function loadSite() {
   el('title').textContent = `Live: ${prof.name || site}`;
   let html = '', worst = 0;
   const devs = Object.keys(j.devices);
-  if (!devs.length) { el('status').innerHTML = '<span class="bad">No live data yet for this site</span>'; el('content').innerHTML = ''; return; }
+  if (!devs.length) html = '<p class="bad">No live data for this site (logger offline or not installed yet).</p>';
   for (const dev of devs) {
     const d = j.devices[dev], vals = d.last.values || {};
     worst = Math.max(worst, d.age_s);
@@ -86,6 +86,7 @@ async function loadSite() {
     log += '</table>';
   } catch (e) {}
   el('content').innerHTML = top + html + log;
+  if (!devs.length) { el('status').innerHTML = '<span class="bad">No live data</span>'; return; }
   el('status').innerHTML = worst < 60 ? `<span class="ok">Live, updated ${worst} s ago</span>`
                                       : `<span class="bad">No data for ${Math.round(worst / 60)} min</span>`;
 }

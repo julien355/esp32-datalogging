@@ -175,6 +175,16 @@ class AlarmTest(unittest.TestCase):
         self.assertNotIn("A01", [o["id"] for o in self.s.alarms.open_alarms("adab")])
         self.assertEqual([x[6] for x in self.log() if x[3] == "A01"], ["start", "clear"])
 
+    def test_rebuild_keeps_offline_lines(self):
+        self.s.save_devices({"devices": {"LOG-0001": {"site": "adab", "token_sha256": "x"}}})
+        rows = [pq_row(self.t(m), e=100 + m) for m in range(3)]
+        self.send(rows)
+        self.s.alarms.last_rx[("adab", "LOG-0001")] = time.time() - 3600
+        self.s.alarms.check_offline()
+        self.s.alarms.rebuild("adab", lambda dev: [dict(zip(PQ_HEADER.split(","), r.split(","))) for r in rows])
+        self.assertIn("A01", [x[3] for x in self.log()])
+        self.assertIn("A01", [o["id"] for o in self.s.alarms.open_alarms("adab")])
+
     def test_backlog_alarm_ignores_wifi_outage(self):
         rows = [pq_row(self.t(m), rssi="").replace(",0,1,", ",90,1,") for m in range(5)]
         self.send(rows)
@@ -290,10 +300,19 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(code, 200)
         code, _ = self.req("GET", "/api/v1/ota?fw=0.1.1", token=self.token)
         self.assertEqual(code, 204)
+        code, _ = self.req("GET", "/api/v1/ota?fw=0.2.0", token=self.token)   # newer, flashed by hand
+        self.assertEqual(code, 204)                                           # never downgraded
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.manage("publish-fw", fw, "--version", "0.1.1")               # no silent overwrite
+        self.manage("publish-fw", fw, "--version", "0.1.1", "--force")        # deliberate step back
+        code, _ = self.req("GET", "/api/v1/ota?fw=0.2.0", token=self.token)
+        self.assertEqual(code, 200)
 
     def test_remote_config(self):
         code, _ = self.req("GET", "/api/v1/config", token=self.token)
         self.assertEqual(code, 204)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.manage("set-config", "LOG-0001", "th1_off_t=1")              # no report yet: keys unchecked
         rep = {"fw": "0.2.0", "cfg_version": 0, "settings": {"th1_off_t": "0", "reboot_hr": "19"}}
         code, _ = self.req("POST", "/api/v1/config/report", json.dumps(rep), self.token, "application/json")
         self.assertEqual(code, 204)

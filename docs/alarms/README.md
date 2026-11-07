@@ -17,7 +17,7 @@ Status: **built and tested with the simulated logger** (7 November 2026). WhatsA
 - Two checks do not come from the records:
   - **A01 logger offline** is checked every minute on what the VPS **receives**;
   - **A18 clock** is checked on the live snapshots.
-- Nothing is lost by evaluating on the VPS: the logger keeps every record on its SD card, and **`manage.py alarms adab --rebuild` replays the whole history** against the current register (after an SD backfill, or to see what a new threshold would have given).
+- Nothing is lost by evaluating on the VPS: the logger keeps every record on its SD card, and **`manage.py alarms adab --rebuild` replays the whole history** (service stopped, see the VPS tutorial C6; A01 and A18, which do not come from the records, are kept as they were) against the current register (after an SD backfill, or to see what a new threshold would have given).
 
 ## 2. Where the files are
 

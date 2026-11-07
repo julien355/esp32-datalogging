@@ -48,7 +48,7 @@ cat <<TXT
 2. Start:  cd /opt/arkan-monitoring/server && docker compose up -d --build
 3. Check:  curl -s http://127.0.0.1:$PORT/health
            docker compose exec ingest python tools/manage.py init     (copies the alarm register)
-4. Site:   docker compose exec ingest python tools/manage.py add-site adab --name "Adab hotel"
+4. Site:   docker compose exec ingest python tools/manage.py add-site adab --name "Adab hotel" --contracted-kva 82.5 --rated-a 200
            docker compose exec ingest python tools/manage.py add-device adab LOG-0001
 5. Caddy:  copy deploy/monitoring.caddy to /opt/edge/sites/, caddy validate, then reload (owner)
 6. Backup: crontab line in deploy/backup.sh

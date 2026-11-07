@@ -621,18 +621,32 @@ class AlarmEngine:
         return sorted(out, key=lambda x: (order.get(x["severity"], 3), x["since"] or ""))
 
     def rebuild(self, site, read_rows):
-        """Replays every record of the site. read_rows(device) yields row dicts oldest first."""
+        """Replays every record of the site. read_rows(device) yields row dicts oldest first.
+        Lines that do not come from the records (A01 offline: reception; A18 clock: live snapshots) cannot be
+        replayed: they are kept from the old log, with their open state. Stop the service while it runs
+        (docker compose stop ingest), so no upload is evaluated at the same time."""
         with self.lock:
+            keep_ids = {a["id"] for a in self.register(site)
+                        if (a.get("rule") or "").strip() in ("offline", "clock_skew")}
             d = os.path.join(self.store.site_dir(site), "alarms")
+            kept = []
             if os.path.isdir(d):
-                for fn in os.listdir(d):
-                    if fn.endswith(".csv"):
-                        os.unlink(os.path.join(d, fn))
+                for fn in sorted(os.listdir(d)):
+                    if not fn.endswith(".csv"):
+                        continue
+                    with open(os.path.join(d, fn), encoding="utf-8", newline="") as f:
+                        kept += [r for r in csv.DictReader(f) if r.get("id") in keep_ids]
+                    os.unlink(os.path.join(d, fn))
             lines = []
             for device in self._devices(site):
+                old = self.load_state(site, device).get("alarms", {})
                 state = {"last_ts": None, "prev": None, "alarms": {}, "boots": []}
                 lines += self.evaluate(site, device, list(read_rows(device)), state)
+                for aid in keep_ids:            # open offline/clock alarms stay open
+                    if aid in old:
+                        state["alarms"][aid] = old[aid]
                 self.save_state(site, device, state)
+            lines += kept
             lines.sort(key=lambda x: x["ts_utc"])
             self.write_log(site, lines)
             return lines

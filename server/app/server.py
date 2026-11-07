@@ -40,6 +40,15 @@ LIVE_POINTS = 240                      # 60 minutes at 15 s
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def version_key(v):
+    """0.3.10 > 0.3.9; anything that is not digits sorts as 0."""
+    out = []
+    for part in str(v or "").split("."):
+        digits = "".join(ch for ch in part if ch.isdigit())
+        out.append(int(digits) if digits else 0)
+    return tuple(out)
+
+
 class Live:
     """Last snapshots per site and device, in memory only (a restart empties it)."""
 
@@ -237,6 +246,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_empty(204)
         entry = man.get(device) or man.get("default")
         if not entry or entry.get("version") == fw:
+            return self.send_empty(204)
+        # Never downgrade a logger flashed by hand with a newer version, unless the entry is marked force
+        # (manage.py publish-fw --force: a deliberate step back).
+        if not entry.get("force") and version_key(entry["version"]) <= version_key(fw):
             return self.send_empty(204)
         return self.send_json(200, {"version": entry["version"], "md5": entry.get("md5", ""),
                                     "size": entry.get("size"), "url": "/api/v1/firmware/" + entry["file"]})

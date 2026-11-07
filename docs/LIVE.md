@@ -24,8 +24,8 @@ There is also **no plugin system** to add a live widget without changing OED's c
 ```json
 "live": {
   "refresh_s": 15,
-  "values": ["p", "s", "pf", "f", "v1", "v2", "v3", "i1", "i2", "i3",
-             "TH1.temp", "TH1.hum", "TH2.temp", "TH2.hum"]
+  "values": ["EM01_p", "EM01_s", "EM01_pf", "EM01_f", "EM01_v1", "EM01_v2", "EM01_v3",
+             "EM01_i1", "EM01_i2", "EM01_i3", "TH1_t", "TH1_rh", "TH2_t", "TH2_rh"]
 }
 ```
 

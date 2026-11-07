@@ -134,17 +134,25 @@ Expected `401` (login asked). Then open `https://arkan-monitoring.duckdns.org/li
 
 From the laptop (Python 3, no packages), with the token from step 6:
 ```bash
-python3 server/tools/simulate_logger.py --url https://arkan-monitoring.duckdns.org --token <token> --backlog-hours 3 --resend --event dip --live
+python server/tools/simulate_logger.py --url https://arkan-monitoring.duckdns.org --token <token> --backlog-hours 3 --resend --event dip --live
 ```
 Expected:
-- the alarm log (`manage.py alarms adab`) shows A26 Voltage dip and A05 Undervoltage starting and clearing 30 min into the backlog, at the times of the simulated records;
+- the alarm log (`manage.py alarms adab`) shows A02 Power interruption (the simulator's first record says `poweron`), A16 Backlog growing (the simulator reports its backlog), and A26 Voltage dip and A05 Undervoltage starting and clearing 30 min into the backlog, at the times of the simulated records;
 - 3 batches of 60 rows, `"stored": 60` each; the resent batch `"stored": 0, "duplicates": 60`;
 - `/live/adab/` shows tiles updating every 15 s;
 - on the VPS: `ls /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw/$(date -u +%Y/%m)/`.
 
-Then remove the simulated data before the real logger starts (it uses the same device code):
+Then remove the simulated data before the real logger starts (it uses the same device code). **Stop the service first**: it keeps an index of stored timestamps in memory, and deleting files under it would make it drop the real logger's rows as duplicates (owner approves the stop and start):
+```bash
+cd /opt/arkan-monitoring/server && docker compose stop ingest
+```
+
 ```bash
 sudo rm -r /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw /srv/arkan-monitoring/data/sites/adab/LOG-0001/alarm-state.json /srv/arkan-monitoring/data/sites/adab/alarms
+```
+
+```bash
+docker compose start ingest
 ```
 
 ## 9. Backup (owner's crontab)
@@ -171,10 +179,10 @@ And, if wanted, the daily summary at 00:20 WITA (16:20 UTC on a UTC server):
 | Update | `git fetch --tags && git checkout <tag> && docker compose up -d --build` |
 | Daily summary | `docker compose exec ingest python tools/manage.py daily adab` |
 | Alarm log | `docker compose exec ingest python tools/manage.py alarms adab` (open alarms + last lines); the file: `/srv/arkan-monitoring/data/sites/adab/alarms/2026.csv` |
-| Change a threshold | edit `/srv/arkan-monitoring/data/alarm-register.csv` in Excel (or a per-site copy in `sites/adab/alarm-register.csv`); applies at the next record. To see what it would have given on past data: `manage.py alarms adab --rebuild` |
+| Change a threshold | edit `/srv/arkan-monitoring/data/alarm-register.csv` in Excel (or a per-site copy in `sites/adab/alarm-register.csv`); applies at the next record. To see what it would have given on past data: `docker compose stop ingest`, `docker compose run --rm ingest python tools/manage.py alarms adab --rebuild`, `docker compose start ingest` (A01 and A18 lines are kept) |
 | Change a logger setting remotely | `manage.py set-config LOG-0001 th1_off_t=-1.2 reboot_hr=19` (taken within 15 min, the logger restarts); `manage.py show-config LOG-0001` to check. Network settings are refused: on site only |
 | OED files | `docker compose exec ingest python tools/manage.py export-oed adab --from 2026-11-01` |
-| SD card backfill | copy the card's `/data` to `/srv/arkan-monitoring/data/export/sd-LOG-0001/`, then `manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001`, then `manage.py alarms adab --rebuild` |
+| SD card backfill | copy the card's `/data` to `/srv/arkan-monitoring/data/export/sd-LOG-0001/`, then with the service stopped (`docker compose stop ingest`): `docker compose run --rm ingest python tools/manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001`, the same with `alarms adab --rebuild`, then `docker compose start ingest` |
 | Firmware update (OTA) | copy `firmware.bin` to the data folder, `manage.py publish-fw /data/firmware.bin --version 0.3.1`; loggers take it within 6 h (`ota_on` is on by default) |
 | Read the data from the laptop | `scp -r hermes-vps:/srv/arkan-monitoring/data/sites/adab ./adab` |
 
