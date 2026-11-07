@@ -88,6 +88,11 @@ docker stats --no-stream arkan-monitoring-ingest
 ```
 Expected: `{"ok": true, ...}` and well under 96 MB.
 
+Then once, to put the alarm register in the data folder (`/srv/arkan-monitoring/data/alarm-register.csv`, the copy you edit in Excel):
+```bash
+docker compose exec ingest python tools/manage.py init
+```
+
 ## 6. Site and logger
 
 ```bash
@@ -97,9 +102,9 @@ cd /opt/arkan-monitoring/server && docker compose exec ingest python tools/manag
 ```bash
 docker compose exec ingest python tools/manage.py add-device adab LOG-0001
 ```
-The second command prints the **token once**. Copy it to the password manager straight away: only its hash is kept on the VPS. Lost token: `rotate-token LOG-0001`.
+The second command prints the **token** and the logger's own **setup WiFi password** (`portal_pass`) **once**. Copy both to the password manager straight away: only the token's hash is kept on the VPS. Lost token: `rotate-token LOG-0001`. Add `--sd-settings /data/export/settings-LOG-0001.txt` to also get the SD card settings file (then move it off the VPS and delete it).
 
-Optional: edit `/srv/arkan-monitoring/data/sites/adab/site.json` (labels, live values, contracted kVA).
+Then edit `/srv/arkan-monitoring/data/sites/adab/site.json`: `contracted_kva` (A08), `rated_a` (A29), `nominal_v`, labels, live values.
 
 ## 7. Caddy (owner approves the reload)
 
@@ -115,8 +120,8 @@ sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 ```
 `cp -n` never overwrites an existing file. The site file:
-- `/api/v1/ingest`, `/api/v1/ota`, `/api/v1/firmware/*` and `POST /api/v1/live`: **no web login** (the logger cannot log in), the device token is checked by the service, body size capped.
-- Everything else (`/live/`, `/api/v1/status`, `/api/v1/live/<site>`): **Arkan login** (`/opt/edge/secrets/hub-users.caddy`). `/` goes to `/live/` until OED is installed.
+- `/api/v1/ingest`, `/api/v1/ota`, `/api/v1/firmware/*`, `/api/v1/config`, `/api/v1/config/report` and `POST /api/v1/live`: **no web login** (the logger cannot log in), the device token is checked by the service, body size capped.
+- Everything else (`/live/`, `/api/v1/status`, `/api/v1/live/<site>`, `/api/v1/alarms/<site>`): **Arkan login** (`/opt/edge/secrets/hub-users.caddy`). `/` goes to `/live/` until OED is installed.
 - Authorization headers removed from the access log.
 
 Check from the laptop:
@@ -129,16 +134,17 @@ Expected `401` (login asked). Then open `https://arkan-monitoring.duckdns.org/li
 
 From the laptop (Python 3, no packages), with the token from step 6:
 ```bash
-python3 server/tools/simulate_logger.py --url https://arkan-monitoring.duckdns.org --token <token> --backlog-hours 3 --resend --live
+python3 server/tools/simulate_logger.py --url https://arkan-monitoring.duckdns.org --token <token> --backlog-hours 3 --resend --event dip --live
 ```
 Expected:
+- the alarm log (`manage.py alarms adab`) shows A26 Voltage dip and A05 Undervoltage starting and clearing 30 min into the backlog, at the times of the simulated records;
 - 3 batches of 60 rows, `"stored": 60` each; the resent batch `"stored": 0, "duplicates": 60`;
 - `/live/adab/` shows tiles updating every 15 s;
 - on the VPS: `ls /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw/$(date -u +%Y/%m)/`.
 
 Then remove the simulated data before the real logger starts (it uses the same device code):
 ```bash
-sudo rm -r /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw
+sudo rm -r /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw /srv/arkan-monitoring/data/sites/adab/LOG-0001/alarm-state.json /srv/arkan-monitoring/data/sites/adab/alarms
 ```
 
 ## 9. Backup (owner's crontab)
@@ -164,9 +170,12 @@ And, if wanted, the daily summary at 00:20 WITA (16:20 UTC on a UTC server):
 | Restart | `docker compose restart ingest` (owner approves) |
 | Update | `git fetch --tags && git checkout <tag> && docker compose up -d --build` |
 | Daily summary | `docker compose exec ingest python tools/manage.py daily adab` |
+| Alarm log | `docker compose exec ingest python tools/manage.py alarms adab` (open alarms + last lines); the file: `/srv/arkan-monitoring/data/sites/adab/alarms/2026.csv` |
+| Change a threshold | edit `/srv/arkan-monitoring/data/alarm-register.csv` in Excel (or a per-site copy in `sites/adab/alarm-register.csv`); applies at the next record. To see what it would have given on past data: `manage.py alarms adab --rebuild` |
+| Change a logger setting remotely | `manage.py set-config LOG-0001 th1_off_t=-1.2 reboot_hr=19` (taken within 15 min, the logger restarts); `manage.py show-config LOG-0001` to check. Network settings are refused: on site only |
 | OED files | `docker compose exec ingest python tools/manage.py export-oed adab --from 2026-11-01` |
-| SD card backfill | copy the card's `/data` to `/srv/arkan-monitoring/data/export/sd-LOG-0001/`, then `manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001` |
-| Firmware update (OTA) | copy `firmware.bin` to the data folder, `manage.py publish-fw /data/firmware.bin --version 0.1.1` |
+| SD card backfill | copy the card's `/data` to `/srv/arkan-monitoring/data/export/sd-LOG-0001/`, then `manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001`, then `manage.py alarms adab --rebuild` |
+| Firmware update (OTA) | copy `firmware.bin` to the data folder, `manage.py publish-fw /data/firmware.bin --version 0.2.1`; loggers take it within 6 h (`ota_on` is on by default) |
 | Read the data from the laptop | `scp -r hermes-vps:/srv/arkan-monitoring/data/sites/adab ./adab` |
 
 ## 11. Security notes

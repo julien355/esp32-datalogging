@@ -1,6 +1,6 @@
 # Logger firmware: functions and settings
 
-Firmware **0.1.0**, folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
+Firmware **0.2.0** (CSV schema 2), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
 Status: **written, compiled by CI, not yet run on the board.** The pin map and the meter register map are still **to verify** (Lab 1 and Lab 3 of the install manual).
 
 How to build, flash, configure and test it: [`OFFICE-PREP.md`](OFFICE-PREP.md). The file format: [`DATA-FORMAT.md`](DATA-FORMAT.md).
@@ -23,26 +23,29 @@ A task stuck for 60 s reboots the board (task watchdog with panic). Records are 
 | Function | Detail |
 |---|---|
 | Meter reading | Modbus RTU master, any number of meters up to 4 (`meters` = `EM01:1,EM02:2`). Registers grouped into few requests (2 for the FCN300). One retry per request |
-| Register table | Built in from `docs/meter/fcn300-3e4y-modbus-guide.md` (**not verified**). Replaced **without reflashing** by `/config/registers.csv` on the SD card: `name,fc,addr,type,scale,ct,agg` per line. Types: `u16 s16 u32 s32 u32sw s32sw f32 f32sw` (`sw` = low word first). `ct=1`: multiplied by `ct_mult`. `agg`: `mean`, `last` (counters), `meanmax` (mean + max column) |
+| Register table | Built in from `docs/meter/fcn300-3e4y-modbus-guide.md` (**not verified**). Replaced **without reflashing** by `/config/registers.csv` on the SD card: `name,fc,addr,type,scale,ct,agg` per line. Types: `u16 s16 u32 s32 u32sw s32sw f32 f32sw` (`sw` = low word first). `ct=1`: multiplied by `ct_mult`. `agg`: `mean`, `last` (counters), `minmax` (mean + `_min` + `_max` columns) |
 | TH1 (board sensor) | I2C, type found at boot: AHT1x/AHT2x (0x38), SHT3x (0x44/0x45), HTU21/SHT21/Si7021 (0x40). CRC checked where the chip has one |
 | TH2 (AM2301) | DHT21 protocol on `pin_dht`. One retry after 2.1 s on a bad read |
 | Calibration | Offset per sensor (`th1_off_t`, `th1_off_rh`, `th2_off_t`, `th2_off_rh`), set after the install-day comparison with a reference |
 | Plausibility | Readings outside -40..85 C or 0..100 %RH are dropped (counted as a fault) |
 
 ### 2.2 The 1-minute record
-- **Mean** of the 15 s samples for V, A, Hz, kW, kvar, kVA, PF, temperature, humidity.
-- **Max** of total kW in the minute (`EM01_p_max`): the demand peak is not hidden by the mean.
+- **Meter values (power quality): mean, min and max** of the 15 s samples for V L-N, V L-L, A, Hz, kW per phase and total, kvar, kVA, PF: `EM01_v1`, `EM01_v1_min`, `EM01_v1_max`... (owner, 7 November 2026). A dip or a demand peak is not hidden by the mean.
+- **Sensors: the 1-minute average only** (`TH1_t`, `TH1_rh`, `TH2_t`, `TH2_rh`; owner, 7 November 2026). Empty = no valid reading in that minute.
 - **Last** value of the energy counters (`EM01_e` kWh, `EM01_eq` kvarh): consumption is computed on the server from the counter, so a gap never corrupts totals.
-- **Sample counts** (`EM01_n`, `TH1_n`, `TH2_n`: 0 to 4): a fault is an empty value plus a low count, never a fake zero.
-- **Health**: `rssi`, `heap_kb`, `up_s`, `backlog_min`, and `boot` (the reset reason, on the first record after a boot only: `poweron`, `brownout`, `task_wdt`, `panic`, `sw:daily`, `sw:offline`, `sw:ota`...).
+- **Meter sample count** (`EM01_n`, 0 to 4): a fault is an empty value plus a low count, never a fake zero.
+- **Health**: `rssi`, `heap_kb`, `up_s`, `backlog_min`, `sd` (0 = the SD card was failing, the row came from the RAM queue), and `boot` (the reset reason, on the first record after a boot only: `poweron`, `brownout`, `task_wdt`, `panic`, `sw:daily`, `sw:offline`, `sw:ota`...).
 - **No record without a valid clock.** A timestamp the logger cannot trust is worse than a gap. With the DS3231 and its coin cell this only happens if the cell is dead and there is no internet.
+
+### 2.2.1 Alarms and warnings
+The logger does not decide alarms: the VPS checks every record against the alarm register (`docs/alarms/`) and keeps the alarm log, including for the backlog after an outage, at the times found in the records. Thresholds are then changed in Excel on the VPS without touching the logger, and the whole log can be rebuilt from the SD card's records. The logger's own health problems reach the log through the record columns (`EM01_n`, empty sensor values, `sd`, `backlog_min`, `rssi`, `boot`); details stay in its event log `/log/YYYY-MM.log`.
 
 ### 2.3 Local storage (SD card)
 One CSV file per UTC day, same columns as the server's files. **The day files are the upload queue**: an upload pointer (`/state/upload.txt`: day, part, byte offset) says how far the server has confirmed. Nothing is written twice. Details and the reasons in [`DATA-FORMAT.md`](DATA-FORMAT.md).
 - Append, then close, every minute: a power cut loses at most the minute being written. A half-written last line is closed at the next boot and refused by the server.
 - If the columns change during a day (new meter, sensor switched off), a new file `YYYY-MM-DD_2.csv` starts: never two layouts in one file.
 - **SD card failure:** records go to a RAM queue (180 rows = 3 h) and are uploaded from there; the card is re-mounted every minute; when it is back, the RAM rows are written to it.
-- **Card nearly full** (below `sd_min_free` %): the oldest day files **already uploaded** are deleted. Unsent data is never deleted. A 16 GB card holds over 50 years at about 180 MB a year, so this is a safety net only.
+- **Card nearly full** (below `sd_min_free` %): the oldest day files **already uploaded** are deleted. Unsent data is never deleted. A 16 GB card holds over 50 years at about 260 MB a year, so this is a safety net only.
 - **Event log** `/log/YYYY-MM.log`: boots and their reason, WiFi up/down, NTP corrections, settings changed, upload errors, SD errors, OTA.
 
 ### 2.4 Lost connections
@@ -82,8 +85,8 @@ One CSV file per UTC day, same columns as the server's files. **The day files ar
 - HTTPS with certificate check (Let's Encrypt and ZeroSSL roots built in). `tls_verify=0` only on the bench. `http://` URLs work for an office test against a laptop.
 - Connection kept open between requests (keep-alive).
 
-### 2.8 OTA (off by default)
-With `ota_on=1`, every `ota_check_h` hours the logger asks `GET /api/v1/ota?fw=<version>`. If the server offers another version (`manage.py publish-fw`), it downloads it, checks the MD5, writes it to the other flash slot and restarts. Rollback as in 2.5.
+### 2.8 OTA (on by default since 0.2.0)
+With `ota_on=1` (default), every `ota_check_h` hours the logger asks `GET /api/v1/ota?fw=<version>`. If the server offers another version (`manage.py publish-fw`), it downloads it, checks the MD5, writes it to the other flash slot and restarts. Rollback as in 2.5.
 
 ### 2.9 Setup without a laptop: the portal
 - Opens when **no WiFi is set**, when the **BOOT button is held 3 s**, or with the console command `portal`.
@@ -91,8 +94,14 @@ With `ota_on=1`, every `ota_check_h` hours the logger asks `GET /api/v1/ota?fw=<
 - Page **http://192.168.4.1** (a phone usually opens it by itself): status, WiFi networks seen with their RSSI, and every setting. Secrets are never displayed; an empty secret field keeps the stored value. "Save and restart".
 - Logging goes on while the portal is open. It closes after `portal_min` minutes without activity.
 
+### 2.9.1 Remote settings (on by default since 0.2.0)
+- After each boot the logger **reports** its firmware, settings (secrets only as "(set)"), CSV columns and TH1 chip to the platform (`POST /api/v1/config/report`). `manage.py show-config LOG-0001` shows them.
+- Every `rcfg_check_m` minutes (15) it asks `GET /api/v1/config`. When `manage.py set-config LOG-0001 th1_off_t=-1.2 ...` has made a newer version, it applies the keys, logs each change, and restarts if anything changed. `key=@default` puts a default back.
+- **Never changed remotely** (a wrong value would cut the logger off for good): `dev_id`, `dev_token`, `srv_url`, `tls_verify`, the four WiFi keys, `portal_pass`. These need the setup portal or the console, on site.
+- The version applied is kept, so a setting is applied once even if the logger asks again.
+
 ### 2.10 Serial console (USB, 115200 baud)
-`help`, `status`, `show`, `set <key> <value>`, `unset <key>`, `reboot`, `factory`, `portal`, `time`, `time set 2026-11-07T03:15:00`, `i2c`, `wifi`, `mb [slave] [fc] [start] [count]`, `regs`, `header`, `ls [dir]`, `cat <file>`, `tail <file> [n]`, `upload`, `resend <YYYY-MM-DD>`, `ota`.
+`help`, `status`, `show`, `set <key> <value>`, `unset <key>`, `reboot`, `factory`, `portal`, `time`, `time set 2026-11-07T03:15:00`, `i2c`, `wifi`, `mb [slave] [fc] [start] [count]`, `regs`, `header`, `ls [dir]`, `cat <file>`, `tail <file> [n]`, `upload`, `resend <YYYY-MM-DD>`, `ota`, `config`.
 
 ### 2.11 Office preparation from the SD card
 A file `/config/settings.txt` with `key=value` lines is applied at boot, **then deleted from the card** (it holds the token and the WiFi password), then the logger restarts. `manage.py add-device ... --sd-settings settings.txt` writes one with the device code, token and server URL.
@@ -101,23 +110,25 @@ A file `/config/settings.txt` with `key=value` lines is applied at boot, **then 
 
 ## 3. All settings
 
-Stored in NVS (survive power cuts and reflashing; erased only by `factory`). Change with the console (`set`), the portal or `/config/settings.txt`, then **reboot**.
+Stored in NVS (survive power cuts and reflashing; erased only by `factory`). Change with the console (`set`), the portal, `/config/settings.txt`, or from the VPS (`manage.py set-config`, applied and rebooted by itself), then **reboot**.
 
 | Group | Key | Default | Meaning |
 |---|---|---|---|
-| Identity | `dev_id` | `LOG-0001` | Logger code, as registered on the platform |
-| WiFi | `wifi_ssid` | (empty) | Main WiFi network (2.4 GHz) |
-|  | `wifi_pass` | (empty) | Main WiFi password **Secret**: never shown. |
-|  | `wifi_ssid2` | (empty) | Backup WiFi network (for example a 4G router), empty = none |
-|  | `wifi_pass2` | (empty) | Backup WiFi password **Secret**: never shown. |
-| Server | `srv_url` | `https://arkan-monitoring.duckdns.org` | Platform base URL (http://IP:8800 for an office test) |
-|  | `dev_token` | (empty) | Device token given by tools/manage.py add-device **Secret**: never shown. |
-|  | `tls_verify` | `1` | 1 = check the server certificate, 0 = do not (bench only) |
+| Identity | `dev_id` | `LOG-0001` | Logger code, as registered on the platform Not changeable remotely. |
+| WiFi | `wifi_ssid` | (empty) | Main WiFi network (2.4 GHz) Not changeable remotely. |
+|  | `wifi_pass` | (empty) | Main WiFi password **Secret**: never shown. Not changeable remotely. |
+|  | `wifi_ssid2` | (empty) | Backup WiFi network (for example a 4G router), empty = none Not changeable remotely. |
+|  | `wifi_pass2` | (empty) | Backup WiFi password **Secret**: never shown. Not changeable remotely. |
+| Server | `srv_url` | `https://arkan-monitoring.duckdns.org` | Platform base URL (http://IP:8800 for an office test) Not changeable remotely. |
+|  | `dev_token` | (empty) | Device token given by tools/manage.py add-device **Secret**: never shown. Not changeable remotely. |
+|  | `tls_verify` | `1` | 1 = check the server certificate, 0 = do not (bench only) Not changeable remotely. |
 |  | `upload_s` | `60` | Seconds between upload attempts |
 |  | `batch_rows` | `60` | Records per upload request |
 |  | `live_on` | `1` | 1 = send a live snapshot after every sample |
-|  | `ota_on` | `0` | 1 = check the platform for firmware updates |
+|  | `ota_on` | `1` | 1 = check the platform for firmware updates |
 |  | `ota_check_h` | `6` | Hours between firmware update checks |
+|  | `rcfg_on` | `1` | 1 = take settings from the platform (manage.py set-config) |
+|  | `rcfg_check_m` | `15` | Minutes between remote settings checks |
 | Sampling | `sample_s` | `15` | Seconds between samples (meter and sensors), divides 60 |
 | Meter | `meters` | `EM01:1` | Meters on RS485 as id:slave, comma separated (EM01:1,EM02:2) |
 |  | `mb_baud` | `9600` | RS485 baud rate |
@@ -145,7 +156,7 @@ Stored in NVS (survive power cuts and reflashing; erased only by `factory`). Cha
 |  | `offline_rbt_h` | `6` | Reboot after this many hours without WiFi, 0 = never |
 |  | `min_heap_kb` | `30` | Reboot if free memory stays below this (kB) |
 |  | `sd_min_free` | `5` | Below this % free on the SD card, delete the oldest uploaded day files |
-| Portal | `portal_pass` | `arkan-setup` | Password of the setup WiFi (8 characters at least) **Secret**: never shown. |
+| Portal | `portal_pass` | `arkan-setup` | Password of the setup WiFi (8 characters at least) **Secret**: never shown. Not changeable remotely. |
 |  | `portal_min` | `15` | Minutes the setup portal stays open without activity |
 | Time | `ntp1` | `pool.ntp.org` | First NTP server |
 |  | `ntp2` | `time.google.com` | Second NTP server |
@@ -167,7 +178,7 @@ Stored in NVS (survive power cuts and reflashing; erased only by `factory`). Cha
 | `src/meter.*` | Modbus master and register table |
 | `src/sampler.*` | 15 s samples, 1-minute record, live snapshot |
 | `src/storage.*` | SD day files, upload pointer, RAM queue, free space |
-| `src/net.*` | WiFi, uploads, live, OTA |
+| `src/net.*` | WiFi, uploads, live, remote settings, OTA |
 | `src/portal.*` | Setup WiFi and page |
 | `src/console.*` | Serial commands |
 

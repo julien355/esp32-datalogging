@@ -1,6 +1,6 @@
 # How the data is saved: on the SD card and on the VPS
 
-Status: **proposal, implemented in firmware 0.1.0 and the ingest service.** To confirm with the owner ([`QUESTIONS.md`](QUESTIONS.md) Q1 to Q4).
+Status: **agreed 7 November 2026** (CSV upload Q1, UTC day files, min and max for power quality Q3, sensors averaged only, Open Energy Dashboard Q6). Implemented in firmware 0.2.0 (CSV schema 2) and the ingest service.
 
 ## 1. The choice: one file per day, all values of a logger in one row per minute
 
@@ -32,7 +32,11 @@ devices.json                                   logger -> site, token hash, firmw
 firmware/manifest.json, logger-x.y.z.bin       OTA
 sites/adab/site.json                           site profile: name, timezone, labels, live values
 sites/adab/LOG-0001/raw/2026/11/2026-11-07.csv same file as on the SD card (same name, same columns)
-sites/adab/LOG-0001/events.jsonl               boots and their reason, firmware changes, column changes, backfills
+sites/adab/LOG-0001/events.jsonl               boots and their reason, firmware changes, settings sent/applied, column changes, backfills
+sites/adab/LOG-0001/config.json                settings sent to the logger (manage.py set-config)
+sites/adab/LOG-0001/settings-reported.json     settings the logger reported after its last boot
+sites/adab/alarms/2026.csv                     alarm and warning log of the site (docs/alarms/README.md)
+alarm-register.csv                             the alarm register in use (Excel)
 sites/adab/daily.csv                           one row per WITA day (manage.py daily)
 export/oed/adab/*.csv                          OED upload files (manage.py export-oed)
 ```
@@ -40,42 +44,43 @@ Backups: `/srv/arkan-monitoring/backups/data-<date>.tar.gz`, nightly, 14 kept (`
 
 **The SD card and the server hold the same files.** Recovering a gap = copying the SD card's `/data` folder and running `manage.py backfill adab LOG-0001 <copy>`: rows already on the server are dropped, the others are merged in time order.
 
-## 3. The CSV file (schema 1)
+## 3. The CSV file (schema 2, firmware 0.2.0)
 
 Plain text, UTF-8, comma separated, `\n` line ends, a header line, no quotes, `.` as decimal point. Empty field = no valid reading.
 
 | Column | Unit | Meaning |
 |---|---|---|
 | `ts` | UTC | Start of the minute, `2026-11-07T03:15:00Z`. Unique in a day: the key for duplicates |
-| `EM01_v1` `_v2` `_v3` | V | Phase voltage L-N, mean of the minute |
+| `EM01_v1` `_v2` `_v3` | V | Phase voltage L-N |
 | `EM01_v12` `_v23` `_v31` | V | Line voltage L-L |
 | `EM01_i1` `_i2` `_i3` | A | Phase current |
 | `EM01_f` | Hz | Frequency |
 | `EM01_p1` `_p2` `_p3` | kW | Active power per phase |
-| `EM01_p` | kW | Total active power, mean of the minute |
-| `EM01_p_max` | kW | Highest 15 s total power in the minute |
+| `EM01_p` | kW | Total active power |
 | `EM01_q` | kvar | Total reactive power |
 | `EM01_s` | kVA | Total apparent power |
 | `EM01_pf` | | Power factor |
+| **each of the above, three columns** | | `EM01_v1` = mean of the minute, `EM01_v1_min` and `EM01_v1_max` = lowest and highest 15 s sample (power quality) |
 | `EM01_e` | kWh | **Cumulative** import energy counter of the meter, last reading of the minute |
-| `EM01_eq` | kvarh | Cumulative reactive energy counter |
+| `EM01_eq` | kvarh | Cumulative reactive energy counter, last reading |
 | `EM01_n` | | Number of good meter reads in the minute (4 = all) |
-| `TH1_t` `TH1_rh` `TH1_n` | C, %RH | Electrical room (board sensor), offset applied |
-| `TH2_t` `TH2_rh` `TH2_n` | C, %RH | Outdoor (AM2301), offset applied |
+| `TH1_t` `TH1_rh` | C, %RH | Electrical room (board sensor), **1-minute average only**, offset applied |
+| `TH2_t` `TH2_rh` | C, %RH | Outdoor (AM2301), 1-minute average only, offset applied |
 | `rssi` | dBm | WiFi signal (empty when offline) |
 | `heap_kb` | kB | Free memory |
 | `up_s` | s | Uptime |
 | `backlog_min` | min | Age of the oldest record not yet uploaded |
+| `sd` | | 1 = written to the SD card, 0 = the card was failing (row kept in RAM only) |
 | `boot` | | Reset reason, on the first record after a boot only |
 
 A second meter adds the same block with `EM02_`. The meter columns and their scales come from the register table: **until the register check, the values and units of currents and powers are not trusted.**
 
-Size: about 350 bytes a row, **0.5 MB a day, 180 MB a year per logger** (plain text; gzip in the backups divides it by about 5).
+Size: about 500 bytes a row (65 columns with one meter), **0.7 MB a day, about 260 MB a year per logger** (plain text; gzip in the backups divides it by about 5). A 16 GB SD card still holds over 50 years.
 
 Example:
 ```
-ts,EM01_v1,...,EM01_p,EM01_p_max,...,EM01_e,EM01_eq,EM01_n,TH1_t,TH1_rh,TH1_n,TH2_t,TH2_rh,TH2_n,rssi,heap_kb,up_s,backlog_min,boot
-2026-11-07T03:15:00Z,231.25,...,28.445,29.867,...,184523.17,40210.32,4,31.37,60.4,4,29.09,76.5,4,-63,180,86400,0,
+ts,EM01_v1,EM01_v1_min,EM01_v1_max,...,EM01_p,EM01_p_min,EM01_p_max,...,EM01_e,EM01_eq,EM01_n,TH1_t,TH1_rh,TH2_t,TH2_rh,rssi,heap_kb,up_s,backlog_min,sd,boot
+2026-11-07T03:15:00Z,231.25,230.8,231.9,...,28.445,27.102,29.867,...,184523.17,40210.32,4,31.37,60.4,29.09,76.5,-63,180,86400,0,1,
 ```
 
 ## 4. Upload (logger to VPS)
@@ -84,7 +89,7 @@ ts,EM01_v1,...,EM01_p,EM01_p_max,...,EM01_e,EM01_eq,EM01_n,TH1_t,TH1_rh,TH1_n,TH
 ```json
 {"ok": true, "stored": 58, "duplicates": 2, "rejected_rows": 0, "last_ts": "2026-11-07T03:15:00Z"}
 ```
-**Change from PLAN.md §5.2:** the plan proposed JSON records. CSV lines are sent instead because the logger then sends the bytes of its file as they are (less RAM, no conversion, identical files on both sides), and the server stores them as they are. The JSON live snapshot stays JSON. To confirm (Q1).
+**Change from PLAN.md §5.2, agreed 7 November 2026:** CSV lines instead of JSON records. The logger sends the bytes of its file as they are (less RAM, no conversion, identical files on both sides). The live snapshot stays JSON.
 
 ## 5. Ready for Open Energy Dashboard
 
@@ -96,4 +101,8 @@ The files are ready to load without change of format on our side:
   - with `--all`: every value (`adab-EM01-v1.csv`, `adab-EM01-p.csv`, ...).
 - The automatic push to OED (every 5 minutes) is the next step, to be done once OED is installed (PLAN.md §5.3).
 
-`daily.csv` (`manage.py daily adab`): one row per WITA day and logger: `minutes`, `coverage_pct`, `EM01_e_delta` (kWh of the day, from the previous day's last reading), `EM01_p_max` and its time, mean of every value, min/max/mean of temperature and humidity.
+`daily.csv` (`manage.py daily adab`): one row per WITA day and logger: `minutes`, `coverage_pct`, `EM01_e_delta` (kWh of the day, from the previous day's last reading), the day's mean of every value, the day's lowest `_min` and highest `_max` of every meter value (with the time of the peak kW and kVA), min/max/mean of temperature and humidity.
+
+## 6. Alarm and warning log
+
+`sites/<site>/alarms/<year>.csv`, one line per alarm start, clear or event, built by the VPS from the records and the alarm register. Columns and the list of alarms: [`alarms/README.md`](alarms/README.md).

@@ -1,6 +1,7 @@
 # Adab Hotel Energy Logger: Installation Plan
 
-Status: **DRAFT v0.10, 7 November 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+Status: **DRAFT v0.11, 7 November 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+v0.11 (owner's answers, 7 November): **CSV upload agreed**; **min and max per minute for every meter value** (power quality), sensors averaged only; **alarm and warning log** on the VPS from the register (`docs/alarms/`, 34 alarms incl. new power quality ones); **OTA and remote settings on**; setup WiFi password per logger, BOOT reachable through the box; **spare meter at the office**: the register check moves to the bench (S4); no 4G router; UPS maybe later (A32 ready, off); the platform stays in `server/` until OED is installed. Decisions and open points: `docs/QUESTIONS.md`.
 v0.10: **firmware 0.1.0 and the ingest service written** (`firmware/`, `server/`; `docs/FIRMWARE.md`, `docs/VPS-SETUP.md`, `docs/OFFICE-PREP.md`). Storage: one CSV per UTC day, the day files are the upload queue (`docs/DATA-FORMAT.md`). Upload proposed as **CSV lines instead of JSON** (§5.2, `docs/QUESTIONS.md` Q1). The ingest service sits in `server/` here until `arkan-monitoring` exists (Q12).
 v0.9: the AM2301 (`TH2`) is **outdoors, beside the panel room, on 1 m of cable**, to monitor outdoor temperature and humidity; outdoor alarm limits proposed (A22 to A25), including the electrical room compared with outdoors.
 v0.8: the AM2301 (`TH2`) goes **outdoors or in another room**, not in the electrical room: longer cable, outdoor protection if outside, its own alarm lines (A22, A23).
@@ -177,7 +178,7 @@ The contract lives in `arkan-monitoring`. The firmware repository keeps a copy, 
 
 ### 5.2 Data contract (frozen in S1; field names follow the CMMS meter list)
 
-> **v0.10 proposal, implemented:** the logger uploads the **CSV lines of its day file** (header + up to 60 rows) instead of the JSON below; the columns are in `docs/DATA-FORMAT.md` §3. The JSON stays for the live snapshot. To confirm (`docs/QUESTIONS.md` Q1).
+> **Agreed 7 November 2026 (v0.11):** the logger uploads the **CSV lines of its day file** (header + up to 60 rows) instead of the JSON below; the columns (schema 2, with min and max) are in `docs/DATA-FORMAT.md` §3. The JSON stays for the live snapshot.
 
 ```json
 POST /api/v1/ingest   Authorization: Bearer <device-token>
@@ -329,7 +330,7 @@ The **meter register check** is the one uncertain step on that path: on a spare 
 | P1 | Client name in the repository | **Settled**: `adab` is the site code and name, in both repositories |
 | P2 | The new platform repository | **Settled**: `arkan-monitoring`, private, created by Claude in S1 |
 | P3 | Alert channel | **Settled**: WhatsApp through Hermes. Open: which WhatsApp group or number receives them, and whether Hermes's webhook platform is on |
-| P4 | FCN300-3E4Y register map | Guide received, **not verified** (`docs/meter/README.md`). Confirm the RS485 terminals on the meter, and decide on a spare meter for the bench |
+| P4 | FCN300-3E4Y register map | Guide received, **not verified** (`docs/meter/README.md`). **Spare meter at the office (7 November)**: verified on the bench, `docs/OFFICE-PREP.md` T4 |
 | P5 | Platform | **Settled**: Open Energy Dashboard + our ingest service. Arkan design integration later |
 | P6 | Meter variant | Read the label: FCN300-**3E4Y** (guide received) or **3EH4Y** (link sent). If 3EH4Y, ask the seller for its register map |
 | P7 | RAM on hermes-vps | Plan in `docs/VPS-MEMORY.md` (about 300 to 450 MB). Check free memory and swap before S5 (`free -h`) |

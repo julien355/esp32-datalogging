@@ -4,7 +4,7 @@ Everything here is done **at the office, on the bench**, before the logger goes 
 
 Reference: functions and settings [`FIRMWARE.md`](FIRMWARE.md), data format [`DATA-FORMAT.md`](DATA-FORMAT.md), VPS [`VPS-SETUP.md`](VPS-SETUP.md), questions still open [`QUESTIONS.md`](QUESTIONS.md). Hardware theory, wiring drawings and site labs: [`install/README.md`](install/README.md).
 
-> **Status.** Firmware 0.1.0 and the ingest service are written; CI compiles the firmware and runs the server tests. **Nothing has run on the real board yet.** The pin map and the meter register map are still **to verify** (T2, T4 below). Expect small fixes during the first bench day.
+> **Status.** Firmware 0.2.0 (power quality min/max, remote settings, OTA on) and the ingest service with the alarm log are written; CI compiles the firmware and runs the server tests. **Nothing has run on the real board yet.** The pin map and the meter register map are still **to verify** (T2, T4 below). Expect small fixes during the first bench day.
 
 ---
 
@@ -83,13 +83,20 @@ Tick each line in the record sheet (section 5). Times are in UTC.
 ### T3. Sensors
 1. `status`, "Last sample": `TH1=31.2C/60% TH2=...`.
 2. Breathe on each sensor: the values rise within 30 s.
-3. Pull the AM2301 data wire: `TH2=fault`, and the record shows `TH2_n` = 0 and empty values. Plug it back.
+3. Pull the AM2301 data wire: `TH2=fault`, and the record has empty `TH2_t`, `TH2_rh`. After 10 min the alarm log on the VPS shows **A14 start**; plug it back: **A14 clear**.
 4. Next to a reference thermometer/hygrometer for 30 min: note the differences. They become `th1_off_t`, `th2_off_t` etc. on the install day (the office is not the site).
 
-### T4. RS485 and meter
-- **With no meter** (no spare yet): RS485 loopback with the USB-RS485 adapter as in Lab 3 part A (`labs/lab3_modbus_dump`), or simply check that the logger tries: `status` shows `EM01: no answer (n in a row)` and the records have `EM01_n` = 0 with empty values. That is the correct behaviour without a meter.
-- **With a Modbus simulator** on the laptop (for example `pip install pymodbus` and its simulator, slave 1, 9600 8N1, holding registers 0 to 0x40 with test values): `mb 1 3 0 64` must show the words; `status` shows `EM01_v1=...`.
-- **At the hotel** (first short visit, before the install): `mb 1 3 0 64` then `mb 1 4 0 64`, photograph the LCD pages at the same moment, and fill `docs/meter/fcn300-3e4y-verified.md`. Corrections go in `/config/registers.csv` on the card (start from the output of `regs`): **no reflashing needed**.
+### T4. RS485 and the spare meter (register check at the office)
+The spare FCN300 at the office (owner, 7 November 2026) moves the register check from the hotel to the bench. **Mains wiring of the meter is done by a qualified electrician**, on a test board with a breaker; a known load (heater, kettle, lamps) on one or more phases.
+1. Note the meter's label (FCN300-3E4Y or 3EH4Y), its Modbus address and baud rate (meter menu), and its CT setting.
+2. RS485 wiring: A to A, B to B, shielded twisted pair, 120 ohm termination jumper on at the logger end.
+3. `mb 1 3 0 64`, then `mb 1 4 0 64`. Timeouts: swap A/B, check address and baud (`set mb_baud`, `set meters EM01:<addr>`).
+4. At the same moment, photograph the LCD pages (V, A, kW, kvar, kVA, PF, Hz, kWh) and compare word by word: which register, which scale, which word order. Use `docs/install/labs/modbus_dump.py` on the laptop for the 32-bit pairs.
+5. Write the result in `docs/meter/fcn300-3e4y-verified.md`. Corrections go in `/config/registers.csv` on the card (start from the output of `regs`), or are sent later with `manage.py set-config`: **no reflashing needed**.
+6. `status`: `EM01_v1=...` etc. within 1 % of the LCD. Switch the load on and off: kW and A follow; `EM01_e` counts up.
+7. **Power quality check:** switch a heavy load on and off a few times. The minute's `EM01_v1_min` / `_max` and `EM01_p_max` show the step even when the mean barely moves.
+8. **CT direction check:** reverse one CT on purpose for 6 minutes: the alarm log shows **A30 Negative power on a phase**. Put it back.
+9. Without the meter connected: `EM01: no answer`, `EM01_n` = 0, empty values, and after a minute **A03 Meter not answering** in the alarm log.
 
 ### T5. Records on the SD card
 1. Wait 3 minutes. `ls /data/2026/11` (this month), `tail /data/2026/11/2026-11-07.csv 3`.
@@ -127,7 +134,18 @@ Tick each line in the record sheet (section 5). Times are in UTC.
 
 ### T12. Daily reboot and watchdog
 1. `set reboot_hr <current UTC hour + 1>`, `reboot`, wait: at hh:05 a reboot with `boot=sw:daily`. Set it back to 19.
-2. Optional (OTA test, needs `ota_on=1`): build version 0.1.1, `manage.py publish-fw`, `ota` on the console: the logger updates and reports the new version. Then publish a broken build: it must come back to the previous version by itself.
+2. **OTA** (on by default): change `FW_VERSION` to 0.2.1, build, `manage.py publish-fw firmware.bin --version 0.2.1`, then `ota` on the console (or wait up to 6 h): the logger updates, `manage.py list` shows 0.2.1. Then publish a build that crashes at boot (test only): it must come back to the previous version by itself (`boot=sw:ota_rollback`).
+
+### T12b. Remote settings
+1. After a boot, `manage.py show-config LOG-0001` shows what the logger reported (firmware, settings, TH1 chip).
+2. `manage.py set-config LOG-0001 th1_off_t=-0.5`, then `config` on the console (or wait 15 min): the logger logs the change and restarts; `show` has the new value; `show-config` reports the new version.
+3. `manage.py set-config LOG-0001 wifi_ssid=x` is refused (network settings only on site).
+4. Put it back: `manage.py set-config LOG-0001 th1_off_t=@default`.
+
+### T12c. Alarm log
+1. On the VPS: `manage.py alarms adab` lists the open alarms and the last log lines; `/live/adab/` shows them too.
+2. Check that T3, T4, T7, T8, T9 left their lines: A14, A03, A30, A01 (start and clear), A02 with the outage length, A15.
+3. Before the site: `manage.py alarms adab --rebuild` after deleting the office data, so the site starts with an empty log.
 
 ### T13. 48-hour soak (plan exit criterion P2)
 Leave it running 48 h with the office WiFi switched off for 1 hour in the middle. Then on the VPS:
@@ -139,13 +157,16 @@ docker compose exec ingest python tools/manage.py daily adab
 ## 4. Before leaving for the site
 - [ ] Verified pins in the settings (and reported, so they become firmware defaults)
 - [ ] `wifi_ssid` / `wifi_pass` of the **hotel staff network** set (console or portal); the office network as `wifi_ssid2` is useless on site: clear it, or set the 4G router if there is one
-- [ ] `portal_pass` changed from the default
+- [ ] `portal_pass` = the logger's own setup WiFi password from `manage.py add-device` (in the password manager)
+- [ ] **A small hole in the box lid over the BOOT button**, labelled "Setup: hold 3 s" (reachable with the box closed, owner 7 November 2026)
+- [ ] Site profile on the VPS: `contracted_kva`, `rated_a`, `nominal_v` in `site.json` (Q23 to Q25), so A08 and A29 work
+- [ ] Verified register table on the card (`/config/registers.csv`) from T4
 - [ ] `tls_verify` = 1, `srv_url` = `https://arkan-monitoring.duckdns.org`
 - [ ] Simulated or office test data removed from the VPS (`VPS-SETUP.md` step 8)
 - [ ] SD card: `/data` emptied on a laptop (the office rows would be resent, harmless but confusing), `/state/upload.txt` deleted
 - [ ] RTC set (UTC), coin cell in place
 - [ ] Labels: logger code on the box, WiFi `ARKAN-LOG-0001`
-- [ ] USB-RS485 adapter + laptop with this repository, for the register check on site
+- [ ] USB-RS485 adapter + laptop with this repository, for debugging on site
 
 ## 5. Bench record sheet
 
@@ -156,7 +177,8 @@ docker compose exec ingest python tools/manage.py daily adab
 | T2 SD CS pin verified | | |
 | T2 RS485 TX / RX / DE verified | | |
 | T3 TH1 chip, TH2 reading, fault shown | | |
-| T4 meter / simulator / loopback | | |
+| T4 spare meter: registers verified, within 1 % of the LCD | | |
+| T4 CT reversed: A30 logged | | |
 | T5 one row per minute on the card | | |
 | T6 day file on the VPS, live page | | |
 | T7 1 h outage: rows received, each once | | |
@@ -167,6 +189,9 @@ docker compose exec ingest python tools/manage.py daily adab
 | T10 server down / wrong token | | |
 | T11 portal and button | | |
 | T12 daily reboot | | |
+| T12 OTA update and rollback | | |
+| T12b remote settings | | |
+| T12c alarm log lines present | | |
 | T13 48 h soak: coverage, heap | | |
 
 ## 6. On site (summary, details in install manual Labs 5 to 7)
