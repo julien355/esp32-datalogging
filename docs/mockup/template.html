@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Adab monitoring: dashboard mockup</title>
+<style>
+  :root{color-scheme:light;--ink:#1f2933;--ink2:#52606d;--muted:#7b8794;--line:#e4e7eb;--bg:#eef1f5;--card:#fff;
+    --navy:#0f2747;--s1:#2a78d6;--s2:#eb6834;--good:#127a3a;--bad:#b42318}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
+  .top{background:var(--navy);color:#fff;padding:18px 24px}
+  .top h1{margin:0 0 4px;font-size:1.35rem}
+  .top p{margin:0;color:#cfe0ff;font-size:.92rem;max-width:980px;line-height:1.45}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px;font-size:.82rem}
+  .flow span{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:4px 8px}
+  .flow b{color:#9ec5f4;font-weight:600}
+  .wrap{display:grid;grid-template-columns:250px 1fr;gap:18px;padding:18px 24px;max-width:1500px;margin:auto}
+  nav{position:sticky;top:12px;align-self:start}
+  nav h3{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 4px 6px}
+  nav button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:7px 10px;border-radius:6px;
+    font:inherit;font-size:.9rem;color:var(--ink);cursor:pointer}
+  nav button small{display:block;color:var(--muted);font-size:.75rem;font-family:ui-monospace,monospace}
+  nav button:hover{background:#dfe5ec}
+  nav button.on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
+  .screen{display:none}.screen.on{display:block}
+  .note{background:var(--card);border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:.9rem;line-height:1.5;
+    border-left:4px solid var(--s1)}
+  .note b{color:var(--ink)} .note ul{margin:4px 0 0;padding-left:18px}
+  .browser{background:var(--card);border-radius:10px;box-shadow:0 2px 10px rgba(15,39,71,.15);overflow:hidden}
+  .bar{display:flex;align-items:center;gap:8px;background:#e9ecf0;padding:8px 12px;border-bottom:1px solid #d5dae0}
+  .dots i{display:inline-block;width:10px;height:10px;border-radius:50%;background:#c4cad2;margin-right:4px}
+  .url{flex:1;background:#fff;border-radius:6px;padding:4px 10px;font:13px ui-monospace,monospace;color:var(--ink2)}
+  .url b{color:var(--ink);font-weight:600}
+  .shot{display:block;width:100%;height:auto}
+  .pair{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+  .phone{border:10px solid #1f2933;border-radius:28px;overflow:hidden;background:#fff}
+  .phone img{display:block;width:100%}
+  .cap{font-size:.78rem;color:var(--muted);margin:6px 2px}
+  /* OED-like graph page (approximation) */
+  .oed-nav{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid var(--line)}
+  .oed-logo{font-weight:700;color:#1b5e20;letter-spacing:.02em}
+  .oed-logo small{display:block;font-weight:400;color:var(--muted);font-size:.7rem}
+  .oed-title{font-size:1.15rem;font-weight:600}
+  .oed-menu span{margin-left:14px;font-size:.88rem;color:var(--ink2)}
+  .oed-body{display:grid;grid-template-columns:230px 1fr;min-height:520px}
+  .oed-side{border-right:1px solid var(--line);padding:12px 14px;font-size:.85rem}
+  .oed-side label{display:block;font-weight:600;margin:12px 0 4px}
+  .seg{display:flex;flex-wrap:wrap;gap:0}
+  .seg span{border:1px solid #adb5bd;padding:3px 8px;font-size:.8rem;margin:0 -1px -1px 0;color:var(--ink2)}
+  .seg span.on{background:#6c757d;color:#fff;border-color:#6c757d}
+  .pick{border:1px solid #ced4da;border-radius:4px;padding:4px 6px;min-height:30px;background:#fff}
+  .pick em{display:inline-block;font-style:normal;background:#e9ecef;border-radius:3px;padding:1px 6px;margin:2px;font-size:.78rem}
+  .pick.dim{color:var(--muted)}
+  .oed-main{padding:10px 16px 14px;position:relative}
+  .oed-btns{margin-top:8px;display:flex;gap:6px}
+  .oed-btns span{border:1px solid #6c757d;border-radius:4px;padding:3px 10px;font-size:.8rem;color:var(--ink2)}
+  .chart{position:relative}
+  .chart svg{display:block;width:100%;height:auto;overflow:visible}
+  .chart .gridl{stroke:#eceff3}
+  .chart .axis text{fill:var(--muted);font-size:11px}
+  .chart .axis line{stroke:#c9ced6}
+  .legend{display:flex;gap:16px;font-size:.82rem;color:var(--ink2);margin:2px 0 4px 44px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+  .legend i.sq{width:10px;height:10px;border-radius:2px}
+  .ctitle{font-weight:600;font-size:.95rem;text-align:center;margin:4px 0}
+  .tip{position:absolute;pointer-events:none;background:#fff;border:1px solid #d5dae0;border-radius:6px;padding:6px 8px;
+    font-size:.78rem;box-shadow:0 2px 6px rgba(0,0,0,.12);display:none;white-space:nowrap;z-index:2}
+  .tip b{display:block;margin-bottom:2px}
+  .err{margin:60px auto;max-width:520px;text-align:center;color:var(--bad);font-weight:600;border:1px dashed var(--bad);
+    padding:24px;border-radius:8px}
+  .cmp{display:flex;gap:40px;justify-content:center;align-items:flex-end;height:330px;margin-top:10px}
+  table.t{border-collapse:collapse;width:100%;font-size:.82rem;margin-top:10px}
+  table.t th,table.t td{border-bottom:1px solid var(--line);padding:4px 8px;text-align:right}
+  table.t th:first-child,table.t td:first-child{text-align:left}
+  details summary{cursor:pointer;color:var(--ink2);font-size:.82rem;margin-top:8px}
+  .foot{max-width:1500px;margin:0 auto 30px;padding:0 24px;font-size:.8rem;color:var(--muted)}
+  @media (max-width:900px){.wrap{grid-template-columns:1fr}nav{position:static}.pair{grid-template-columns:1fr}
+    .oed-body{grid-template-columns:1fr}.oed-side{border-right:0;border-bottom:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>Adab hotel monitoring: how the dashboard should look</h1>
+  <p id="intro"></p>
+  <div class="flow">
+    <span>Logger LOG-0001 (main panel)</span>→
+    <span>ingest service <b>/api/v1/</b></span>→
+    <span>live pages <b>/live/</b> · every 15 s</span>
+    <span>Open Energy Dashboard <b>/</b> · pushed every 5 min</span>
+    <span>WhatsApp alerts via Hermes (off until the owner turns them on)</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <nav id="nav"></nav>
+  <main id="screens"></main>
+</div>
+<div class="foot">Mockup with simulated data (tools/simulate_logger.py), not readings from the hotel. Live screens are screenshots of
+the real service in <code>server/app/</code>; OED screens are redrawn to show what each OED graph will contain, not OED's exact
+pixels. Built by <code>docs/mockup/build_mockup.py</code>.</div>
+
+<script>
+const D = /*__DATA__*/null;
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const C1 = '#2a78d6', C2 = '#eb6834';
+
+$('#intro').textContent = `One address, arkan-monitoring.duckdns.org, behind the usual Arkan login. Two kinds of screens: ` +
+  `the live pages (what is happening now, refreshed every 15 s) and Open Energy Dashboard (history: kW, kWh per day, ` +
+  `week against week, temperature and humidity). Simulated data, ${D.range[0]} to ${D.range[1]} WITA.`;
+
+// ---------- small chart kit (SVG, no library) ----------
+const W = 900, H = 340, M = {l: 52, r: 16, t: 10, b: 34};
+const tp = s => { const [d, h] = s.split(' '); const [Y, Mo, Da] = d.split('-').map(Number); const [hh, mm] = (h || '0:0').split(':').map(Number);
+  return Date.UTC(Y, Mo - 1, Da, hh, mm); };
+function nice(lo, hi, n = 5) {
+  const span = hi - lo || 1, step0 = span / n, p = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * p).find(s => s >= step0);
+  const a = Math.floor(lo / step) * step, b = Math.ceil(hi / step) * step, t = [];
+  for (let v = a; v <= b + step / 2; v += step) t.push(+v.toFixed(6));
+  return t;
+}
+const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], mons = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fdate = ms => { const d = new Date(ms); return `${days[d.getUTCDay()]} ${d.getUTCDate()} ${mons[d.getUTCMonth()]}`; };
+const fhm = ms => new Date(ms).toISOString().slice(11, 16);
+
+function lineChart(el, series, {unit, yZero = false, hourly = true, digits = 1}) {
+  const all = series.flatMap(s => s.pts.map(p => p[1]));
+  const xs = series.flatMap(s => s.pts.map(p => tp(p[0])));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const yt = nice(yZero ? 0 : Math.min(...all), Math.max(...all));
+  const y0 = yt[0], y1 = yt[yt.length - 1];
+  const X = v => M.l + (v - x0) / (x1 - x0) * (W - M.l - M.r), Y = v => H - M.b - (v - y0) / (y1 - y0) * (H - M.t - M.b);
+  const spanDays = (x1 - x0) / 864e5;
+  let g = '';
+  for (const v of yt) g += `<line class="gridl" x1="${M.l}" x2="${W - M.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${M.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+  // x ticks: midnights (multi-day) or every 3 h (one day)
+  const stepMs = spanDays > 1.5 ? 864e5 * (spanDays > 8 ? 2 : 1) : 3 * 36e5;
+  for (let v = Math.ceil(x0 / stepMs) * stepMs; v <= x1; v += stepMs)
+    g += `<line class="gridl" x1="${X(v)}" x2="${X(v)}" y1="${M.t}" y2="${H - M.b}"/><text x="${X(v)}" y="${H - M.b + 16}" text-anchor="middle">${spanDays > 1.5 ? fdate(v) : fhm(v)}</text>`;
+  let paths = '';
+  for (const s of series) {
+    let d = '', prev = null;
+    for (const [t, v] of s.pts) { const ms = tp(t); d += `${prev !== null && ms - prev > (hourly ? 2 : 0.05) * 36e5 ? 'M' : (d ? 'L' : 'M')}${X(ms).toFixed(1)},${Y(v).toFixed(1)}`; prev = ms; }
+    paths += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${hourly ? 2 : 1.4}" stroke-linejoin="round"/>`;
+  }
+  el.innerHTML = `<div class="legend">${series.length > 1 ? series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('') : ''}</div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map(s => s.name).join(', '))}">
+      <g class="axis">${g}<text x="12" y="${M.t + (H - M.b - M.t) / 2}" transform="rotate(-90 12 ${M.t + (H - M.b - M.t) / 2})" text-anchor="middle">${esc(unit)}</text></g>
+      ${paths}<line class="xh" y1="${M.t}" y2="${H - M.b}" stroke="#7b8794" stroke-dasharray="3 3" visibility="hidden"/>
+      <g class="dots"></g><rect x="${M.l}" y="${M.t}" width="${W - M.l - M.r}" height="${H - M.t - M.b}" fill="transparent"/></svg><div class="tip"></div>`;
+  const svg = $('svg', el), tip = $('.tip', el), xh = $('.xh', el), dots = $('.dots', el);
+  const idx = series.map(s => s.pts.map(p => tp(p[0])));
+  svg.addEventListener('mousemove', ev => {
+    const r = svg.getBoundingClientRect(), mx = (ev.clientX - r.left) / r.width * W;
+    const t = x0 + (mx - M.l) / (W - M.l - M.r) * (x1 - x0);
+    let rows = '', dd = '', ref = null;
+    series.forEach((s, k) => {
+      const a = idx[k]; let lo = 0, hi = a.length - 1;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; a[m] < t ? lo = m : hi = m; }
+      const j = Math.abs(a[lo] - t) < Math.abs(a[hi] - t) ? lo : hi; const p = s.pts[j]; ref = ref ?? a[j];
+      dd += `<circle cx="${X(a[j])}" cy="${Y(p[1])}" r="4" fill="${s.color}" stroke="#fff" stroke-width="2"/>`;
+      rows += `<div><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:5px"></i>${esc(s.name)}: <b style="display:inline">${p[1].toFixed(digits)}</b> ${esc(unit)}</div>`;
+    });
+    dots.innerHTML = dd; xh.setAttribute('x1', X(ref)); xh.setAttribute('x2', X(ref)); xh.setAttribute('visibility', 'visible');
+    tip.innerHTML = `<b>${fdate(ref)} ${fhm(ref)}${hourly ? '–' + fhm(ref + 36e5) : ''}</b>${rows}`;
+    tip.style.display = 'block';
+    const px = X(ref) / W * r.width; tip.style.left = Math.min(px + 12, r.width - tip.offsetWidth - 4) + 'px'; tip.style.top = '30px';
+  });
+  svg.addEventListener('mouseleave', () => { tip.style.display = 'none'; dots.innerHTML = ''; xh.setAttribute('visibility', 'hidden'); });
+}
+
+function barChart(el, bars, unit) {
+  const yt = nice(0, Math.max(...bars.map(b => b.v)));
+  const y1 = yt[yt.length - 1], n = bars.length, bw = (W - M.l - M.r) / n;
+  const Y = v => H - M.b - v / y1 * (H - M.t - M.b);
+  let g = '', b = '';
+  for (const v of yt) g += `<line class="gridl" x1="${M.l}" x2="${W - M.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${M.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+  bars.forEach((d, i) => {
+    const x = M.l + i * bw + 2, w = bw - 4, y = Y(d.v), h = H - M.b - y;
+    b += `<path d="M${x},${H - M.b}V${y + 4}q0,-4 4,-4h${w - 8}q4,0 4,4V${H - M.b}Z" fill="${d.partial ? '#9ec5f4' : C1}"/>`;
+    b += `<text x="${x + w / 2}" y="${H - M.b + 15}" text-anchor="middle" font-size="10.5" fill="#7b8794">${esc(d.l1)}</text><text x="${x + w / 2}" y="${H - M.b + 28}" text-anchor="middle" font-size="10.5" fill="#7b8794">${esc(d.l2)}</text>`;
+    b += `<rect class="hit" data-i="${i}" x="${M.l + i * bw}" y="${M.t}" width="${bw}" height="${H - M.t - M.b}" fill="transparent"/>`;
+  });
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H + 8}" role="img" aria-label="kWh per day"><g class="axis">${g}<text x="12" y="${H / 2}" transform="rotate(-90 12 ${H / 2})" text-anchor="middle">${unit}</text></g>${b}</svg><div class="tip"></div>`;
+  const svg = $('svg', el), tip = $('.tip', el);
+  svg.addEventListener('mousemove', ev => {
+    const i = ev.target.dataset?.i; if (i === undefined) return;
+    const d = bars[i], r = svg.getBoundingClientRect();
+    tip.innerHTML = d.tip; tip.style.display = 'block';
+    tip.style.left = Math.min((M.l + (+i + .5) * bw) / W * r.width + 10, r.width - tip.offsetWidth - 4) + 'px'; tip.style.top = '20px';
+  });
+  svg.addEventListener('mouseleave', () => tip.style.display = 'none');
+}
+
+// ---------- OED page frame ----------
+function oed({type, groups = [], meters = [], unit, extra = '', title, below = ''}) {
+  const seg = ['Line', 'Bar', 'Compare', 'Map'].map(t => `<span class="${t === type ? 'on' : ''}">${t}</span>`).join('');
+  const pick = (a, dim) => a.length ? `<div class="pick">${a.map(x => `<em>${esc(x)}</em>`).join('')}</div>` : `<div class="pick dim">${dim}</div>`;
+  return `<div class="oed-nav"><div class="oed-logo">OED<small>Open Energy Dashboard</small></div><div class="oed-title">Arkan monitoring</div>
+      <div class="oed-menu"><span>Pages ▾</span><span>Options ▾</span><span>Help</span></div></div>
+    <div class="oed-body"><div class="oed-side"><label>Graph Type</label><div class="seg">${seg}</div>
+      <label>Groups</label>${pick(groups, 'Select groups…')}<label>Meters</label>${pick(meters, 'Select meters…')}
+      <label>Units</label><div class="pick">${esc(unit)}</div>${extra}</div>
+      <div class="oed-main"><div class="ctitle">${title}</div><div class="chart"></div>${below}</div></div>`;
+}
+
+// ---------- screens ----------
+const kwMax = Math.max(...D.kw_hour.map(p => p[1]));
+const cmp = D.compare, pct = cmp.last ? (cmp.this - cmp.last) / cmp.last * 100 : 0;
+const fullDays = D.days.filter(d => d.cov >= 99);
+const avgDay = fullDays.reduce((a, d) => a + d.kwh, 0) / (fullDays.length || 1);
+
+const S = [
+  {grp: 'Live pages (ingest service)', id: 'live-all', name: 'Start page: all sites', url: '/live/',
+   note: `<b>The page people bookmark.</b> One line per logger: last record, live status, firmware. With more hotels, more lines.
+     Click the site to open its live page.`,
+   html: () => `<img class="shot" src="img/live-all.png" alt="Live start page with the list of sites">`},
+  {grp: 'Live pages (ingest service)', id: 'live-adab', name: 'Adab: live now', url: '/live/adab/',
+   note: `<b>What is happening now, refreshed every 15 s.</b> Open alarms first, then the logger's status line (time, WiFi signal, backlog,
+     firmware), one tile per live value with its last 60 minutes, and the alarm log in hotel time. The values come from
+     <code>site.json</code> and can change without code. Readable on a phone (right).
+     <ul><li>The log here shows the simulated test events: a voltage dip on L2 (A26) with 6 minutes of undervoltage (A05) and the backlog warning while 14 days of records were uploaded (A16).</li>
+     <li>Screenshot of the real page <code>server/app/live.html</code> served by the local ingest service, fed by the simulated logger.</li>
+     <li><b>Still missing against <code>docs/LIVE.md</code>:</b> values rounded for reading (229.5 V, not 229.497), the room-minus-outdoor
+       difference and outdoor dew point, the time of the last push to OED, and the links to the site's OED graphs.</li></ul>`,
+   html: () => `<div class="pair"><div><img class="shot" src="img/live-adab.png" alt="Live page of Adab hotel"></div>
+     <div><div class="phone"><img src="img/live-adab-phone.png" alt="Live page on a phone"></div><div class="cap">Same page on a phone (390 px wide)</div></div></div>`},
+  {grp: 'Open Energy Dashboard (history)', id: 'oed-kw', name: 'Power over two weeks', url: '/',
+   note: `<b>Hotel load, kW, hour by hour.</b> OED line graph, group <code>adab</code>, unit kWh, rate Hour (kWh per hour = kW).
+     Peak hourly mean ${kwMax.toFixed(1)} kW against the 82.5 kVA PLN contract. OED averages long periods; short peaks show after a zoom (next screen).`,
+   html: () => oed({type: 'Line', groups: ['adab'], unit: 'kWh', title: `adab: kWh per hour (kW)`,
+     extra: `<label>Rate</label><div class="pick">Hour</div>`, below: `<div class="oed-btns"><span>Redraw</span><span>Restore</span><span>Export graph data</span></div>`}),
+   draw: el => lineChart(el, [{name: 'adab', color: C1, pts: D.kw_hour}], {unit: 'kW', yZero: true})},
+  {grp: 'Open Energy Dashboard (history)', id: 'oed-zoom', name: 'One day, minute by minute', url: '/',
+   note: `<b>Zoomed on ${D.zoom_day} and Redraw:</b> OED then shows the original 1-minute readings, so morning and evening peaks are visible.
+     Times are WITA (hotel time) for everyone.`,
+   html: () => oed({type: 'Line', meters: ['adab-EM01-energy'], unit: 'kWh', title: `adab-EM01-energy, ${D.zoom_day}: kWh per hour (kW), 1-minute readings`,
+     extra: `<label>Rate</label><div class="pick">Hour</div>`, below: `<div class="oed-btns"><span>Redraw</span><span>Restore</span><span>Export graph meter data</span></div>`}),
+   draw: el => lineChart(el, [{name: 'adab-EM01-energy', color: C1, pts: D.kw_minute}], {unit: 'kW', yZero: true, hourly: false})},
+  {grp: 'Open Energy Dashboard (history)', id: 'oed-bar', name: 'Energy per day', url: '/',
+   note: `<b>kWh per WITA day</b> (OED bar graph, interval Day). Full days average ${avgDay.toFixed(0)} kWh. The first and last bars
+     are partial days (lighter): the simulation starts and ends mid-day. Hover a bar for the day's peak and electrical-room temperature from our <code>daily.csv</code>.`,
+   html: () => oed({type: 'Bar', groups: ['adab'], unit: 'kWh', title: 'adab: kWh per day',
+     extra: `<label>Bar Interval</label><div class="seg"><span class="on">Day</span><span>Week</span><span>4 Weeks</span></div>`}),
+   draw: el => barChart(el, D.days.map(d => { const dt = new Date(d.date + 'T00:00:00Z');
+     return {v: d.kwh, partial: d.cov < 99, l1: days[dt.getUTCDay()], l2: `${dt.getUTCDate()} ${mons[dt.getUTCMonth()]}`,
+       tip: `<b>${fdate(dt.getTime())}</b>${d.kwh.toFixed(1)} kWh${d.cov < 99 ? ` (partial day, ${d.cov}% of minutes)` : ''}<br>peak ${d.peak?.toFixed(1)} kW at ${esc(d.peak_t)}<br>electrical room ${d.tmin?.toFixed(1)}–${d.tmax?.toFixed(1)} °C`}; }), 'kWh')},
+  {grp: 'Open Energy Dashboard (history)', id: 'oed-cmp', name: 'This week against last week', url: '/',
+   note: `<b>OED Compare, Week:</b> this week so far (from Sunday 00:00) against the same ${cmp.elapsed_h} hours of last week.
+     Red when use went up, green when it went down. (The simulator repeats the same week, so here the two bars are equal.)`,
+   html: () => oed({type: 'Compare', groups: ['adab'], unit: 'kWh', title: 'adab: this week against last week',
+     extra: `<label>Compare period</label><div class="seg"><span>Day</span><span class="on">Week</span><span>4 Weeks</span></div><label>Sort</label><div class="pick">Alphabetically</div>`}),
+   draw: el => { const mx = Math.max(cmp.this, cmp.last), up = pct > 0, h = v => v / mx * 260;
+     el.innerHTML = `<div class="cmp">
+       <div style="text-align:center"><div style="font-size:.85rem;color:#52606d">${cmp.last.toFixed(0)} kWh</div><div style="width:120px;height:${h(cmp.last)}px;background:#86b6ef;border-radius:4px 4px 0 0"></div><div style="font-size:.85rem;margin-top:6px">Last week<br><small style="color:#7b8794">from ${esc(cmp.last_from)}</small></div></div>
+       <div style="text-align:center"><div style="font-size:.85rem;color:#52606d">${cmp.this.toFixed(0)} kWh</div><div style="width:120px;height:${h(cmp.this)}px;background:${C1};border-radius:4px 4px 0 0"></div><div style="font-size:.85rem;margin-top:6px">This week so far<br><small style="color:#7b8794">to ${esc(cmp.now)}</small></div></div></div>
+       ${Math.abs(pct) < 0.5 ? `<div style="text-align:center;font-weight:600;margin-top:10px;color:var(--ink2)">About the same as last week (${pct >= 0 ? '+' : ''}${pct.toFixed(1)} %)</div>`
+         : `<div style="text-align:center;font-weight:600;margin-top:10px;color:${up ? 'var(--bad)' : 'var(--good)'}">${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)} % ${up ? 'more' : 'less'} than last week</div>`}`; }},
+  {grp: 'Open Energy Dashboard (history)', id: 'oed-temp', name: 'Temperature: room and outdoor', url: '/',
+   note: `<b>Electrical room (TH1, on the board) against outdoor (TH2, AM2301 beside the panel room).</b> OED line graph,
+     two meters, unit Celsius, hourly means of the 5-minute readings. The gap between the two lines is what alarm A24 watches.`,
+   html: () => oed({type: 'Line', meters: ['adab-TH1-temp', 'adab-TH2-temp'], unit: 'Celsius', title: 'Temperature (°C)'}),
+   draw: el => lineChart(el, [{name: 'adab-TH1-temp (electrical room)', color: C1, pts: D.t_room}, {name: 'adab-TH2-temp (outdoor)', color: C2, pts: D.t_out}], {unit: '°C'})},
+  {grp: 'Open Energy Dashboard (history)', id: 'oed-rh', name: 'Humidity: room and outdoor', url: '/',
+   note: `<b>Relative humidity</b>, same two sensors, unit % RH (a unit we add in OED).`,
+   html: () => oed({type: 'Line', meters: ['adab-TH1-hum', 'adab-TH2-hum'], unit: '% RH', title: 'Relative humidity (% RH)'}),
+   draw: el => lineChart(el, [{name: 'adab-TH1-hum (electrical room)', color: C1, pts: D.rh_room}, {name: 'adab-TH2-hum (outdoor)', color: C2, pts: D.rh_out}], {unit: '% RH'})},
+  {grp: 'Open Energy Dashboard (history)', id: 'oed-limit', name: 'What OED will not show', url: '/',
+   note: `<b>A limit to know:</b> OED draws temperature and humidity as lines only. Bar and Compare refuse "raw" units, by design.
+     The daily minimum and maximum temperature stay in our <code>daily.csv</code> (hover a bar on the "Energy per day" screen).`,
+   html: () => oed({type: 'Bar', meters: ['adab-TH1-temp'], unit: 'Celsius', title: ''}),
+   draw: el => el.innerHTML = `<div class="err">Cannot create bar graph on raw units such as temperature</div>`},
+];
+
+let lastGrp = '', nav = '', scr = '';
+for (const s of S) {
+  if (s.grp !== lastGrp) { nav += `<h3>${esc(s.grp)}</h3>`; lastGrp = s.grp; }
+  nav += `<button data-id="${s.id}">${esc(s.name)}<small>${esc(s.url)}</small></button>`;
+  scr += `<section class="screen" id="s-${s.id}"><div class="note">${s.note}</div>
+    <div class="browser"><div class="bar"><span class="dots"><i></i><i></i><i></i></span>
+    <div class="url">https://arkan-monitoring.duckdns.org<b>${esc(s.url)}</b></div></div><div class="body">${s.html()}</div></div></section>`;
+}
+$('#nav').innerHTML = nav; $('#screens').innerHTML = scr;
+const drawn = {};
+function show(id) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.id === id));
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + id));
+  const s = S.find(x => x.id === id);
+  if (s.draw && !drawn[id]) { s.draw($(`#s-${id} .chart`)); drawn[id] = 1; }
+  history.replaceState(null, '', '#' + id);
+}
+$('#nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) show(b.dataset.id); });
+const fromHash = () => show(S.some(s => s.id === location.hash.slice(1)) ? location.hash.slice(1) : 'live-adab');
+addEventListener('hashchange', fromHash);
+fromHash();
+</script>
+</body>
+</html>
