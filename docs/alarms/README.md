@@ -9,7 +9,8 @@ Status: **built and tested with the simulated logger** (7 November 2026). WhatsA
 ## 1. How it works
 
 - Every 1-minute record is checked against every enabled line of the register, **in time order**, including the backlog sent after an outage. An alarm's time is **the minute the condition began in the data**, not the moment the data reached the VPS.
-- Power quality alarms use the **min and max of the 15 s samples** in each minute (logger 0.2.0), so a short dip shows even when the minute's mean looks normal.
+- Power quality alarms use the **min and max of the 15 s samples** in each minute (logger 0.2.0+), so a short dip shows even when the minute's mean looks normal.
+- Temperature and humidity alarms use the **5-minute averages** (logger 0.3.0): they are checked on the rows at :00, :05, ... and their delays count in real minutes as before.
 - **Delay:** the condition must hold for `delay_min` consecutive minutes before the alarm starts (0 or 1 = at once). A gap of more than 5 minutes in the data restarts the count.
 - **Hysteresis:** the alarm clears only past `clear_at` (for example undervoltage starts below 207 V and clears above 210 V), so it does not flap.
 - **Events** (power interruption, crash, counter backwards) are single lines, no start or clear.
@@ -66,7 +67,7 @@ Read the log:
 | `evaluated_on` | `1-min record`, `live snapshot` or `reception` |
 | `condition`, `note` | Plain text: what it means, what to check |
 
-## 5. The alarms and warnings recommended for recording (34 lines, 31 enabled)
+## 5. The alarms and warnings recorded (37 lines, 34 enabled)
 
 **Power quality (from the 1-minute mean, min and max)**
 
@@ -87,8 +88,9 @@ Read the log:
 
 | Id | Name | Starts when | Sev. | WhatsApp |
 |---|---|---|---|---|
-| A08 | High demand | kVA max > 90 % of contracted kVA for 5 min (needs `contracted_kva`) | warning | yes |
-| A29 | **Phase current near the rating** (new) | I max > 90 % of `rated_a` for 5 min (needs `rated_a`) | warning | yes |
+| A08 | High demand | kVA max > 90 % of the **82.5 kVA** contract (74 kVA) for 5 min | warning | yes |
+| A37 | **Phase current near the PLN limit** (new) | highest phase current > 90 % of the PLN limit for 5 min: 82.5 kVA = **3 x 125 A** at 220 V, so 112 A | warning | yes |
+| A29 | **Phase current near the rating** (new) | I max > 90 % of the **200 A** main breaker (180 A) for 5 min | warning | yes |
 | A03 | Meter not answering | no good read in a whole minute | critical | yes |
 | A30 | **Negative power on a phase** (new) | phase kW < -0.5 for 5 min: CT backwards or on the wrong phase | warning | no |
 | A31 | **Energy counter not moving** (new) | kWh unchanged 30 min while load > 1 kW: wrong register | warning | no |
@@ -104,21 +106,33 @@ Read the log:
 | A02 | Power interruption | event: boot after power loss, with the outage length from the gap | info | no |
 | A33 | **Logger crash restart** (new) | event: boot by watchdog or crash | warning | no |
 | A34 | **Frequent restarts** (new) | event: 3 unplanned restarts within 24 h | warning | yes |
-| A14 | Temp/RH sensor fault | no valid reading for 10 min | warning | no |
+| A14 | Temp/RH sensor fault | `err` in the 5-minute sensor rows (no valid reading in a window) for 10 min | warning | no |
 | A15 | SD card error | records from the RAM queue | warning | no |
 | A16 | Backlog growing | backlog > 60 min **while WiFi is up** (uploads failing) | warning | no |
 | A17 | Weak WiFi | < -80 dBm for 60 min | info | no |
 | A18 | Clock wrong | logger clock more than 2 min off (live snapshots) | warning | no |
+| A35 | **Firmware updated** (new) | event: the logger starts with another version; logs old and new, and whether by OTA or flashed by hand | info | no |
+| A36 | **Firmware update rolled back** (new) | event: a new firmware kept restarting, the logger went back to the previous one | warning | no |
 | A20 | Push to OED failing | off until the push to OED exists | warning | no |
 
-Also kept in `events.jsonl`, not in the alarm log because they are not faults: firmware changed, settings sent and applied, logger added, backfill, columns changed.
+Also kept in `events.jsonl` (not in the alarm log): settings sent and applied, logger added, backfill, columns changed.
 
-## 6. Thresholds to confirm
-- **A05, A06, A26, A27:** 230 V nominal assumed; SPLN tolerance +5 % / -10 %. Confirm with the PLN supply at the hotel.
-- **A08:** the hotel's contracted kVA → `contracted_kva` in `site.json`. Until then A08 never starts.
-- **A29:** main breaker or CT rating in A → `rated_a` in `site.json`. Until then A29 never starts.
+**Daily counts** (`manage.py daily adab`, owner 7 November 2026): `daily.csv` has, per WITA day, the number of **dips** (A26), **swells** (A27), **power interruptions** (A02) and of all alarm starts.
+
+## 6. Site values (owner, 7 November 2026) and thresholds
+
+| Value | Adab | Used by | In `site.json` |
+|---|---|---|---|
+| Grid | PLN 3-phase 4-wire, 230/400 V nominal (SNI 04-0227), PLN contracts quoted at 220/380 V | A05, A06, A26, A27 | `nominal_v` 230, `grid` |
+| Contracted power | **82.5 kVA** | A08 (74.25 kVA), A37 | `contracted_kva` 82.5 |
+| PLN limit per phase | 82.5 kVA / (3 x 220 V) = **125 A** (the limiter PLN fits for this contract) | A37 (112.5 A) | `contract_v_ln` 220 |
+| Main breaker | **200 A** | A29 (180 A) | `rated_a` 200 |
+| CT ratio | set in the meter, which already shows correct A and kW | register scale (`ct_mult` stays 1 unless T4 shows otherwise) | |
+
+- **A37 before A29:** at 82.5 kVA the PLN limiter (3 x 125 A) trips long before the 200 A breaker is loaded, and it trips on **one** overloaded phase even when the total kVA is under the contract. A37 is the one that warns before a PLN trip; A29 stays as the breaker's own check.
+- **Voltage limits** (A05 207 V, A06 242 V, A26 207 V, A27 253 V): SNI tolerance +5 % / -10 % around 230 V. A supply that runs near 220 V is still inside them.
 - **A11, A12, A13** (electrical room), **A22 to A25** (outdoor): as proposed on 5 November.
-- **A04 to A10, A26 to A31** depend on the meter register check (spare meter at the office, `docs/OFFICE-PREP.md` T4).
+- **A04 to A10, A26 to A31, A37** depend on the meter register check on the spare meter (`docs/OFFICE-PREP.md` T4).
 - Review the log after the first week and tune: a line that fires every day is noise; raise its threshold or delay, or set WhatsApp to `no`.
 
 ## 7. What the WhatsApp group will receive (S6)

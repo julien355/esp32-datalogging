@@ -1,6 +1,6 @@
 # Logger firmware: functions and settings
 
-Firmware **0.2.0** (CSV schema 2), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
+Firmware **0.3.0** (CSV schema 3), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
 Status: **written, compiled by CI, not yet run on the board.** The pin map and the meter register map are still **to verify** (Lab 1 and Lab 3 of the install manual).
 
 How to build, flash, configure and test it: [`OFFICE-PREP.md`](OFFICE-PREP.md). The file format: [`DATA-FORMAT.md`](DATA-FORMAT.md).
@@ -31,14 +31,14 @@ A task stuck for 60 s reboots the board (task watchdog with panic). Records are 
 
 ### 2.2 The 1-minute record
 - **Meter values (power quality): mean, min and max** of the 15 s samples for V L-N, V L-L, A, Hz, kW per phase and total, kvar, kVA, PF: `EM01_v1`, `EM01_v1_min`, `EM01_v1_max`... (owner, 7 November 2026). A dip or a demand peak is not hidden by the mean.
-- **Sensors: the 1-minute average only** (`TH1_t`, `TH1_rh`, `TH2_t`, `TH2_rh`; owner, 7 November 2026). Empty = no valid reading in that minute.
+- **Sensors: a 5-minute average only** (`TH1_t`, `TH1_rh`, `TH2_t`, `TH2_rh`; owner, 7 November 2026; setting `th_avg_min`). Written on the rows at :00, :05, :10... as the mean of the 5 minutes **before** that time; empty on the other rows; `err` if the window had no valid reading (sensor fault). The sensors are still read every 15 s for the live page.
 - **Last** value of the energy counters (`EM01_e` kWh, `EM01_eq` kvarh): consumption is computed on the server from the counter, so a gap never corrupts totals.
 - **Meter sample count** (`EM01_n`, 0 to 4): a fault is an empty value plus a low count, never a fake zero.
-- **Health**: `rssi`, `heap_kb`, `up_s`, `backlog_min`, `sd` (0 = the SD card was failing, the row came from the RAM queue), and `boot` (the reset reason, on the first record after a boot only: `poweron`, `brownout`, `task_wdt`, `panic`, `sw:daily`, `sw:offline`, `sw:ota`...).
+- **Health**: `rssi`, `heap_kb`, `up_s`, `backlog_min`, `sd` (0 = the SD card was failing, the row came from the RAM queue), and `boot` (on the first record after a boot only: the reset reason and the firmware version, `reason@version`, for example `poweron@0.3.0`, `sw:ota@0.3.1`, `sw:ota_rollback@0.3.0`, `brownout`, `task_wdt`, `panic`, `sw:daily`, `sw:offline`...). The VPS logs firmware changes from it (A35, A36).
 - **No record without a valid clock.** A timestamp the logger cannot trust is worse than a gap. With the DS3231 and its coin cell this only happens if the cell is dead and there is no internet.
 
 ### 2.2.1 Alarms and warnings
-The logger does not decide alarms: the VPS checks every record against the alarm register (`docs/alarms/`) and keeps the alarm log, including for the backlog after an outage, at the times found in the records. Thresholds are then changed in Excel on the VPS without touching the logger, and the whole log can be rebuilt from the SD card's records. The logger's own health problems reach the log through the record columns (`EM01_n`, empty sensor values, `sd`, `backlog_min`, `rssi`, `boot`); details stay in its event log `/log/YYYY-MM.log`.
+The logger does not decide alarms: the VPS checks every record against the alarm register (`docs/alarms/`) and keeps the alarm log, including for the backlog after an outage, at the times found in the records. Thresholds are then changed in Excel on the VPS without touching the logger, and the whole log can be rebuilt from the SD card's records. The logger's own health problems reach the log through the record columns (`EM01_n`, `err` sensor values, `sd`, `backlog_min`, `rssi`, `boot` with the firmware version); details stay in its event log `/log/YYYY-MM.log`.
 
 ### 2.3 Local storage (SD card)
 One CSV file per UTC day, same columns as the server's files. **The day files are the upload queue**: an upload pointer (`/state/upload.txt`: day, part, byte offset) says how far the server has confirmed. Nothing is written twice. Details and the reasons in [`DATA-FORMAT.md`](DATA-FORMAT.md).
@@ -134,7 +134,8 @@ Stored in NVS (survive power cuts and reflashing; erased only by `factory`). Cha
 |  | `mb_baud` | `9600` | RS485 baud rate |
 |  | `mb_format` | `8N1` | RS485 frame: 8N1, 8E1, 8O1 or 8N2 |
 |  | `ct_mult` | `1` | Multiplier for currents and powers if the meter gives secondary values (CT ratio), else 1 |
-| Sensors | `th1_type` | `auto` | TH1 on-board I2C sensor: auto, aht, sht3x, htu21, none |
+| Sensors | `th_avg_min` | `5` | Minutes averaged per temperature/humidity record (1, 5, 10, 15, 30 or 60) |
+|  | `th1_type` | `auto` | TH1 on-board I2C sensor: auto, aht, sht3x, htu21, none |
 |  | `th1_off_t` | `0` | TH1 temperature offset (C), from the install-day calibration |
 |  | `th1_off_rh` | `0` | TH1 humidity offset (%RH) |
 |  | `th2_on` | `1` | 1 = AM2301 (TH2) connected |

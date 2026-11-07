@@ -96,7 +96,7 @@ docker compose exec ingest python tools/manage.py init
 ## 6. Site and logger
 
 ```bash
-cd /opt/arkan-monitoring/server && docker compose exec ingest python tools/manage.py add-site adab --name "Adab hotel"
+cd /opt/arkan-monitoring/server && docker compose exec ingest python tools/manage.py add-site adab --name "Adab hotel" --contracted-kva 82.5 --rated-a 200
 ```
 
 ```bash
@@ -104,7 +104,7 @@ docker compose exec ingest python tools/manage.py add-device adab LOG-0001
 ```
 The second command prints the **token** and the logger's own **setup WiFi password** (`portal_pass`) **once**. Copy both to the password manager straight away: only the token's hash is kept on the VPS. Lost token: `rotate-token LOG-0001`. Add `--sd-settings /data/export/settings-LOG-0001.txt` to also get the SD card settings file (then move it off the VPS and delete it).
 
-Then edit `/srv/arkan-monitoring/data/sites/adab/site.json`: `contracted_kva` (A08), `rated_a` (A29), `nominal_v`, labels, live values.
+`site.json` then holds the PLN contract (82.5 kVA, 220 V per phase for the 3 x 125 A limit), the 200 A main breaker and 230 V nominal (owner, 7 November 2026). Edit `/srv/arkan-monitoring/data/sites/adab/site.json` for labels and live values.
 
 ## 7. Caddy (owner approves the reload)
 
@@ -175,7 +175,7 @@ And, if wanted, the daily summary at 00:20 WITA (16:20 UTC on a UTC server):
 | Change a logger setting remotely | `manage.py set-config LOG-0001 th1_off_t=-1.2 reboot_hr=19` (taken within 15 min, the logger restarts); `manage.py show-config LOG-0001` to check. Network settings are refused: on site only |
 | OED files | `docker compose exec ingest python tools/manage.py export-oed adab --from 2026-11-01` |
 | SD card backfill | copy the card's `/data` to `/srv/arkan-monitoring/data/export/sd-LOG-0001/`, then `manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001`, then `manage.py alarms adab --rebuild` |
-| Firmware update (OTA) | copy `firmware.bin` to the data folder, `manage.py publish-fw /data/firmware.bin --version 0.2.1`; loggers take it within 6 h (`ota_on` is on by default) |
+| Firmware update (OTA) | copy `firmware.bin` to the data folder, `manage.py publish-fw /data/firmware.bin --version 0.3.1`; loggers take it within 6 h (`ota_on` is on by default) |
 | Read the data from the laptop | `scp -r hermes-vps:/srv/arkan-monitoring/data/sites/adab ./adab` |
 
 ## 11. Security notes

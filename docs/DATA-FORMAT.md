@@ -1,6 +1,6 @@
 # How the data is saved: on the SD card and on the VPS
 
-Status: **agreed 7 November 2026** (CSV upload Q1, UTC day files, min and max for power quality Q3, sensors averaged only, Open Energy Dashboard Q6). Implemented in firmware 0.2.0 (CSV schema 2) and the ingest service.
+Status: **agreed 7 November 2026** (CSV upload Q1, UTC day files, min and max for power quality Q3, sensors as 5-minute averages, firmware version on each boot, Open Energy Dashboard Q6). Implemented in firmware 0.3.0 (CSV schema 3) and the ingest service.
 
 ## 1. The choice: one file per day, all values of a logger in one row per minute
 
@@ -44,7 +44,7 @@ Backups: `/srv/arkan-monitoring/backups/data-<date>.tar.gz`, nightly, 14 kept (`
 
 **The SD card and the server hold the same files.** Recovering a gap = copying the SD card's `/data` folder and running `manage.py backfill adab LOG-0001 <copy>`: rows already on the server are dropped, the others are merged in time order.
 
-## 3. The CSV file (schema 2, firmware 0.2.0)
+## 3. The CSV file (schema 3, firmware 0.3.0)
 
 Plain text, UTF-8, comma separated, `\n` line ends, a header line, no quotes, `.` as decimal point. Empty field = no valid reading.
 
@@ -64,14 +64,14 @@ Plain text, UTF-8, comma separated, `\n` line ends, a header line, no quotes, `.
 | `EM01_e` | kWh | **Cumulative** import energy counter of the meter, last reading of the minute |
 | `EM01_eq` | kvarh | Cumulative reactive energy counter, last reading |
 | `EM01_n` | | Number of good meter reads in the minute (4 = all) |
-| `TH1_t` `TH1_rh` | C, %RH | Electrical room (board sensor), **1-minute average only**, offset applied |
-| `TH2_t` `TH2_rh` | C, %RH | Outdoor (AM2301), 1-minute average only, offset applied |
+| `TH1_t` `TH1_rh` | C, %RH | Electrical room (board sensor), **5-minute average**, offset applied. Filled only on the rows at :00, :05, :10... with the mean of the 5 minutes **before** that time (the 03:20 row holds 03:15 to 03:20). Empty on the other rows. `err` = no valid reading in the window |
+| `TH2_t` `TH2_rh` | C, %RH | Outdoor (AM2301), same rule |
 | `rssi` | dBm | WiFi signal (empty when offline) |
 | `heap_kb` | kB | Free memory |
 | `up_s` | s | Uptime |
 | `backlog_min` | min | Age of the oldest record not yet uploaded |
 | `sd` | | 1 = written to the SD card, 0 = the card was failing (row kept in RAM only) |
-| `boot` | | Reset reason, on the first record after a boot only |
+| `boot` | | On the first record after a boot only: `reason@firmware`, for example `poweron@0.3.0` or `sw:ota@0.3.1` |
 
 A second meter adds the same block with `EM02_`. The meter columns and their scales come from the register table: **until the register check, the values and units of currents and powers are not trusted.**
 
@@ -80,7 +80,8 @@ Size: about 500 bytes a row (65 columns with one meter), **0.7 MB a day, about 2
 Example:
 ```
 ts,EM01_v1,EM01_v1_min,EM01_v1_max,...,EM01_p,EM01_p_min,EM01_p_max,...,EM01_e,EM01_eq,EM01_n,TH1_t,TH1_rh,TH2_t,TH2_rh,rssi,heap_kb,up_s,backlog_min,sd,boot
-2026-11-07T03:15:00Z,231.25,230.8,231.9,...,28.445,27.102,29.867,...,184523.17,40210.32,4,31.37,60.4,29.09,76.5,-63,180,86400,0,1,
+2026-11-07T03:14:00Z,231.25,230.8,231.9,...,28.445,27.102,29.867,...,184523.17,40210.32,4,,,,,-63,180,86400,0,1,
+2026-11-07T03:15:00Z,231.10,230.6,231.7,...,28.610,27.350,30.102,...,184523.65,40210.53,4,31.37,60.4,29.09,76.5,-63,180,86460,0,1,
 ```
 
 ## 4. Upload (logger to VPS)
@@ -94,6 +95,7 @@ ts,EM01_v1,EM01_v1_min,EM01_v1_max,...,EM01_p,EM01_p_min,EM01_p_max,...,EM01_e,E
 ## 5. Ready for Open Energy Dashboard
 
 The files are ready to load without change of format on our side:
+- **Temperature and humidity** go to OED as 5-minute readings (start = previous reading, end = the row's time).
 - **Energy**: `EM01_e` is the meter's own cumulative counter. OED takes it as a meter with `cumulative=yes`, and computes kWh per interval and kW. Gaps and logger reboots do not corrupt totals; a meter reset shows as the counter going down (alarm A19).
 - **Temperature and humidity**: raw readings per minute.
 - `manage.py export-oed adab [--from 2026-11-01] [--to 2026-11-30] [--all]` writes **one file per value** in OED's CSV upload format (`reading,start_timestamp,end_timestamp`, **WITA local time** because OED stores times without a timezone):
@@ -101,7 +103,7 @@ The files are ready to load without change of format on our side:
   - with `--all`: every value (`adab-EM01-v1.csv`, `adab-EM01-p.csv`, ...).
 - The automatic push to OED (every 5 minutes) is the next step, to be done once OED is installed (PLAN.md §5.3).
 
-`daily.csv` (`manage.py daily adab`): one row per WITA day and logger: `minutes`, `coverage_pct`, `EM01_e_delta` (kWh of the day, from the previous day's last reading), the day's mean of every value, the day's lowest `_min` and highest `_max` of every meter value (with the time of the peak kW and kVA), min/max/mean of temperature and humidity.
+`daily.csv` (`manage.py daily adab`): one row per WITA day and logger: `minutes`, `coverage_pct`, **`dips`, `swells`** (A26, A27 starts), `power_interruptions` (A02), `alarms_started`, `EM01_e_delta` (kWh of the day, from the previous day's last reading), the day's mean of every value, the day's lowest `_min` and highest `_max` of every meter value (with the time of the peak kW and kVA), min/max/mean of temperature and humidity.
 
 ## 6. Alarm and warning log
 

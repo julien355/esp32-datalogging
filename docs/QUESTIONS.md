@@ -19,6 +19,19 @@
 | Q16 | Setup button | **Reachable through the closed box** | drill a small hole over BOOT in the box lid, label it (`docs/OFFICE-PREP.md` §4) |
 | Q18 | Bench meter | **A spare meter is at the office** | register check moves to the office (`docs/OFFICE-PREP.md` T4) |
 
+## Decisions of 7 November 2026, second round (owner)
+
+| # | Question | Decision | Done in |
+|---|---|---|---|
+| | Sensors in the record | **5-minute average only** (saves space) | firmware 0.3.0: `TH*_t`, `TH*_rh` on the rows at :00, :05... (setting `th_avg_min`) |
+| | Logger health | **Log when the firmware is updated** | A35 Firmware updated (old -> new, OTA or by hand), A36 Update rolled back; the boot column carries `reason@version` |
+| Q23 | Supply | **PLN 3-phase** | 230/400 V nominal (SNI), contracts at 220/380 V: `nominal_v` 230, `contract_v_ln` 220 |
+| Q24 | Contracted kVA | **82.5 kVA** | A08 at 74.25 kVA; new **A37** per-phase limit 3 x 125 A (warns at 112.5 A) |
+| Q25 | Main breaker | **200 A** | A29 at 180 A |
+| Q26 | CT ratio | **Set in the meter, which shows correct power and amps**; ratio to be noted | `ct_mult` stays 1; T4 on the spare meter confirms the registers give primary values |
+| Q27 | WhatsApp list | **OK** | as in `alarms.csv` |
+| Q28 | Daily count of dips and swells | **Yes** | `daily.csv`: `dips`, `swells`, `power_interruptions`, `alarms_started` |
+
 ## Still open
 
 | # | Question | Default now | Recommendation |
@@ -31,9 +44,5 @@
 | Q19 | Small OLED on the I2C header (WiFi, last upload, kW) | None | Optional |
 | Q20 | 2.4 GHz WiFi at the office for the bench | | |
 | Q22 | WhatsApp alerts through Hermes in session S6 | Not built | Yes |
-| **Q23** | **Supply voltage** at the hotel: 230 V L-N? | 230 V | Confirm: sets A05, A06, A26, A27 |
-| **Q24** | **Contracted kVA** of the hotel (PLN bill) | not set | Needed for A08 High demand |
-| **Q25** | **Rated current** of the main breaker (or the CTs) in A | not set | Needed for A29 Phase current near the rating |
-| **Q26** | **CT ratio** of the meter (on its label or menu) | | Needed to check the current and power scales (T4) |
-| **Q27** | Alarms going to WhatsApp: the proposal is in the `whatsapp` column of `docs/alarms/alarms.csv` (12 enabled alarms: A01, A03 to A08, A11, A12, A24, A29, A34; A32 too once the UPS is in). Add or remove any? | as listed | Start with these; review after the first week |
-| **Q28** | Power quality alarms A26 (dip) and A27 (swell) are logged as info only. Do you also want a **daily count of dips and swells** in `daily.csv`? | No | Yes if the hotel has complaints about equipment trips |
+| **Q29** | **A37 (phase current near the PLN limit) to WhatsApp?** New since Q27; proposed yes, since a PLN limiter trip blacks out the hotel | yes | Yes |
+| **Q30** | CT ratio value, for the as-built record (Q26) | | Note it from the meter menu during T4 or on site |

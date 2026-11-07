@@ -4,7 +4,7 @@ Everything here is done **at the office, on the bench**, before the logger goes 
 
 Reference: functions and settings [`FIRMWARE.md`](FIRMWARE.md), data format [`DATA-FORMAT.md`](DATA-FORMAT.md), VPS [`VPS-SETUP.md`](VPS-SETUP.md), questions still open [`QUESTIONS.md`](QUESTIONS.md). Hardware theory, wiring drawings and site labs: [`install/README.md`](install/README.md).
 
-> **Status.** Firmware 0.2.0 (power quality min/max, remote settings, OTA on) and the ingest service with the alarm log are written; CI compiles the firmware and runs the server tests. **Nothing has run on the real board yet.** The pin map and the meter register map are still **to verify** (T2, T4 below). Expect small fixes during the first bench day.
+> **Status.** Firmware 0.3.0 (power quality min/max, sensors every 5 min, firmware version logged, remote settings, OTA on) and the ingest service with the alarm log are written; CI compiles the firmware and runs the server tests. **Nothing has run on the real board yet.** The pin map and the meter register map are still **to verify** (T2, T4 below). Expect small fixes during the first bench day.
 
 ---
 
@@ -83,7 +83,7 @@ Tick each line in the record sheet (section 5). Times are in UTC.
 ### T3. Sensors
 1. `status`, "Last sample": `TH1=31.2C/60% TH2=...`.
 2. Breathe on each sensor: the values rise within 30 s.
-3. Pull the AM2301 data wire: `TH2=fault`, and the record has empty `TH2_t`, `TH2_rh`. After 10 min the alarm log on the VPS shows **A14 start**; plug it back: **A14 clear**.
+3. Pull the AM2301 data wire: `TH2=fault` on the console; the next 5-minute rows have `err` in `TH2_t`, `TH2_rh`. Within 15 min the alarm log on the VPS shows **A14 start**; plug it back: **A14 clear** at the next 5-minute row.
 4. Next to a reference thermometer/hygrometer for 30 min: note the differences. They become `th1_off_t`, `th2_off_t` etc. on the install day (the office is not the site).
 
 ### T4. RS485 and the spare meter (register check at the office)
@@ -99,8 +99,8 @@ The spare FCN300 at the office (owner, 7 November 2026) moves the register check
 9. Without the meter connected: `EM01: no answer`, `EM01_n` = 0, empty values, and after a minute **A03 Meter not answering** in the alarm log.
 
 ### T5. Records on the SD card
-1. Wait 3 minutes. `ls /data/2026/11` (this month), `tail /data/2026/11/2026-11-07.csv 3`.
-2. One row per minute, timestamps on the minute, `TH1_n` = 4.
+1. Wait 6 minutes (the sensor values appear on the rows at :00, :05, ... only). `ls /data/2026/11` (this month), `tail /data/2026/11/2026-11-07.csv 3`.
+2. One row per minute, timestamps on the minute, `EM01_n` = 4 (with the meter), `TH1_t` filled every 5th row. The first row after the boot has `boot` = `poweron@0.3.0`.
 3. `header` shows the columns.
 
 ### T6. WiFi and upload
@@ -134,7 +134,7 @@ The spare FCN300 at the office (owner, 7 November 2026) moves the register check
 
 ### T12. Daily reboot and watchdog
 1. `set reboot_hr <current UTC hour + 1>`, `reboot`, wait: at hh:05 a reboot with `boot=sw:daily`. Set it back to 19.
-2. **OTA** (on by default): change `FW_VERSION` to 0.2.1, build, `manage.py publish-fw firmware.bin --version 0.2.1`, then `ota` on the console (or wait up to 6 h): the logger updates, `manage.py list` shows 0.2.1. Then publish a build that crashes at boot (test only): it must come back to the previous version by itself (`boot=sw:ota_rollback`).
+2. **OTA** (on by default): change `FW_VERSION` to 0.3.1, build, `manage.py publish-fw firmware.bin --version 0.3.1`, then `ota` on the console (or wait up to 6 h): the logger updates, `manage.py list` shows 0.3.1, and the alarm log has **A35 Firmware updated** "0.3.0 -> 0.3.1, by remote update (OTA)". Then publish a build that crashes at boot (test only): it must come back to the previous version by itself (`boot=sw:ota_rollback@0.3.1`, **A36** in the alarm log).
 
 ### T12b. Remote settings
 1. After a boot, `manage.py show-config LOG-0001` shows what the logger reported (firmware, settings, TH1 chip).
@@ -159,7 +159,7 @@ docker compose exec ingest python tools/manage.py daily adab
 - [ ] `wifi_ssid` / `wifi_pass` of the **hotel staff network** set (console or portal); the office network as `wifi_ssid2` is useless on site: clear it, or set the 4G router if there is one
 - [ ] `portal_pass` = the logger's own setup WiFi password from `manage.py add-device` (in the password manager)
 - [ ] **A small hole in the box lid over the BOOT button**, labelled "Setup: hold 3 s" (reachable with the box closed, owner 7 November 2026)
-- [ ] Site profile on the VPS: `contracted_kva`, `rated_a`, `nominal_v` in `site.json` (Q23 to Q25), so A08 and A29 work
+- [ ] Site profile on the VPS: 82.5 kVA, 200 A, 230 V in `site.json` (`add-site ... --contracted-kva 82.5 --rated-a 200`), so A08, A29 and A37 work
 - [ ] Verified register table on the card (`/config/registers.csv`) from T4
 - [ ] `tls_verify` = 1, `srv_url` = `https://arkan-monitoring.duckdns.org`
 - [ ] Simulated or office test data removed from the VPS (`VPS-SETUP.md` step 8)
@@ -189,7 +189,7 @@ docker compose exec ingest python tools/manage.py daily adab
 | T10 server down / wrong token | | |
 | T11 portal and button | | |
 | T12 daily reboot | | |
-| T12 OTA update and rollback | | |
+| T12 OTA update and rollback (A35, A36 logged) | | |
 | T12b remote settings | | |
 | T12c alarm log lines present | | |
 | T13 48 h soak: coverage, heap | | |
