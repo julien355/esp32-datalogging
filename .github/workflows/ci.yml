@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            firmware/.pio/libdeps
+          key: pio-${{ hashFiles('firmware/platformio.ini') }}
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build (native USB and UART variants)
+        working-directory: firmware
+        run: pio run -e logger -e logger-uart
+      - name: Size
+        working-directory: firmware
+        run: ls -l .pio/build/logger/firmware.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.sha }}
+          path: |
+            firmware/.pio/build/logger/firmware.bin
+            firmware/.pio/build/logger/bootloader.bin
+            firmware/.pio/build/logger/partitions.bin
+            firmware/.pio/build/logger-uart/firmware.bin
+
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python -m unittest discover -s server/tests -v
+      - name: Docker image builds
+        run: docker build -t arkan-monitoring-ingest:ci server

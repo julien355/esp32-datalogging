@@ -1,0 +1,62 @@
+# /opt/edge/sites/monitoring.caddy on hermes-vps (native Caddy, imported by the main Caddyfile).
+# Same logins as the other Arkan dashboards: /opt/edge/secrets/hub-users.caddy.
+# The loggers' endpoints are open (no basicauth): the device token is checked by the service.
+# After any change: caddy validate, then the owner approves the reload.
+
+arkan-monitoring.duckdns.org {
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Robots-Tag "noindex, nofollow"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	# Loggers: token checked by the service, body size capped here too.
+	@device {
+		path /api/v1/ingest /api/v1/ota /api/v1/firmware/*
+	}
+	@livepost {
+		method POST
+		path /api/v1/live
+	}
+	handle @device {
+		request_body {
+			max_size 256KB
+		}
+		reverse_proxy 127.0.0.1:8800
+	}
+	handle @livepost {
+		request_body {
+			max_size 16KB
+		}
+		reverse_proxy 127.0.0.1:8800
+	}
+
+	# People: Arkan login.
+	handle {
+		basicauth {
+			import /opt/edge/secrets/hub-users.caddy
+		}
+		# Until Open Energy Dashboard is deployed, the start page is the live overview.
+		redir / /live/ 302
+		reverse_proxy 127.0.0.1:8800 {
+			header_up X-Auth-User {http.auth.user.id}
+		}
+	}
+
+	log {
+		output file /var/log/caddy/arkan-monitoring.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+		format filter {
+			wrap json
+			fields {
+				request>headers>Authorization delete
+				request>headers>Cookie delete
+			}
+		}
+	}
+}

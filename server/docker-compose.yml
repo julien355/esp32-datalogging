@@ -1,0 +1,28 @@
+# Monitoring ingest service on the VPS.
+#   cd /opt/arkan-monitoring/server && docker compose up -d --build
+# Data folder on the host: /srv/arkan-monitoring/data (created by deploy/setup-vps.sh), mounted at /data.
+# Published on the loopback only: Caddy on the host is the only way in from the internet.
+services:
+  ingest:
+    build: .
+    image: arkan-monitoring-ingest:local
+    container_name: arkan-monitoring-ingest
+    restart: unless-stopped            # comes back after a crash or a VPS reboot
+    ports:
+      - "127.0.0.1:${INGEST_PORT:-8800}:8800"
+    volumes:
+      - ${DATA_DIR_HOST:-/srv/arkan-monitoring/data}:/data
+    environment:
+      DATA_DIR: /data
+      MAX_BODY: "262144"
+    user: "1000:1000"
+    read_only: true                    # the only writable place is /data
+    tmpfs:
+      - /tmp
+    mem_limit: 96m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

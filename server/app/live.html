@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Live</title>
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;background:#f5f6f8;color:#1f2933}
+  header{background:#0f2747;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
+  header a{color:#cfe0ff}
+  main{padding:12px;max-width:1100px;margin:auto}
+  .status{margin:8px 0;font-weight:600}
+  .ok{color:#127a3a}.bad{color:#b42318}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+  .tile{background:#fff;border-radius:8px;padding:10px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .tile .k{font-size:.8em;color:#52606d}.tile .v{font-size:1.6em;font-weight:700}
+  svg{width:100%;height:34px}
+  table{border-collapse:collapse;background:#fff;width:100%}
+  td,th{padding:6px 10px;border-bottom:1px solid #e4e7eb;text-align:left}
+  h2{font-size:1.05em;margin:18px 0 6px}
+</style>
+</head>
+<body>
+<header><strong id="title">Live</strong><a href="/live/">All sites</a></header>
+<main>
+  <div id="status" class="status">Loading...</div>
+  <div id="content"></div>
+</main>
+<script>
+const m = location.pathname.match(/^\/live\/([a-z0-9-]+)\/?$/);
+const site = m ? m[1] : null;
+const el = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function spark(points) {
+  const v = points.filter(x => x !== null && x !== undefined && !isNaN(x));
+  if (v.length < 2) return '';
+  const lo = Math.min(...v), hi = Math.max(...v), span = (hi - lo) || 1;
+  const d = v.map((y, i) => `${(i / (v.length - 1) * 100).toFixed(1)},${(30 - (y - lo) / span * 28).toFixed(1)}`).join(' ');
+  return `<svg viewBox="0 0 100 32" preserveAspectRatio="none"><polyline fill="none" stroke="#2563eb" stroke-width="1.5" points="${d}"/></svg>`;
+}
+
+function localTime(iso, offH) {
+  if (!iso) return '-';
+  const t = new Date(Date.parse(iso) + (offH || 0) * 3600e3);
+  return t.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+async function loadSite() {
+  const r = await fetch(`/api/v1/live/${site}`, {cache: 'no-store'});
+  const j = await r.json();
+  const prof = j.profile || {}, labels = prof.labels || {}, off = prof.utc_offset_h ?? 8;
+  const wanted = (prof.live && prof.live.values) || null;
+  el('title').textContent = `Live: ${prof.name || site}`;
+  let html = '', worst = 0;
+  const devs = Object.keys(j.devices);
+  if (!devs.length) { el('status').innerHTML = '<span class="bad">No live data yet for this site</span>'; el('content').innerHTML = ''; return; }
+  for (const dev of devs) {
+    const d = j.devices[dev], vals = d.last.values || {};
+    worst = Math.max(worst, d.age_s);
+    const keys = (wanted || Object.keys(vals)).filter(k => k in vals);
+    html += `<h2>${esc(dev)}: ${localTime(d.last.ts, off)} (UTC+${off}), RSSI ${esc(d.last.sys?.rssi ?? '-')} dBm, backlog ${esc(d.last.sys?.backlog_min ?? '-')} min, fw ${esc(d.last.sys?.fw ?? '-')}</h2><div class="grid">`;
+    for (const k of keys) {
+      const hist = d.history.map(h => parseFloat(h.values[k]));
+      html += `<div class="tile"><div class="k">${esc(labels[k] || k)}</div><div class="v">${esc(vals[k])}</div>${spark(hist)}</div>`;
+    }
+    html += '</div>';
+  }
+  el('content').innerHTML = html;
+  el('status').innerHTML = worst < 60 ? `<span class="ok">Live, updated ${worst} s ago</span>`
+                                      : `<span class="bad">No data for ${Math.round(worst / 60)} min</span>`;
+}
+
+async function loadAll() {
+  const j = await (await fetch('/api/v1/status', {cache: 'no-store'})).json();
+  let html = '<table><tr><th>Site</th><th>Logger</th><th>Last record (UTC)</th><th>Live</th><th>Firmware</th></tr>';
+  for (const [s, devs] of Object.entries(j.sites)) {
+    for (const [dev, d] of Object.entries(devs)) {
+      const live = d.live_age_s === null ? '<span class="bad">none</span>'
+                 : d.live_age_s < 60 ? `<span class="ok">${d.live_age_s} s ago</span>` : `<span class="bad">${Math.round(d.live_age_s / 60)} min ago</span>`;
+      html += `<tr><td><a href="/live/${esc(s)}/">${esc(s)}</a></td><td>${esc(dev)}</td><td>${esc(d.last_record || '-')}</td><td>${live}</td><td>${esc(d.fw || '-')}</td></tr>`;
+    }
+  }
+  el('content').innerHTML = html + '</table>';
+  el('status').textContent = `All sites, ${j.time}`;
+}
+
+async function tick() {
+  try { await (site ? loadSite() : loadAll()); }
+  catch (e) { el('status').innerHTML = '<span class="bad">Server not reachable</span>'; }
+}
+tick();
+setInterval(tick, 15000);
+</script>
+</body>
+</html>
