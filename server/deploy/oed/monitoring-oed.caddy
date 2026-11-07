@@ -1,0 +1,90 @@
+# DRAFT, NOT TESTED.
+# Variant of server/deploy/monitoring.caddy for when Open Energy Dashboard (OED) is installed.
+# It REPLACES /opt/edge/sites/monitoring.caddy on hermes-vps (native Caddy 2.6, imported by the main Caddyfile).
+#   /                 -> OED (127.0.0.1:8810), behind the Arkan login
+#   /live/, /api/v1/*, /health -> our ingest service (127.0.0.1:8800), behind the Arkan login
+#   logger endpoints  -> our ingest service, NO web login (the device token is checked by the service)
+# OED uses only /api/<name> paths (users, meters, readings, csv, ...), never /api/v1, /live or /health
+# (OED v1.0.0 src/server/app.js), so the two never collide.
+# After any change: caddy validate, then the owner approves the reload.
+
+arkan-monitoring.duckdns.org {
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Robots-Tag "noindex, nofollow"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	# Loggers: token checked by the service, body size capped here too (unchanged).
+	@device {
+		path /api/v1/ingest /api/v1/ota /api/v1/firmware/* /api/v1/config /api/v1/config/report
+	}
+	@livepost {
+		method POST
+		path /api/v1/live
+	}
+	handle @device {
+		request_body {
+			max_size 256KB
+		}
+		reverse_proxy 127.0.0.1:8800
+	}
+	handle @livepost {
+		request_body {
+			max_size 16KB
+		}
+		reverse_proxy 127.0.0.1:8800
+	}
+
+	# People: Arkan login first, then our ingest service or OED.
+	handle {
+		basicauth {
+			import /opt/edge/secrets/hub-users.caddy
+		}
+
+		@ingest {
+			path /live /live/* /api/v1/* /health
+		}
+		handle @ingest {
+			reverse_proxy 127.0.0.1:8800 {
+				header_up X-Auth-User {http.auth.user.id}
+			}
+		}
+
+		# Optional, PLAN.md 5.4: hide OED's CSV upload API from the internet.
+		# Uncomment only if nobody uses OED's CSV page in the browser: that page uses the same API.
+		# The ingest service and curl on the VPS reach OED directly on 127.0.0.1:8810 anyway.
+		# handle /api/csv/* {
+		# 	respond 403
+		# }
+
+		# Everything else is OED. OED logs in with its own "token" header, so the Arkan
+		# Authorization header is not needed there and is not passed on.
+		handle {
+			request_body {
+				max_size 50MB
+			}
+			reverse_proxy 127.0.0.1:8810 {
+				header_up -Authorization
+			}
+		}
+	}
+
+	log {
+		output file /var/log/caddy/arkan-monitoring.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+		format filter {
+			wrap json
+			fields {
+				request>headers>Authorization delete
+				request>headers>Cookie delete
+				request>headers>Token delete
+			}
+		}
+	}
+}
