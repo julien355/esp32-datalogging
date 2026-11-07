@@ -264,7 +264,7 @@ You need three programs: **Git** (downloads the code), **VS Code** (the editor) 
    pio --version
    ```
    Expected: `PlatformIO Core, version 6.x...`.
-   If not ("pio is not recognized"): open the PlatformIO terminal instead: click the ant-head icon, then **Quick Access > Miscellaneous > PlatformIO Core CLI**. That terminal always has `pio`. Use it for every `pio` command in this tutorial.
+   If not ("pio is not recognized"): that is normal in a plain terminal. Use the **PlatformIO terminal** for every `pio` command in this tutorial: how to open it and how to recognise it is in [A4.2](#a42-open-the-platformio-terminal).
 5. **Check the USB connection of the board.** Plug the board into the laptop with the USB-C data cable. Open **Device Manager** (right-click the Start button > Device Manager), look under **Ports (COM & LPT)**.
    Expected: a new COM port appears when you plug the board, for example "USB Serial Device (COM5)". Note the COM number.
    If not: try another cable (charge-only cables have no data wires). If the port appears with a yellow warning sign, or its name mentions CH340 or CP210x without a working driver, install the driver of that chip from its maker. If still nothing: hold **BOOT**, press and release **RESET**, release **BOOT** (download mode, see A4) and look again.
@@ -292,57 +292,244 @@ Choose **one** of the two ways.
 2. Right-click the ZIP file > **Extract All**. The folder name ends with the branch name (for example `esp32-datalogging-main`).
    Expected: the folder has `firmware`, `docs` and `server` inside.
 
-**Open the project in VS Code:** menu **File > Open Folder**, choose the **`firmware`** folder (the one that contains `platformio.ini`), not the top folder.
+**Open the project in VS Code:** menu **File > Open Folder**, choose the **`firmware`** folder (the one that contains `platformio.ini`), not the top folder (details in A4.1).
 Expected: PlatformIO recognises the project (the bottom blue status bar shows PlatformIO buttons: a check mark for Build, an arrow for Upload, a plug for the Serial Monitor) and starts downloading the libraries the first time.
 
 ### A4 Building and flashing the firmware
 
-**Two words first.** **Building** (compiling) turns the source code into a firmware file (`firmware.bin`). **Flashing** (uploading) writes that file into the board's flash memory. The settings are stored in a separate part of the flash (**NVS**, non-volatile storage): flashing a new firmware with PlatformIO **does not erase the settings**.
+This section takes you from "the code is on the laptop" (A3) to "the board runs the logger firmware". Take your time the first time: the first build downloads about 1 GB of tools and can take 10 to 20 minutes. The next builds take less than a minute.
 
-**Two builds ("environments") exist in `platformio.ini`:**
+**Words used here**
 
-| Build | When to use it |
+| Word | Meaning |
 |---|---|
-| `logger` (the default) | When the board's USB-C goes to the ESP32-S3's **native USB** port. Try this one first |
-| `logger-uart` | When the board's USB-C goes through a **USB-to-serial chip** (CH340 or CP210x). Use it if, after flashing `logger`, the serial monitor shows **no text at all** |
+| **Build** (compile) | Turns the source code (`firmware/src/*.cpp`) into one file the chip can run: `firmware.bin` |
+| **Flash** (upload) | Writes `firmware.bin` into the board's flash memory over the USB-C cable |
+| **Environment** (`env`) | A named build recipe in `firmware/platformio.ini`. We have two: `logger` and `logger-uart` (A4.3) |
+| **COM port** | The name Windows gives to the board's USB serial connection, for example `COM5` |
+| **Download mode** | A state of the chip where its program is stopped and it waits for a new one (A4.6) |
+| **NVS** | The part of the flash that holds the settings. **Flashing a new firmware with PlatformIO does not erase it**: the WiFi, token and offsets stay |
+| **Terminal** | A text window where you type commands. In VS Code it opens at the bottom of the window |
 
-Which one the Bluino board needs is **to verify** on the first bench day. Write the answer in the record sheet and in the as-built record.
+#### A4.1 Open the project the right way
 
-1. **Go to the firmware folder** in the PlatformIO terminal (adapt the path to where you put the code):
-   ```powershell
-   cd $HOME\Documents\esp32-datalogging\firmware
-   ```
-2. **Build:**
+1. Open VS Code.
+2. Menu **File > Open Folder...**, go to `Documents\esp32-datalogging\firmware` and click **Select Folder**.
+   **Choose the `firmware` folder itself**, the one that contains the file `platformio.ini`, not the top folder `esp32-datalogging`. PlatformIO only recognises a project when `platformio.ini` is at the top of the opened folder.
+3. If VS Code asks "Do you trust the authors of the files in this folder?", click **Yes, I trust the authors**.
+4. Expected, within a minute:
+   - in the left bar, the **ant-head icon** (PlatformIO);
+   - in the **blue status bar at the bottom** of the window, small PlatformIO buttons (described in A4.4);
+   - in the Explorer (left, top icon), the files `platformio.ini`, `include`, `src`, `tools`.
+   - The first time, a message at the bottom right says PlatformIO is installing the platform and libraries. Wait until it is finished.
+   If not: you opened the wrong folder. **File > Close Folder**, then open `firmware` again.
+
+#### A4.2 Open the PlatformIO terminal
+
+All `pio` commands in this tutorial are typed in the **PlatformIO terminal**. It is a normal PowerShell terminal inside VS Code, with the `pio` program added to it, and it opens directly in the project folder (`...\firmware`). A plain Windows PowerShell window usually does **not** know `pio`.
+
+Use **one** of these three ways:
+
+**Way 1: the button in the status bar (quickest).**
+1. Look at the **blue status bar** at the very bottom of the VS Code window.
+2. Find the small **terminal icon** (a square with `>_` inside). Hover over it with the mouse: the tooltip says **"PlatformIO: New Terminal"**.
+3. Click it.
+
+**Way 2: from the PlatformIO panel.**
+1. Click the **ant-head icon** in the left bar. The PlatformIO panel opens.
+2. Under **QUICK ACCESS**, open **Miscellaneous**.
+3. Click **New Terminal** (in some versions it is called **PlatformIO Core CLI**).
+
+**Way 3: from the Command Palette (works even if you cannot find the icons).**
+1. Press `Ctrl+Shift+P`. A search box opens at the top of the window.
+2. Type `PlatformIO: New Terminal` and press Enter when it is highlighted.
+
+**Check that you are in the right terminal.** A panel opens at the bottom of VS Code. Its tab (on the right of the panel) is named **PlatformIO CLI** or similar, and the prompt ends with your project folder, for example:
+```
+PS C:\Users\you\Documents\esp32-datalogging\firmware>
+```
+Type:
+```powershell
+pio --version
+```
+Expected: `PlatformIO Core, version 6.x.x`.
+If not:
+- `pio : The term 'pio' is not recognized...`: you are in a normal terminal (menu **Terminal > New Terminal** opens one of those). Close it (trash-can icon on the right of the terminal panel) and use Way 1, 2 or 3.
+- The prompt is not in `...\firmware`: type the next command (adapt the path):
+  ```powershell
+  cd $HOME\Documents\esp32-datalogging\firmware
+  ```
+- To see the terminal panel again after hiding it: menu **View > Terminal** (or press `Ctrl` and the backtick key, left of `1` on a US keyboard).
+
+#### A4.3 Choose the build for this board (`logger` or `logger-uart`)
+
+The board's USB-C can be wired in two ways, and each needs its own build. You can usually tell **before flashing**, from the name Windows gives the port:
+
+1. Plug the board into the laptop with the USB-C **data** cable.
+2. Open **Device Manager** (right-click the Start button > **Device Manager**) and open **Ports (COM & LPT)**.
+3. Read the name of the new line that appears when you plug the board in:
+
+| Name in Device Manager (typical) | What it means | Build |
+|---|---|---|
+| `USB Serial Device (COM5)`, and under **Universal Serial Bus devices** a `USB JTAG/serial debug unit` | USB-C goes to the ESP32-S3's **own (native) USB** | **`logger`** (the default) |
+| `USB-SERIAL CH340 (COM5)` | a CH340 USB-to-serial chip on the board | **`logger-uart`** |
+| `Silicon Labs CP210x USB to UART Bridge (COM5)` | a CP210x USB-to-serial chip | **`logger-uart`** |
+| Nothing new appears | charge-only cable, missing driver, or the board is not powered | try another cable; for CH340/CP210x install the driver from the chip maker; try the BOOT/RESET trick (A4.6) |
+
+4. **Note the COM number** (here `COM5`) and the name in the record sheet. The choice of build is **to verify** on the first bench day: if the serial monitor stays silent after flashing (A4.7), use the other build.
+
+#### A4.4 The buttons in the status bar (if you prefer clicking)
+
+Everything in this section can be done by typing `pio` commands **or** by clicking. The blue status bar at the bottom has, from left to right (hover over each to see its name):
+
+| Icon | Name (tooltip) | Same as typing |
+|---|---|---|
+| house | PlatformIO: Home | (opens PIO Home, not needed) |
+| check mark ✓ | PlatformIO: **Build** | `pio run` |
+| arrow → | PlatformIO: **Upload** | `pio run -t upload` |
+| trash can | PlatformIO: **Clean** | `pio run -t clean` |
+| plug | PlatformIO: **Serial Monitor** | `pio device monitor` |
+| `>_` | PlatformIO: **New Terminal** | (A4.2) |
+| `env:logger (firmware)` or `Default (firmware)` | **Switch environment** | `-e logger` / `-e logger-uart` |
+
+The **environment switch** decides which build the Build and Upload buttons use. Click it, then choose `env:logger` or `env:logger-uart` in the list that opens at the top. "Default" means the one in `platformio.ini` (`default_envs = logger`).
+
+The same actions are in the PlatformIO panel (ant-head icon) under **PROJECT TASKS > env:logger** (or **env:logger-uart**) **> General**: **Build**, **Upload**, **Monitor**, **Clean**.
+
+In this tutorial we type the commands: you see exactly which build you run, and the text is easy to copy into a report.
+
+#### A4.5 Build
+
+1. In the PlatformIO terminal (A4.2), in the `firmware` folder, build the default environment:
    ```powershell
    pio run
    ```
-   Expected: after a few minutes the first time (downloads), `[SUCCESS]` for the environment `logger`.
-   If not: read the first `error:` line. A download error means no internet or a proxy. A compile error should not happen (CI builds the same code): check you are on an unmodified copy and tell the supervisor.
-3. **Close any serial monitor** that is open (the port can only be used by one program). Then **flash**:
+   For a board that needs `logger-uart` (A4.3), build that one instead:
+   ```powershell
+   pio run -e logger-uart
+   ```
+2. **The first time**, PlatformIO downloads the ESP32 platform (espressif32 6.9.0, about 1 GB with the compiler), then the four libraries listed in `platformio.ini` (ModbusMaster, DHT sensor library, Adafruit Unified Sensor, ArduinoJson). You see lines such as `Platform Manager: Installing espressif32 @ 6.9.0` and `Library Manager: Installing ...`. Do not close VS Code. Expect 10 to 20 minutes on hotel or office WiFi.
+3. Then it compiles: many lines `Compiling .pio/build/logger/...`, then `Linking`, then the memory summary. Expected at the end (the numbers vary a little with each version):
+   ```
+   RAM:   [==        ]  16.8% (used 55052 bytes from 327680 bytes)
+   Flash: [======    ]  55.3% (used 1087925 bytes from 1966080 bytes)
+   ...
+   Environment    Status    Duration
+   -------------  --------  ------------
+   logger         SUCCESS   00:00:26.844
+   ========================= 1 succeeded in 00:00:26.844 =========================
+   ```
+   The file made is `firmware\.pio\build\logger\firmware.bin` (or `...\logger-uart\...`). Flash at about 55 % is expected: the other half is kept free for remote updates (OTA).
+4. If not:
+
+| What you see | Cause | What to do |
+|---|---|---|
+| `HTTPClientError`, `Could not resolve host`, a download timeout | no internet, or a proxy blocks `platformio.org` | try another network (phone hotspot), then `pio run` again: downloads resume |
+| `UnknownPackageError` or `PackageException` after a cut download | a half-downloaded package | delete the folder `C:\Users\<you>\.platformio\.cache` and run `pio run` again |
+| `error:` in a `.cpp` file | the code was changed, or it is not the version CI builds | `git status` must show no change; `git pull` to get the current version; tell the supervisor |
+| Very slow, the laptop fan runs | antivirus scanning every compiled file | normal the first time; ask IT to exclude `C:\Users\<you>\.platformio` and the project folder |
+| A path error with strange characters | the project path contains accents or is very long | move the project to a short path such as `C:\arkan\esp32-datalogging` |
+
+#### A4.6 Flash (upload)
+
+Before flashing:
+- **close every serial monitor** (VS Code monitor, Arduino IDE, PuTTY): only one program can use the COM port;
+- the board is plugged in with the data cable, and Device Manager shows its COM port (A4.3).
+
+1. Flash the default build:
    ```powershell
    pio run -t upload
    ```
-   Expected: the upload tool connects, writes, shows `Hash of data verified`, then `[SUCCESS]`.
-   If not ("No serial data received", "Failed to connect", "port busy"):
-   - close the serial monitor and any other serial program;
-   - give the port explicitly, with your COM number:
-     ```powershell
-     pio run -t upload --upload-port COM5
-     ```
-   - **the BOOT/RESET trick**: hold **BOOT**, press and release **RESET**, then release **BOOT**. The chip is now in **download mode** (the firmware is stopped, waiting for a new one). Run the upload again. When it ends, press **RESET** once to start the new firmware.
-4. **If the monitor stays empty after flashing** (A5, step 1 to 3 give no text, even after RESET and typing `help`), flash the other build:
+   or, for a `logger-uart` board:
    ```powershell
    pio run -e logger-uart -t upload
    ```
-   Expected: `[SUCCESS]`, and then text in the monitor.
+   PlatformIO builds first if needed, then starts the flashing tool (esptool). It finds the port by itself.
+2. Expected output (approximate; versions differ slightly):
+   ```
+   Auto-detected: COM5
+   Uploading .pio\build\logger\firmware.bin
+   esptool.py v4.5.1
+   Serial port COM5
+   Connecting...
+   Chip is ESP32-S3 (revision v0.2)
+   Features: WiFi, BLE
+   ...
+   Writing at 0x00010000... (2 %)
+   ...
+   Writing at 0x0010a3c4... (100 %)
+   Wrote 1092944 bytes (...) at 0x00010000 in 12.3 seconds (...)
+   Hash of data verified.
+   Leaving...
+   Hard resetting via RTS pin...
+   ========================= [SUCCESS] Took 35.2 seconds =========================
+   ```
+   `Hash of data verified.` is the important line: the firmware was written and read back correctly. The board then restarts on its own and runs the new firmware.
+3. **If it does not connect**, use the table:
 
-**Alternative without PlatformIO: the CI files.** Every push to GitHub is compiled by CI (GitHub Actions).
-1. On GitHub, open the repository, tab **Actions**, workflow **ci**, the latest green run of the branch you want.
-2. At the bottom, under **Artifacts**, download `firmware-<commit>`. It holds `logger/firmware.bin`, `logger/bootloader.bin`, `logger/partitions.bin` and `logger-uart/firmware.bin`.
-3. Flash them with the Espressif web flasher (esptool-js, in Chrome or Edge): **erase the flash first**, then `bootloader.bin` at `0x0`, `partitions.bin` at `0x8000`, `firmware.bin` at `0x10000` ([`../OFFICE-PREP.md` section 1](../OFFICE-PREP.md#1-build-and-flash)).
-4. **Erasing the flash also erases the settings** (NVS). Configure the logger again afterwards (A7).
+| Message | Cause | What to do |
+|---|---|---|
+| `Could not open COM5, the port doesn't exist` or `Access is denied` / `PermissionError` | a serial monitor or another program holds the port | close the monitor (in its terminal press `Ctrl+C`, or click the trash-can icon of that terminal), close Arduino IDE or PuTTY, try again |
+| `A fatal error occurred: Failed to connect to ESP32-S3: No serial data received` or `Wrong boot mode detected` | the chip did not enter download mode by itself | **BOOT/RESET trick** (below) |
+| Several COM ports, the wrong one is picked | another USB serial device is plugged in | give the port: `pio run -t upload --upload-port COM5` |
+| The COM number changes after each try | normal with the native USB: the port disappears and comes back at each reset | check Device Manager again, or let PlatformIO auto-detect |
 
-The CI artifact only has the bootloader and partition files of the `logger` build; for `logger-uart`, using the same two files is expected to work (same board and partition table) but is **to verify**.
+**The BOOT/RESET trick (download mode by hand).** The two small push buttons are on the board ([board map, 0.4.2](#042-the-board)): **BOOT** (top left corner) and **RESET** (just under BOOT) (sometimes marked `RST` or `EN`).
+1. Press and **hold BOOT**.
+2. While holding BOOT, press **RESET** once and release it.
+3. Release **BOOT**.
+   The chip now waits for a new firmware (the logger program is stopped; with the native USB the COM port may change number).
+4. Run the upload command again:
+   ```powershell
+   pio run -t upload
+   ```
+5. When it says `[SUCCESS]`, press **RESET** once. In download mode the flashing tool cannot always restart the chip by itself, so the old state stays until you press RESET.
+
+Typing the command several times if needed is safe: a failed upload does not damage the board. If it never connects, it is the cable, the driver or the port.
+
+#### A4.7 Check that the new firmware runs
+
+1. Open the serial monitor (A5 explains it in detail):
+   ```powershell
+   pio device monitor
+   ```
+2. Press **RESET** on the board, wait 5 seconds, type `status` and press Enter.
+   Expected: the first line says `firmware 0.3.0` (or the version you built; the version is set in `firmware/include/config.h`, `FW_VERSION`).
+3. **If the monitor stays empty** (no text at all, even after RESET and typing `status`), the board needs the other build. Close the monitor (`Ctrl+C`), then:
+   ```powershell
+   pio run -e logger-uart -t upload
+   ```
+   and check again. If `logger-uart` also gives no text, go back to `logger` and ask the supervisor (cable, port, or a board problem).
+4. Write in the record sheet: the build that works (`logger` or `logger-uart`), the COM port name in Device Manager, the firmware version shown by `status`.
+
+#### A4.8 Useful extra commands (only when needed)
+
+| Command | What it does | When |
+|---|---|---|
+| `pio run -t clean` | deletes the build files of the default environment | a strange build error after updating the code; then build again |
+| `pio device list` | lists the COM ports PlatformIO sees, with their names | to find the board's port without Device Manager |
+| `pio run -t erase` | **erases the whole flash, settings included** | only if the supervisor asks (a board that keeps crashing at boot). Afterwards flash again (A4.6) and configure again (A7) |
+| `git pull` | gets the latest code from GitHub (if you used `git clone` in A3) | before building a new version; then `pio run` |
+
+#### A4.9 Alternative without PlatformIO: the files built by GitHub (CI)
+
+Every push to GitHub is compiled by CI (GitHub Actions). You can flash those files with a web page instead of installing PlatformIO. **This way erases the settings**, so prefer PlatformIO for a board that is already configured.
+
+1. On GitHub, open the repository, tab **Actions**, workflow **ci**, the latest run with a green check.
+2. At the bottom of the run page, under **Artifacts**, download `firmware-<commit>` (a ZIP). It holds `logger/firmware.bin`, `logger/bootloader.bin`, `logger/partitions.bin` and `logger-uart/firmware.bin`.
+3. In Chrome or Edge, open the Espressif web flasher (esptool-js), click **Connect**, choose the board's COM port. If it does not connect, use the BOOT/RESET trick (A4.6).
+4. Click **Erase Flash** and wait for the end.
+5. Add the three files with these addresses, then **Program**:
+
+| File | Address |
+|---|---|
+| `bootloader.bin` | `0x0` |
+| `partitions.bin` | `0x8000` |
+| `firmware.bin` (of `logger` or `logger-uart`) | `0x10000` |
+
+6. Press **RESET**, then configure the logger again (A7): the erase removed the settings.
+
+The CI artifact only has the bootloader and partition files of the `logger` build; for `logger-uart`, using the same two files is expected to work (same chip and partition table) but is **to verify**.
 
 ### A5 First boot and the serial monitor
 
@@ -363,17 +550,17 @@ The **serial console** is a text window on the laptop where the logger prints wh
    [uptime 1s] TH1 sensor: aht (0x38)
    [uptime 1s] TH2 sensor: AM2301 on GPIO 4
    [uptime 1s] Meter: built-in FCN300 register table (19 values, not verified)
-   [uptime 1s] Meter: RS485 pins not set (pin_rs_tx / pin_rs_rx): meter reading disabled
+   [uptime 1s] Meter: RS485 pins not set (pin_rs_tx / pin_rs_rx): meter NOT read, records show EM01_n = 0
    [uptime 1s] Sampling every 15 s, ... columns
    [uptime 1s] Setup portal open: WiFi "ARKAN-LOG-0001", page http://192.168.4.1 (stays open: no WiFi set)
    [uptime 1s] Server https://arkan-monitoring.duckdns.org (TLS verified), upload every 60 s, live on, OTA on, remote settings on
    Type 'help' for the console commands.
    ```
    With the native USB build, the first lines are often printed before the laptop has reopened the port, so you may miss them. That is normal: use `status` (next step) instead.
-   "Meter reading disabled" is normal until the RS485 pins are set in T2. "RTC time invalid" is normal on a new board until WiFi (NTP) or `time set` gives it the time.
+   "Meter NOT read" is normal until the RS485 pins are set in T2 (until then the alarm A03 Meter not answering is expected on the VPS). "RTC time invalid" is normal on a new board until WiFi (NTP) or `time set` gives it the time.
 3. **Type `help` and press Enter.** What you type is not shown while you type; after Enter the logger prints `> help` and the list of commands.
    Expected: the list of commands (see the [cheat sheet](#console-command-cheat-sheet)).
-   If not: no text at all = wrong build (A4 step 4) or wrong port.
+   If not: no text at all = wrong build (A4.7 step 3) or wrong port.
 4. **Type `status`.** Expected, for example:
    ```
    Logger LOG-0001, firmware 0.3.0, CSV schema 3, up 42 s, boot poweron
