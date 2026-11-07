@@ -1935,7 +1935,7 @@ VPS commands with `docker compose` run in `/opt/arkan-monitoring/server`. `manag
 | Replay the alarm log | VPS | service stopped: `docker compose run --rm ingest python tools/manage.py alarms adab --rebuild` (C6) |
 | Daily summary | VPS | `manage.py daily adab` |
 | OED files | VPS | `manage.py export-oed adab [--from 2026-11-01] [--to 2026-11-30] [--all] [--out <folder>]` |
-| SD card backfill | VPS | `manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001` |
+| SD card backfill | VPS | service stopped: `docker compose run --rm ingest python tools/manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001` (C9) |
 | Publish a firmware | VPS | `manage.py publish-fw /data/firmware-upload-0.3.1.bin --version 0.3.1 [--device LOG-0001]` |
 | Remote settings | VPS | `manage.py set-config LOG-0001 key=value ...`, `manage.py show-config LOG-0001` |
 | Backup by hand | VPS | `/opt/arkan-monitoring/server/deploy/backup.sh` |
