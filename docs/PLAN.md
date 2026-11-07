@@ -1,6 +1,7 @@
 # Adab Hotel Energy Logger: Installation Plan
 
-Status: **DRAFT v0.9, 5 November 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+Status: **DRAFT v0.10, 7 November 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+v0.10: **firmware 0.1.0 and the ingest service written** (`firmware/`, `server/`; `docs/FIRMWARE.md`, `docs/VPS-SETUP.md`, `docs/OFFICE-PREP.md`). Storage: one CSV per UTC day, the day files are the upload queue (`docs/DATA-FORMAT.md`). Upload proposed as **CSV lines instead of JSON** (§5.2, `docs/QUESTIONS.md` Q1). The ingest service sits in `server/` here until `arkan-monitoring` exists (Q12).
 v0.9: the AM2301 (`TH2`) is **outdoors, beside the panel room, on 1 m of cable**, to monitor outdoor temperature and humidity; outdoor alarm limits proposed (A22 to A25), including the electrical room compared with outdoors.
 v0.8: the AM2301 (`TH2`) goes **outdoors or in another room**, not in the electrical room: longer cable, outdoor protection if outside, its own alarm lines (A22, A23).
 v0.7: a **second temperature and humidity sensor, AM2301**, on a cable (§2, §5); the sensors become a list (`TH1`, `TH2`) in the data, OED, the live page and the alarms (`applies_to` column, new A21).
@@ -175,6 +176,9 @@ The contract lives in `arkan-monitoring`. The firmware repository keeps a copy, 
 - **Setup:** WiFi credentials through a one-time setup page in access-point mode, stored in NVS.
 
 ### 5.2 Data contract (frozen in S1; field names follow the CMMS meter list)
+
+> **v0.10 proposal, implemented:** the logger uploads the **CSV lines of its day file** (header + up to 60 rows) instead of the JSON below; the columns are in `docs/DATA-FORMAT.md` §3. The JSON stays for the live snapshot. To confirm (`docs/QUESTIONS.md` Q1).
+
 ```json
 POST /api/v1/ingest   Authorization: Bearer <device-token>
 {

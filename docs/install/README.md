@@ -585,7 +585,7 @@ Meter label: FCN300-______ . Slave ID ____ . Baud ____ . Parity ____ . CT ____ /
 
 **Sketch.** [`labs/lab4_rssi_survey/lab4_rssi_survey.ino`](labs/lab4_rssi_survey/lab4_rssi_survey.ino) (not yet tested on the hardware).
 
-> **NOT BUILT YET:** the logger's WiFi setup page and uploader (session S2), the platform, the ingest API and the live page (sessions S3 and S5). Part A can be done now. Parts B to D describe the plan's design; run them when those parts exist, and update this lab with what you find.
+> **Now written, not yet tested on the board (7 November 2026):** the firmware (`firmware/`, setup portal and uploader) and the ingest service with its live page (`server/`). Parts B to D can be run with them: follow `docs/OFFICE-PREP.md` (tests T6 and T7) and `docs/VPS-SETUP.md`, and update this lab with what you find. OED itself is not installed yet (Part D, OED steps).
 
 ### Part A: RSSI survey (can be done now)
 
