@@ -3,3 +3,6 @@ firmware/.vscode/
 __pycache__/
 *.pyc
 server/.env
+server/deploy/oed/.env
+server/deploy/oed/*.env
+!server/deploy/oed/oed.env.example

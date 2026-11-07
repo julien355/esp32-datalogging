@@ -39,7 +39,9 @@ if [[ ! -f $DATA/devices.json ]]; then
 else
   say "exists: $DATA/devices.json (kept)"
 fi
-run chown -R $OWNER_UID:$OWNER_UID "$BASE"
+# Only our folders: /srv/arkan-monitoring/oed (OED's PostgreSQL, owned by the database container) must keep its owner.
+run chown $OWNER_UID:$OWNER_UID "$BASE"
+run chown -R $OWNER_UID:$OWNER_UID "$DATA" "$BASE/backups"
 run chmod 750 "$BASE" "$DATA" "$BASE/backups"
 
 step "Next steps"

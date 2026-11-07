@@ -1162,6 +1162,6 @@ Run on the VPS as `ai` unless marked. "OED folder" = `/opt/arkan-monitoring/serv
 11. Whether OED offers a way to remove or replace past cumulative readings (C.8).
 12. The draft Caddy file, `docker-compose.yml` and PostgreSQL settings, on a test run (they were checked for syntax only: `docker compose config` passed; Caddy was not available to validate).
 
-**Open points in our own files** (not changed by this tutorial; see the review notes):
-- The exporter writes energy readings minute by minute (`start = t`, `end = t + 1 min`), so a missing minute leaves a gap that OED drops for cumulative meters. Making each energy reading start at the end of the previous one (as the sensor readings already do) would remove the gap problem and the kW spike.
-- The exporter's closing message does not say `gzip: no`, which OED needs for our files (its default is yes).
+**Fixed in our files after review (7 November 2026):**
+- The exporter now chains the energy readings: each one starts where the previous one ended (up to a 60 minute gap), so a missing minute no longer leaves a hole that OED drops. Reading Gap 3600 on the energy meter stays as a safety net for longer gaps.
+- The exporter's closing message now says `headerRow=yes, gzip=no`.

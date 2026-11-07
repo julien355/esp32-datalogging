@@ -96,7 +96,7 @@ ts,EM01_v1,EM01_v1_min,EM01_v1_max,...,EM01_p,EM01_p_min,EM01_p_max,...,EM01_e,E
 
 The files are ready to load without change of format on our side:
 - **Temperature and humidity** go to OED as 5-minute readings (start = previous reading, end = the row's time).
-- **Energy**: `EM01_e` is the meter's own cumulative counter. OED takes it as a meter with `cumulative=yes`, and computes kWh per interval and kW. Gaps and logger reboots do not corrupt totals; a meter reset shows as the counter going down (alarm A19).
+- **Energy**: `EM01_e` is the meter's own cumulative counter. OED takes it as a meter with `cumulative=yes`, and computes kWh per interval and kW. The exporter chains the energy readings (each starts where the previous ended, across gaps up to 60 min), and the OED meter is set with Reading Gap 3600 s, so short gaps and logger reboots do not lose energy; after a longer gap OED drops the first reading (tutorial 3, B.5). A meter reset shows as the counter going down (alarm A19). Upload with `headerRow=yes`, `gzip=no`.
 - `manage.py export-oed adab [--from 2026-11-01] [--to 2026-11-30] [--all]` writes **one file per value** in OED's CSV upload format (`reading,start_timestamp,end_timestamp`, **WITA local time** because OED stores times without a timezone):
   - `adab-EM01-energy.csv` (cumulative=yes), `adab-TH1-temp.csv`, `adab-TH1-hum.csv`, `adab-TH2-temp.csv`, `adab-TH2-hum.csv`;
   - with `--all`: every value (`adab-EM01-v1.csv`, `adab-EM01-p.csv`, ...).

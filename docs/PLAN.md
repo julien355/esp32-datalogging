@@ -103,7 +103,7 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 | 23 | Meter variants | **Same registers for 3E4Y and 3EH4Y** | One register table; harmonics not read for now |
 | 24 | Alarms | **A register saying which alarms go to WhatsApp** | `docs/alarms/alarms.csv`, `whatsapp` column, editable in Excel (`docs/alarms/README.md`) |
 | 25 | RAM on the VPS | **Keep it low** | OED built off the VPS, slim image, tuned PostgreSQL, memory limits per container: about 300 to 450 MB in all (`docs/VPS-MEMORY.md`) |
-| 21 | Temperature and humidity in OED | Asked: can OED show them? | **Yes**, as "raw" units: line, 3D and radar graphs; not bar or compare graphs (§5.3, `docs/REUSE.md` §7) |
+| 21 | Temperature and humidity in OED | Asked: can OED show them? | **Yes**, as "raw" units: line graphs (3D and radar only on OED versions after v1.0.0); not bar or compare graphs (§5.3, `docs/REUSE.md` §7) |
 | 4 | Domain | **`arkan-monitoring.duckdns.org`** | New DuckDNS name pointing to hermes-vps; native Caddy gets the certificate |
 | 5 | Temp/RH | **Electrical room's air** | Alert on high room temperature (threshold to set) |
 | 6 | WiFi | **Staff network, password, no login page** | WPA2 credentials set through the logger's setup page, kept in NVS |
@@ -235,12 +235,12 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 
   | OED meter (site `adab`) | Unit in OED | Type | Graphs |
   |---|---|---|---|
-  | `adab-EM01-energy` | kWh (from the meter's cumulative counter, `cumulative=yes`) | quantity | line (shown as kW), bar (kWh per day, week), compare, map, 3D |
-  | `adab-TH1-temp` (electrical room), `adab-TH2-temp` (outdoor) | Celsius (built into OED) | raw | line, 3D, radar |
-  | `adab-TH1-hum`, `adab-TH2-hum` | **% RH** (a unit we add once, raw) | raw | line, 3D, radar |
-  | `adab-EM01-I1/I2/I3`, `-V1/V2/V3`, `-PF` (optional) | A, V, PF (units we add, raw) | raw | line |
+  | `adab-EM01-energy` | kWh (from the meter's cumulative counter, `cumulative=yes`) | quantity | line (shown as kW), bar (kWh per day, week), compare, map |
+  | `adab-TH1-temp` (electrical room), `adab-TH2-temp` (outdoor) | Celsius (built into OED) | raw | line |
+  | `adab-TH1-hum`, `adab-TH2-hum` | **% RH** (a unit we add once, raw) | raw | line |
+  | `adab-EM01-i1/i2/i3`, `-v1/v2/v3`, `-pf` (optional, lower case as the exporter writes them) | A, V, PF (units we add, raw) | raw | line |
 
-  - The group **`adab`** holds the site's meters; a group **"All sites"** holds the site groups.
+  - The group **`adab`** holds the site's **energy** meters; a group **"All sites"** holds the site groups. OED refuses meters without a common unit in one group, so temperature and humidity meters are not in groups (tutorial 3).
   - **OED stores times without a timezone**: the push sends WITA local time (UTC+8, no daylight saving). Our files stay in UTC.
   - **OED is not a live view.** Readings appear after each push (5 minutes) and daily graphs after its view refresh. The "now" values and the logger's health are on the live page of the ingest service, refreshed every 15 s.
   - The push is idempotent: it keeps, per site and meter, the last time sent, and can resend a whole day from the files.
@@ -266,7 +266,7 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 - `/opt/edge/sites/monitoring.caddy`, its own host block for `arkan-monitoring.duckdns.org`:
   - `/` goes to **OED**, `/live/` to the ingest service's live page, both behind `basicauth` with `import /opt/edge/secrets/hub-users.caddy` (**the same logins as the other dashboards**). OED's own admin login stays for its settings pages.
   - `/api/v1/ingest` and the device endpoints go to the ingest service **without basicauth**: the logger cannot sign in through it, so the device token is checked in the service.
-  - OED's own CSV upload API is **not** published: only the ingest service reaches it, inside the VPS.
+  - OED's own CSV upload API stays **behind the Arkan login** (OED's CSV upload page uses the same API, and the API also needs an OED user with the CSV role). The draft Caddy file has a commented block to close it completely once the automatic push exists (owner to decide).
   - The log filtered as in `cmms.caddy`, HSTS, `noindex`.
 - DuckDNS: create the `arkan-monitoring` name, point it to the VPS IP, and keep it updated the way the other duckdns names are.
 - Nightly backup of the data folder and an OED database dump (`pg_dump`), kept as in `arkan-hub/deploy/backup.sh`. OED can be rebuilt from the data folder at any time by resending.

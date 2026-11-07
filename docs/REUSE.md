@@ -84,15 +84,15 @@ Checked in the OED source code (`OpenEnergyDashboard/OED`, branch `development`,
 | Temperature | **Celsius and Fahrenheit are standard OED units, type `raw`**, with a built-in Celsius to Fahrenheit conversion. They are created hidden (`displayable: none`); the admin makes them visible | `src/server/util/insertData.js` |
 | Humidity | **No built-in unit.** The admin adds one (for example "% RH", type `raw`) on the Units page; OED allows any unit | `src/client/app/components/unit/` |
 | Line graph | Works for raw units (there are server tests for raw line readings). OED averages points when the range is long; "Redraw" brings back full resolution | `src/server/test/web/readingsLineMeterRaw.js` |
-| 3D and radar graphs | Work for raw units (the rate menu is hidden for them) | `GraphicRateMenuComponent.tsx` |
+| 3D and radar graphs | **Not in OED v1.0.0** (the pinned release: line, bar, compare, map only); on OED's development branch they work for raw units | `types/redux/graph.ts` (v1.0.0), `GraphicRateMenuComponent.tsx` (development) |
 | **Bar graph** | **Not for raw units**: "Cannot create bar graph on raw units such as temperature" | `BarChartComponent.tsx`, `translations/data.ts` |
 | **Compare graph** | **Not for raw units**: "Cannot create comparison graph on raw units such as temperature" | `CompareBarComponent.tsx` |
-| Data in | CSV upload by API: `POST /api/csv/readings` with `meterIdentifier`, an OED user with the CSV role, `cumulative`, `headerRow`, `refreshReadings` and more | `src/server/routes/csv.js`, `services/csvPipeline/` |
+| Data in | CSV upload by API: `POST /api/csv/readings` with `meterName` (OED v1.0.0; `meterIdentifier` only on OED's development branch), `email` and `password` of an OED user with the CSV role, `cumulative`, `headerRow`, `refreshReadings` and more | `src/server/routes/csv.js`, `services/csvPipeline/` |
 
 **In practice for Adab:**
-- Room temperature and humidity are two OED meters with raw units, shown as **line graphs over time** (day, week, month, with zoom) and in 3D (hour by day).
+- Room temperature and humidity are two OED meters with raw units, shown as **line graphs over time** (day, week, month, with zoom) and, after an OED upgrade, in 3D (hour by day).
 - No daily bar chart and no "this week vs last week" comparison for them. If wanted, the ingest service can also write a daily min/max file. OED cannot show it as a bar either, so it would go on our status page.
-- Energy (kWh) gets everything: line (as kW), bar (per day, week), compare, map, 3D.
+- Energy (kWh) gets everything: line (as kW), bar (per day, week), compare, map (3D after an OED upgrade).
 
 ### What OED does not do (kept in our ingest service)
 - Receive live posts from the logger: OED takes CSV uploads, so the service pushes every 5 minutes.

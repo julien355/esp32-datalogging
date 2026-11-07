@@ -314,6 +314,7 @@ def cmd_export_oed(store, a):
     keep = re.compile(r"^(EM\d+_e|TH\d+_t|TH\d+_rh)$") if not a.all else re.compile(r"^(?!.*_n$)[A-Za-z0-9]+_.+$")
     files = {}
     last_sensor = {}   # (device, column) -> time of the previous sensor value
+    last_end = {}      # (device, column) -> end of the previous energy reading
     for dev in store.site_devices(a.site):
         for t, row in read_rows(store, a.site, dev, a.date_from, a.date_to):
             start = t.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
@@ -329,6 +330,15 @@ def cmd_export_oed(store, a):
                     last_sensor[(dev, col)] = t
                     start_s = w_start.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
                     end_s = t.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
+                elif col.endswith("_e") or col.endswith("_eq"):
+                    # Cumulative counters: each reading starts where the previous one ended, so a missing minute
+                    # does not leave a hole in which OED would drop the energy (its default Reading Gap is 0).
+                    # After a gap of more than 60 min, a new chain starts at the row's own minute.
+                    p_end = last_end.get((dev, col))
+                    w_start = p_end if p_end and t - p_end <= timedelta(minutes=60) else t
+                    last_end[(dev, col)] = t + timedelta(minutes=1)
+                    start_s = w_start.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
+                    end_s = end
                 else:
                     start_s, end_s = start, end
                 name = oed_meter_name(a.site, col)
@@ -339,7 +349,7 @@ def cmd_export_oed(store, a):
                 files[name].write(f"{val},{start_s},{end_s}\n")
     for f in files.values():
         f.close()
-    print(f"{len(files)} file(s) in {out_dir} (header row: yes; *-energy files: cumulative=yes)")
+    print(f"{len(files)} file(s) in {out_dir} (upload with headerRow=yes, gzip=no; *-energy files: cumulative=yes)")
 
 
 def cmd_backfill(store, a):

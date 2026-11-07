@@ -328,13 +328,13 @@ class ToolsAndHttpTest(unittest.TestCase):
     def test_daily_backfill_export(self):
         base = datetime(2026, 11, 6, 15, 0, tzinfo=timezone.utc)   # 23:00 WITA
         rows = [row((base + timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ"), e=1000 + m * 0.5)
-                for m in range(120)]                                 # until 00:59 WITA on the 7th
+                for m in range(120) if m != 30]                      # one missing minute                                 # until 00:59 WITA on the 7th
         sd = os.path.join(self.data, "sdcopy", "data", "2026", "11")
         os.makedirs(sd)
         with open(os.path.join(sd, "2026-11-06.csv"), "w") as f:
             f.write(HEADER + "\n" + "\n".join(rows) + "\n")
         out = self.manage("backfill", "adab", "LOG-0001", os.path.join(self.data, "sdcopy"))
-        self.assertIn("120 new row(s)", out)
+        self.assertIn("119 new row(s)", out)
         self.manage("daily", "adab")
         with open(os.path.join(self.data, "sites", "adab", "daily.csv")) as f:
             lines = f.read().splitlines()
@@ -349,6 +349,8 @@ class ToolsAndHttpTest(unittest.TestCase):
             oed = f.read().splitlines()
         self.assertEqual(oed[0], "reading,start_timestamp,end_timestamp")
         self.assertEqual(oed[1], "1000.00,2026-11-06 23:00:00,2026-11-06 23:01:00")
+        self.assertEqual(oed[2], "1000.50,2026-11-06 23:01:00,2026-11-06 23:02:00")   # contiguous chain
+        self.assertEqual(oed[31], "1015.50,2026-11-06 23:30:00,2026-11-06 23:32:00")  # minute 30 missing: no hole
 
 
 if __name__ == "__main__":
