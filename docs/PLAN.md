@@ -83,7 +83,7 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
   - The AM2301's case is not waterproof and direct sun distorts the reading. Mount it in a **radiation shield** (louvred screen), **in permanent shade** (north or east face if possible, under the eaves), **sensor opening down**, about 1.5 m above the ground, away from AC condenser outlets, the genset exhaust and hot walls in the sun.
   - Leave a **drip loop** in the cable below the shield so water runs off before the gland.
   - Outdoors in the tropics, a reading of 99 to 100 % RH for hours after rain is normal; days at 100 % mean a wet sensor (alarm A25).
-  - **Calibration:** on the install day, note both sensors against a reference thermometer and hygrometer, and set an **offset per sensor** in `site.json` (`TH1` on the board reads a little warm from the board's own heat).
+  - **Calibration:** on the install day, note both sensors against a reference thermometer and hygrometer, and set an **offset per sensor** in the logger's settings (`th1_off_t`, `th1_off_rh`, `th2_off_t`, `th2_off_rh`; console, portal or `manage.py set-config`) (`TH1` on the board reads a little warm from the board's own heat).
 - **Library:** the Adafruit "DHT sensor library" (type `DHT21`/`AM2301`), or an RMT-based DHT driver on the ESP32 if timing errors show up with WiFi active.
 
 ## 3. Review answers (30 October 2026)
@@ -171,9 +171,9 @@ The contract lives in `arkan-monitoring`. The firmware repository keeps a copy, 
 - **Read:** Modbus RTU master (FCN300-3E4Y, register table in config: address, function code, type, word order, scale), temperature and humidity from **`TH1`** (I2C, on the board) and **`TH2`** (AM2301, single wire), DS3231 RTC, ADS1115 (later). The sensors are a list in the config (id, type, pin or address, location label), so a third sensor is a config line.
 - **Timestamp:** RTC, set by NTP when online. Everything is in UTC.
 - **Store-and-forward:** every record is written to the **SD card first** (daily CSV + a send queue), then uploaded. The backlog is sent when the link comes back, so nothing is lost.
-- **Uplink:** **HTTPS POST of JSON batches to `/api/v1/ingest`** with a per-device token.
+- **Uplink:** **HTTPS POST of CSV lines (the day file's header + up to 60 rows) to `/api/v1/ingest`** with a per-device token (agreed 7 November 2026; was JSON batches).
 - **Live:** every 15 s, a small snapshot of the live values to `/api/v1/live` (not buffered, best effort; `docs/LIVE.md`).
-- **Remote management:** OTA firmware updates pulled from the platform; remote config (intervals, Modbus address, register table); heartbeat (RSSI, uptime, free heap, SD state, backlog size, firmware version).
+- **Remote management:** OTA firmware updates pulled from the platform; remote config of the settings (intervals, Modbus address, offsets; not the register table, which is a file on the SD card); heartbeat (RSSI, uptime, free heap, SD state, backlog size, firmware version).
 - **Robustness:** watchdog, WiFi reconnect, keeps running if the SD card fails, logs a boot reason (a power cut shows as a cold boot after a gap).
 - **Setup:** WiFi credentials through a one-time setup page in access-point mode, stored in NVS.
 
@@ -199,7 +199,7 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 ```
 - The site is found from the device token, so the payload carries no site name.
 - `e` is the meter's **cumulative kWh counter**, stored as it is. Consumption is computed on the server, so gaps never corrupt totals.
-- `seq` drops duplicates when the backlog is resent.
+- Duplicates are dropped by timestamp `ts` when the backlog is resent (v0.10: no `seq`).
 - `env` is a **list of sensors**, one entry per sensor id. A sensor that failed its read sends `"err": "timeout"` (or `"checksum"`) instead of values, so a fault is never mistaken for a reading. The location of each id (for example "electrical room", "outside the box") is in `site.json`, not in the payload.
 
 ### 5.3 Platform (`arkan-monitoring`, Python 3.11 standard library)
@@ -222,7 +222,7 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 ```
 
 - **Plain CSV and JSON**: the files can be opened in Excel or read by Claude, Codex or PowerShell over SSH without the app, and copied site by site.
-- **Same CSV columns on the SD card and on the server.** Backfilling a gap is a copy of the SD card's day files into the site folder; the tool merges them by `seq` and drops duplicates.
+- **Same CSV columns on the SD card and on the server.** Backfilling a gap is a copy of the SD card's day files into the site folder; the tool merges them by timestamp `ts` and drops duplicates.
 - **Append-only day files.** A new day starts a new file. The daily and monthly files are rewritten through a temporary file that is then swapped in, so a reader never sees half a file (the CMMS rule).
 - **Size:** about 1,440 rows a day per logger, around 100 MB a year. A day chart reads one file; a month view reads `daily.csv`.
 - **Adding a site** = a new subfolder with its `site.json`, made by `tools/add_site.py`. **Removing or archiving a site** = moving its folder.
@@ -230,7 +230,7 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
 - If reading many files ever becomes slow, a cache can be added per site. It would be rebuilt from the CSV files, which stay the record.
 
 **The ingest service (`arkan-monitoring`, Python 3.11 standard library):**
-- **Ingest:** `/api/v1/ingest` checks the token and the schema, appends the rows to the site's day file, and answers with the last `seq` stored.
+- **Ingest:** `/api/v1/ingest` checks the token and the schema, appends the rows to the site's day file, and answers with the counts stored, duplicated and rejected and the last `ts`.
 - **Push to OED:** every 5 minutes, the new rows of each site go to OED's CSV upload API (`POST /api/csv/readings`, with an OED user that has the CSV role). One OED meter per measured value:
 
   | OED meter (site `adab`) | Unit in OED | Type | Graphs |

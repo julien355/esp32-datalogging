@@ -4,7 +4,7 @@ Lab manual, version 0.1, 5 November 2026. Based on `docs/PLAN.md` v0.9.
 
 This manual takes a group of students, under the supervision of an engineer, from a bare logger board on the bench to a commissioned logger at the Adab hotel. Each lab teaches the theory behind the step, then has you do it, measure it and write it down.
 
-> **Status of what you are installing.** The logger firmware and the monitoring platform are **not built yet** (sessions S2, S3 and S5 of the plan). The labs that depend on them (Lab 4 upload, Lab 7 data and alarm checks) describe the steps as the plan defines them; they are marked **NOT BUILT YET** and are run once those parts exist. Labs 1, 2, 3 and 5 can be run now with the test sketches in [`labs/`](labs/).
+> **Status of what you are installing (updated 7 November 2026).** The logger firmware (0.3.0) and the monitoring platform's ingest service are now **written** and tested in CI and with a simulated logger, **not yet on the real board**. The step-by-step guides that match them are the tutorials in [`../tutorials/`](../tutorials/) (logger on site, VPS, Open Energy Dashboard); where this manual and a tutorial disagree, **the tutorial is right** (upload format, sensor timing, settings). Labs 1, 2, 3 and 5 use the test sketches in [`labs/`](labs/).
 
 > **Facts still to verify.** The pin map, the meter register map and its scaling are **not verified**. They are marked **to verify** wherever they appear. Part of your job in these labs is to verify them and record the result. Never treat a "to verify" value as a fact until your record sheet, signed by the supervisor, says it is.
 
@@ -193,7 +193,7 @@ Read the section before the lab that uses it. Each section ends with what you wi
 
 ### 4.0 The whole system in one paragraph
 
-The logger is a **Modbus master**: every 15 s it asks the meter (the **slave**) for its registers; it reads both temperature and humidity sensors every 15 to 60 s (the plan gives both figures: to settle in the firmware); it stamps the record with the RTC time in UTC, writes it to the SD card first, then sends it over HTTPS to the platform. Records are averaged to 1 minute and uploaded every minute; a small snapshot goes to the live page every 15 s. If the network is down, the SD card queue keeps the records and sends the backlog later (store and forward). Drawing (a).
+The logger is a **Modbus master**: every 15 s it asks the meter (the **slave**) for its registers; it reads both temperature and humidity sensors every 15 s too; it stamps the record with the RTC time in UTC, writes it to the SD card first, then sends it over HTTPS to the platform. Meter values are recorded every minute (mean, min and max of the four samples), temperature and humidity as 5-minute averages, and uploaded every minute; a small snapshot goes to the live page every 15 s. If the network is down, the SD card queue keeps the records and sends the backlog later (store and forward). Drawing (a).
 
 ### 4.1 ESP32-S3 and 3.3 V logic
 
@@ -478,7 +478,7 @@ Worked example: outdoors T = 29.8 C, RH = 66.5 %: gamma = ln(0.665) + 17.62 x 29
 
 **Theory.** 4.4, 4.5, 4.6. Drawing (c).
 
-**Equipment.** Board, USB-RS485 adapter, 2 m of the RS485 cable, laptop with Python and `minimalmodbus`, multimeter, 120 ohm resistor. For part B and C: the meter at the hotel (**no spare meter yet**, owner, 30 October 2026), the electrician, a camera.
+**Equipment.** Board, USB-RS485 adapter, 2 m of the RS485 cable, laptop with Python and `minimalmodbus`, multimeter, 120 ohm resistor. For part B and C: the **spare meter at the office** (owner, 7 November 2026) or the meter at the hotel, the electrician, a camera.
 
 **Sketch and script.** [`labs/lab3_modbus_dump/lab3_modbus_dump.ino`](labs/lab3_modbus_dump/lab3_modbus_dump.ino) and [`labs/modbus_dump.py`](labs/modbus_dump.py) (neither tested on the hardware yet). The plan also foresees `tools/modbus_dump.py` in session S2; until then use this one.
 
@@ -595,21 +595,21 @@ Meter label: FCN300-______ . Slave ID ____ . Baud ____ . Parity ____ . CT ____ /
 4. Hold the board **against the steel panel** and record again: see how much the steel costs you.
 5. Note the WiFi **channel** and whether the network is 2.4 GHz (the ESP32-S3 has no 5 GHz radio).
 
-### Part B: WiFi setup page (NOT BUILT YET, from plan section 5.1)
+### Part B: WiFi setup page
 
 1. Power the logger. With no WiFi stored, it starts an **access point** (name and password to be given by the firmware docs).
 2. Join it from a phone. The setup page opens. Enter the **staff network name and WPA2 password**. The logger stores them in **NVS** (its non-volatile memory) and restarts as a WiFi client.
 3. Check in the logger's status (setup page or serial log): connected, IP address, RSSI, NTP time synchronised.
 4. Never write the WiFi password in your report or a photo. Record only "set by (name) on (date)".
 
-### Part C: posting to the platform (NOT BUILT YET, from plan sections 5.2 to 5.4)
+### Part C: posting to the platform
 
-1. The owner creates the device and its **token** with the `arkan-monitoring` tools (`add_site`, device `LOG-0001` on site `adab`) and gives it to the supervisor. The token is entered in the logger's config. It is a secret: not in photos or reports.
-2. The logger POSTs records to `/api/v1/ingest` every minute (HTTPS, `Authorization: Bearer <device token>`), as JSON (plan section 5.2): one record per minute with `ts` (UTC), `seq`, the `env` list (`TH1`, `TH2`), the `meters` list (`EM01`) and `sys` (RSSI, uptime, backlog, boot reason).
+1. The owner creates the device and its **token** with `manage.py add-device adab LOG-0001` on the VPS and gives it to the supervisor. The token is entered in the logger's config. It is a secret: not in photos or reports.
+2. The logger POSTs records to `/api/v1/ingest` every minute (HTTPS, `Authorization: Bearer <device token>`), as **CSV lines** of its day file: the header line, then one row per minute with `ts` (UTC), the meter values (`EM01_...`), the sensors (`TH1_t`... every 5 minutes) and the health columns (`rssi`, `up_s`, `backlog_min`, `sd`, `boot`). Columns: [`../DATA-FORMAT.md`](../DATA-FORMAT.md).
 3. The supervisor (or the owner) checks on the VPS that the day file grows: `/srv/arkan-monitoring/data/sites/adab/LOG-0001/raw/YYYY/MM/YYYY-MM-DD.csv`.
-4. **Store and forward test:** switch off the WiFi for the logger (the supervisor removes the credentials or takes the logger out of range) for 10 minutes. Check that `sys.backlog` grows, then that, once back, the missing minutes arrive and there is **no gap** in the day file (each `seq` once).
+4. **Store and forward test:** switch off the WiFi for the logger (the supervisor removes the credentials or takes the logger out of range) for 10 minutes. Check that `backlog_min` grows, then that, once back, the missing minutes arrive and there is **no gap** in the day file (each timestamp `ts` once).
 
-### Part D: live page and OED (NOT BUILT YET)
+### Part D: live page and OED (OED not installed yet: tutorial 3)
 
 1. Open `https://arkan-monitoring.duckdns.org/live/adab/` with the Arkan login. Expect tiles for kW, kVA, PF, Hz, V and I per phase, `TH1` and `TH2`, updated every 15 s, with the status line "Live, updated N s ago" (`docs/LIVE.md`).
 2. Compare one tile with the meter's LCD at the same moment.
@@ -641,7 +641,7 @@ Meter label: FCN300-______ . Slave ID ____ . Baud ____ . Parity ____ . CT ____ /
 
 1. The mean RSSI is -72 dBm. By how much (as a ratio) must the received power increase to reach -66 dBm? What could you change on site?
 2. Why does the logger write to the SD card **before** uploading?
-3. Why does the payload carry `seq`? What would happen on resend without it?
+3. The server drops a row whose timestamp `ts` it already has. Why does that make resending safe? What would happen without it?
 4. The live snapshot is not stored or resent. Why is that acceptable, and what keeps the history complete?
 5. Why does the platform store UTC but OED show WITA?
 
@@ -788,7 +788,7 @@ Meter label: FCN300-______ . Slave ID ____ . Baud ____ . Parity ____ . CT ____ /
 
 **Equipment.** Laptop, reference thermometer and hygrometer, camera, the platform login, the alarm register, the record sheets of Labs 1 to 6.
 
-> **NOT BUILT YET:** the firmware, the platform, the live page and the alarms. This lab is written from the plan; run it once sessions S2 to S6 are done, and correct it with what you find.
+> **Now built (7 November 2026), not yet run on site:** the firmware, the platform, the live page and the alarm log (WhatsApp alerts come in S6). Follow [`../tutorials/1-LOGGER-ON-SITE.md`](../tutorials/1-LOGGER-ON-SITE.md) part B for the commissioning steps, and correct this lab with what you find.
 
 ### Part A: checklist before power
 
@@ -835,7 +835,7 @@ Take 3 readings 1 minute apart with the reference instrument beside `TH1` (insid
 After 24 hours (from 00:00 WITA to 00:00 WITA, which is 16:00 to 16:00 UTC):
 
 1. Count the 1-minute records in the day files: expect **1440** (more than 99 % = at least 1426 for the 7-day validation of phase P7).
-2. Look for gaps (missing minutes) and duplicates (same `seq` twice): none expected.
+2. Look for gaps (missing minutes) and duplicates (same `ts` twice): none expected.
 3. Plot kW and both temperatures over the day in OED: does the shape make sense (hotel load higher in the evening, outdoor temperature peaking early afternoon)?
 4. Check that `e` (kWh) only ever increases (alarm A19 otherwise).
 5. Check the number of sensor read errors and Modbus timeouts in the heartbeat.

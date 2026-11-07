@@ -38,4 +38,4 @@ Everything above sits in a **register table in the logger's config**: address, f
    - print each word as u16, s16, and pairs as u32/s32/float in both word orders.
 2. Photograph the LCD pages at the same moment (V, A, kW, PF, Hz, kWh).
 3. Match each LCD value to a register and a scale; write the result in `fcn300-3e4y-verified.md`.
-4. **No spare meter yet** (owner, 30 October 2026), so this happens at the hotel during a first short visit, before the install. A spare bought later lets the firmware be tested at the office and serves the next sites.
+4. **A spare meter is at the office** (owner, 7 November 2026): the check is done on the bench before the install (`docs/OFFICE-PREP.md` T4). **Check the ranges too:** with the guide's scales, a 16-bit current x 0.001 cannot exceed 65.5 A and a 16-bit power x 0.001 cannot exceed 32.8 kW, below what an 82.5 kVA hotel draws (up to 125 A per phase). If the meter really uses 16 bits, its values are secondary (before the CT ratio) or scaled differently; settle it with a load on the spare meter and the CT ratio in its menu.

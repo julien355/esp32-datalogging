@@ -44,7 +44,7 @@ The logger does not decide alarms: the VPS checks every record against the alarm
 One CSV file per UTC day, same columns as the server's files. **The day files are the upload queue**: an upload pointer (`/state/upload.txt`: day, part, byte offset) says how far the server has confirmed. Nothing is written twice. Details and the reasons in [`DATA-FORMAT.md`](DATA-FORMAT.md).
 - Append, then close, every minute: a power cut loses at most the minute being written. A half-written last line is closed at the next boot and refused by the server.
 - If the columns change during a day (new meter, sensor switched off), a new file `YYYY-MM-DD_2.csv` starts: never two layouts in one file.
-- **SD card failure:** records go to a RAM queue (180 rows = 3 h) and are uploaded from there; the card is re-mounted every minute; when it is back, the RAM rows are written to it.
+- **SD card failure:** records go to a RAM queue (180 rows = 3 h) and are uploaded from there; the card is re-mounted every minute; when it is back, the RAM rows **not yet uploaded** are written to it (rows uploaded from RAM while the card was out are on the VPS only, so the card copy has a gap there). There is no eject command: switch the power off before removing the card.
 - **Card nearly full** (below `sd_min_free` %): the oldest day files **already uploaded** are deleted. Unsent data is never deleted. A 16 GB card holds over 50 years at about 260 MB a year, so this is a safety net only.
 - **Event log** `/log/YYYY-MM.log`: boots and their reason, WiFi up/down, NTP corrections, settings changed, upload errors, SD errors, OTA.
 

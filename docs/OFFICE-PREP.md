@@ -61,7 +61,7 @@ reboot
 
 **B. Setup portal** (phone only): join WiFi `ARKAN-LOG-0001`, password `arkan-setup`, the page http://192.168.4.1 opens. Fill in, "Save and restart".
 
-**C. SD card file** (preparing several loggers): `manage.py add-device adab LOG-0001 --sd-settings settings.txt` writes the file; add the WiFi lines; copy it to the card as `/config/settings.txt`; power the logger: it applies it, deletes the file, restarts.
+**C. SD card file** (preparing several loggers): on the VPS, `manage.py add-device adab LOG-0001 --sd-settings /data/export/settings-LOG-0001.txt` writes the file into the data folder (`/srv/arkan-monitoring/data/export/` on the host; the container is read-only elsewhere); copy it to the laptop and delete it from the VPS; add the WiFi lines; copy it to the card as `/config/settings.txt`; power the logger: it applies it, deletes the file, restarts.
 
 Check with `show` (secrets appear as `******`) and `status`.
 
@@ -92,7 +92,7 @@ The spare FCN300 at the office (owner, 7 November 2026) moves the register check
 2. RS485 wiring: A to A, B to B, shielded twisted pair, 120 ohm termination jumper on at the logger end.
 3. `mb 1 3 0 64`, then `mb 1 4 0 64`. Timeouts: swap A/B, check address and baud (`set mb_baud`, `set meters EM01:<addr>`).
 4. At the same moment, photograph the LCD pages (V, A, kW, kvar, kVA, PF, Hz, kWh) and compare word by word: which register, which scale, which word order. Use `docs/install/labs/modbus_dump.py` on the laptop for the 32-bit pairs.
-5. Write the result in `docs/meter/fcn300-3e4y-verified.md`. Corrections go in `/config/registers.csv` on the card (start from the output of `regs`), or are sent later with `manage.py set-config`: **no reflashing needed**.
+5. Write the result in `docs/meter/fcn300-3e4y-verified.md`. Corrections go in `/config/registers.csv` on the card (start from the output of `regs`): **no reflashing needed**. (Remote settings cannot change the register table; only `meters`, `mb_baud`, `mb_format` and `ct_mult` can be changed remotely.) **Check the ranges:** with the guide's 16-bit scales, current cannot exceed 65.5 A and power 32.8 kW; see `docs/meter/README.md` step 4.
 6. `status`: `EM01_v1=...` etc. within 1 % of the LCD. Switch the load on and off: kW and A follow; `EM01_e` counts up.
 7. **Power quality check:** switch a heavy load on and off a few times. The minute's `EM01_v1_min` / `_max` and `EM01_p_max` show the step even when the mean barely moves.
 8. **CT direction check:** reverse one CT on purpose for 6 minutes: the alarm log shows **A30 Negative power on a phase**. Put it back.
@@ -122,7 +122,7 @@ The spare FCN300 at the office (owner, 7 November 2026) moves the register check
 
 ### T9. SD card removed
 1. Pull the SD card while running. `status`: `SD: FAILED`, `RAM queue n rows`; uploads go on from RAM.
-2. Put it back: within a minute, "SD card back", the RAM rows are written to the card.
+2. Put it back: within a minute, "SD card back"; the RAM rows not yet uploaded are written to the card (rows already uploaded from RAM are on the VPS only). Always switch the power off before removing the card in normal use: there is no eject command.
 
 ### T10. Server down / wrong token
 1. On the VPS: `docker compose stop ingest` for 10 minutes, then `start`: same result as T7, no loss.

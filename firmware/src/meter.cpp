@@ -40,6 +40,7 @@ static Meter meters[MAX_METERS];
 static int nMeters = 0;
 static double ctMult = 1;
 static int dePin = -1;
+static bool portOk = false;   // RS485 pins set and the port started
 static ModbusMaster node;
 
 struct Block {
@@ -172,8 +173,9 @@ void begin(fs::FS *sd) {
   int tx = cfg::getInt("pin_rs_tx"), rx = cfg::getInt("pin_rs_rx");
   dePin = cfg::getInt("pin_rs_de");
   if (tx < 0 || rx < 0) {
-    evlog("Meter: RS485 pins not set (pin_rs_tx / pin_rs_rx): meter reading disabled");
-    nMeters = 0;
+    // Keep the meters in the configuration: their columns stay in the record (empty, EM01_n = 0),
+    // so the platform raises A03 "Meter not answering" instead of the fault going unnoticed.
+    evlog("Meter: RS485 pins not set (pin_rs_tx / pin_rs_rx): meter NOT read, records show EM01_n = 0");
     return;
   }
   if (dePin >= 0) {
@@ -183,6 +185,7 @@ void begin(fs::FS *sd) {
   String fmt = cfg::get("mb_format");
   uint32_t serialCfg = fmt == "8E1" ? SERIAL_8E1 : fmt == "8O1" ? SERIAL_8O1 : fmt == "8N2" ? SERIAL_8N2 : SERIAL_8N1;
   Serial1.begin(cfg::getInt("mb_baud"), serialCfg, rx, tx);
+  portOk = true;
   node.preTransmission(preTx);
   node.postTransmission(postTx);
   evlog("Meter: %d meter(s), RS485 TX=%d RX=%d DE=%d %ld %s, %d request(s) per read", nMeters, tx, rx,
@@ -218,6 +221,10 @@ static double decode(const Reg &r, uint16_t w0, uint16_t w1) {
 bool read(int i, double *values, bool *ok) {
   for (int j = 0; j < nRegs; j++) ok[j] = false;
   if (i >= nMeters) return false;
+  if (!portOk) {
+    st.meterFailRun[i] = st.meterFailRun[i] + 1;
+    return false;
+  }
   node.begin(meters[i].slave, Serial1);
   bool any = false;
   for (int b = 0; b < nBlocks; b++) {

@@ -5,7 +5,7 @@
 | # | Question | Decision | Done in |
 |---|---|---|---|
 | | Sensors in the record | **1-minute average only** | firmware 0.2.0 (no sample count, no min/max for TH1, TH2) |
-| | Alarm and warning log | **Add it**, with a recommended list | `docs/alarms/` (34 alarms, 31 enabled), VPS log `sites/<site>/alarms/<year>.csv` |
+| | Alarm and warning log | **Add it**, with a recommended list | `docs/alarms/` (37 alarms, 34 enabled since the second round), VPS log `sites/<site>/alarms/<year>.csv` |
 | Q1 | Upload format | **CSV** | done (PLAN.md §5.2 updated) |
 | Q3 | Min and max per minute | **Yes, min and max: power quality analysis** | firmware 0.2.0: mean, `_min`, `_max` for every meter value |
 | Q6 | Open Energy Monitoring = Open Energy Dashboard | **Yes, OED** | export format kept |
