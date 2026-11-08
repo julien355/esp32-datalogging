@@ -7,6 +7,10 @@
       sites/<site>/<device>/raw/YYYY/MM/YYYY-MM-DD.csv   1-minute records of that UTC day
       sites/<site>/<device>/raw/YYYY/MM/YYYY-MM-DD_2.csv  same day, if the columns changed
       sites/<site>/<device>/events.jsonl   boots, firmware changes, column changes
+      sites/<site>/<device>/config.json    remote settings asked (manage.py set-config, register page)
+      sites/<site>/<device>/registers.json meter register table asked (register page, manage.py set-registers)
+      sites/<site>/<device>/registers-history.jsonl   every register table version sent
+      sites/<site>/<device>/settings-reported.json    what the logger reported after its last boot
       sites/<site>/daily.csv               one row per local day (tools/manage.py daily)
 
 The day files have exactly the columns of the logger's SD card files, so an SD card copy can
@@ -312,9 +316,70 @@ class DataStore:
                 old = json.load(f).get("cfg_version")
         except (FileNotFoundError, ValueError):
             pass
+        old_reg = None
+        try:
+            with open(p, encoding="utf-8") as f:
+                old_reg = json.load(f).get("reg_version")
+        except (FileNotFoundError, ValueError):
+            pass
         atomic_write(p, json.dumps(report, indent=2, sort_keys=True) + "\n")
         if old != report.get("cfg_version"):
             self.event(site, device, "config_applied", {"version": report.get("cfg_version")})
+        if "reg_version" in report and old_reg != report.get("reg_version"):
+            self.event(site, device, "registers_applied", {"version": report.get("reg_version"),
+                                                           "source": report.get("reg_source")})
+
+    def get_report(self, site, device):
+        try:
+            with open(os.path.join(self.device_dir(site, device), "settings-reported.json"), encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, ValueError):
+            return None
+
+    # ------------------------------------------------------------------ register table
+    # registers.json: the table the platform wants on the logger (GET /api/v1/registers).
+    # registers-history.jsonl: every version ever sent, newest last, so any one can be sent again.
+    def registers_path(self, site, device):
+        return os.path.join(self.device_dir(site, device), "registers.json")
+
+    def registers_history_path(self, site, device):
+        return os.path.join(self.device_dir(site, device), "registers-history.jsonl")
+
+    def get_registers(self, site, device):
+        try:
+            with open(self.registers_path(site, device), encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, ValueError):
+            return None
+
+    def registers_history(self, site, device):
+        out = []
+        try:
+            with open(self.registers_history_path(site, device), encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        out.append(json.loads(line))
+                    except ValueError:
+                        continue
+        except FileNotFoundError:
+            pass
+        return out
+
+    def set_registers(self, site, device, csv_text=None, builtin=False, by="", comment=""):
+        """csv_text: a checked, normalised table (registers.to_csv). builtin=True: the logger deletes its
+        /config/registers.csv and goes back to the table built into its firmware. Returns the new version."""
+        with self.lock:
+            cur = self.get_registers(site, device) or {}
+            hist = self.registers_history(site, device)
+            ver = max([int(cur.get("version", 0))] + [int(h.get("version", 0)) for h in hist]) + 1
+            entry = {"version": ver, "builtin": bool(builtin), "csv": None if builtin else csv_text,
+                     "updated": iso_now(), "by": by or "", "comment": (comment or "")[:200]}
+            atomic_write(self.registers_path(site, device), json.dumps(entry, indent=2, sort_keys=True) + "\n")
+            p = self.registers_history_path(site, device)
+            with open(p, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, sort_keys=True) + "\n")
+        self.event(site, device, "registers_set", {"version": ver, "builtin": bool(builtin), "by": by or ""})
+        return ver
 
     # ------------------------------------------------------------------ reading
     def sites(self):

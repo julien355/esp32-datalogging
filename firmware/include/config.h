@@ -3,7 +3,7 @@
 // the setup portal or /config/settings.txt on the SD card.
 #pragma once
 
-#define FW_VERSION "0.3.1"
+#define FW_VERSION "0.4.0"
 #ifndef FW_VARIANT
 #define FW_VARIANT "usb"        // set per build env in platformio.ini: "usb" (native USB) or "uart"
 #endif

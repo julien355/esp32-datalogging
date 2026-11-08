@@ -8,7 +8,7 @@
 <style>
   body{font-family:system-ui,sans-serif;margin:0;background:#f5f6f8;color:#1f2933}
   header{background:#0f2747;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
-  header a{color:#cfe0ff}
+  header a{color:#cfe0ff;margin-left:12px}
   main{padding:12px;max-width:1100px;margin:auto}
   .status{margin:8px 0;font-weight:600}
   .ok{color:#127a3a}.bad{color:#b42318}
@@ -33,7 +33,7 @@
 </style>
 </head>
 <body>
-<header><strong id="title">Live</strong><a href="/live/">All sites</a></header>
+<header><strong id="title">Live</strong><span><a id="regLink" href="/live/" hidden>Meter registers</a> <a href="/live/">All sites</a></span></header>
 <main>
   <div id="status" class="status">Loading...</div>
   <div id="content"></div>
@@ -43,6 +43,7 @@
 const m = location.pathname.match(/^\/live\/([a-z0-9-]+)\/?$/);
 const site = m ? m[1] : null;
 const el = id => document.getElementById(id);
+if (site) { el('regLink').href = `/live/${site}/register`; el('regLink').hidden = false; }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 function spark(points) {

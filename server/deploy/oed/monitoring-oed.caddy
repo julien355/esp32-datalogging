@@ -2,7 +2,7 @@
 # Variant of server/deploy/monitoring.caddy for when Open Energy Dashboard (OED) is installed.
 # It REPLACES /opt/edge/sites/monitoring.caddy on hermes-vps (native Caddy 2.6, imported by the main Caddyfile).
 #   /                 -> OED (127.0.0.1:8810), behind the Arkan login
-#   /live/, /api/v1/*, /health -> our ingest service (127.0.0.1:8800), behind the Arkan login
+#   /live/ (and /live/<site>/register), /api/v1/*, /health -> our ingest service (127.0.0.1:8800), behind the Arkan login
 #   logger endpoints  -> our ingest service, NO web login (the device token is checked by the service)
 # OED uses only /api/<name> paths (users, meters, readings, csv, ...), never /api/v1, /live or /health
 # (OED v1.0.0 src/server/app.js), so the two never collide.
@@ -20,7 +20,7 @@ arkan-monitoring.duckdns.org {
 
 	# Loggers: token checked by the service, body size capped here too (unchanged).
 	@device {
-		path /api/v1/ingest /api/v1/ota /api/v1/firmware/* /api/v1/config /api/v1/config/report
+		path /api/v1/ingest /api/v1/ota /api/v1/firmware/* /api/v1/config /api/v1/config/report /api/v1/registers
 	}
 	@livepost {
 		method POST

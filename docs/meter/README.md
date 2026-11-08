@@ -69,7 +69,7 @@ Function code 3. Slave 1, 9600 baud, 8-N-1 (read the real values on the meter's 
 - Energy: 0x0018 (high word) + 0x0019 (low word), kWh = (high x 65536 + low) / 100
 - CT ratio: 0x0030 / 0x0031 (read only; do not write)
 
-Everything above sits in a **register table**: address, function code, type (u16, s16, u32, s32, float), word order, scale, whether `ct_mult` applies. A correction found on site is a file change on the SD card, not a firmware change. **Remote settings cannot change the table; they can change `ct_mult`.**
+Everything above sits in a **register table**: address, function code, type (u16, s16, u32, s32, float), word order, scale, whether `ct_mult` applies. A correction found on site is a file change on the SD card, not a firmware change. Since firmware 0.4.0 the table can also be sent remotely, from the platform's page `/live/<site>/register` (see "Changing the register table" below), as can `ct_mult`.
 
 ## 4. On-site register check (first visit, supervisor with the laptop)
 
@@ -94,7 +94,7 @@ Everything above sits in a **register table**: address, function code, type (u16
    Nothing matches in 0x0000 to 0x003F: dump wider (`--count 256`), on both function codes, and look at the float columns (a pair near 231.0 or 50.0 is a float32 map; try both word orders).
 5. **Apply the correction rule per value** (also in the header of the CSV): new scale = old scale x (LCD value / value the logger shows).
    - ratio 1 (within 2 %): keep;
-   - ratio = the CT ratio (50): the meter sends secondary values. Keep `ct = 1` and set `ct_mult` to the ratio (console `set ct_mult 50` then `reboot`, or remotely with `manage.py set-config LOG-0001 ct_mult=50`: applied within 15 minutes, the logger restarts once); if the energy counters are off by the same ratio, set `ct = 1` on `e` and `eq`;
+   - ratio = the CT ratio (50): the meter sends secondary values. Keep `ct = 1` and set `ct_mult` to the ratio (console `set ct_mult 50` then `reboot`, or remotely from the register page's **Meter link settings** or with `manage.py set-config LOG-0001 ct_mult=50`: applied within 15 minutes, the logger restarts once); if the energy counters are off by the same ratio, set `ct = 1` on `e` and `eq`;
    - ratio 10, 100, 1000 (or 0.1, ...): wrong decimal point: change the scale in `registers.csv`;
    - a value that is its own special case (a power in a 32-bit pair, a word-swapped pair): change `type` (`u32`, `s32`, `u32sw`, `s32sw`, `f32`, `f32sw`) and the number of registers it takes; a 32-bit value uses two addresses, so move the neighbours.
    One place to look is easier than two: when I and P need different factors, set `ct = 0` on them and put the whole factor in each scale.
@@ -104,3 +104,31 @@ Everything above sits in a **register table**: address, function code, type (u16
 9. **Write it down:** `docs/meter/fcn300-3e4y-verified.md` (raw dump, LCD photos, final table, CT ratio) and commit the final `registers.csv` here so the next logger starts from it.
 
 If the dump contradicts the guide and no scale or type fixes it, **do not stay on site experimenting**: keep the dump and the photos, send them (a new table is quick to build from a dump), and ask the supplier or FORT for the "communication protocol" sheet of the exact model.
+
+## Changing the register table
+
+A wrong register, a wrong scale, or a different meter: the table changes, the firmware does not.
+
+**Where the table lives**
+
+| Place | What |
+|---|---|
+| `firmware/src/meter.cpp` (`DEFAULT_TABLE`) | Built into the firmware. Used when the SD card has no `/config/registers.csv` |
+| SD card `/config/registers.csv` | Replaces the whole built-in table when present. `registers.bak` next to it is the previous one |
+| Platform, `sites/<site>/<device>/registers.json` | The table last sent from the page `/live/<site>/register`. `registers-history.jsonl`: every version sent |
+| Logger's report (`settings-reported.json`) | The table the logger actually reads, its source (`sd` or `builtin`) and the version applied |
+
+**From the page `https://arkan-monitoring.duckdns.org/live/adab/register`** (link "Meter registers" at the top of the site's live page; Arkan login; logger firmware 0.4.0 or later). If the site has several loggers, a list at the top right chooses one (`?device=LOG-0002`).
+
+1. The top box shows the table **on the logger** and what was **last sent**, with a state: *No table sent*, *Waiting*, *Applied*, *Differs*, *Refused*, *Firmware too old*.
+2. The editor opens with the logger's table. Change a line, add or delete lines, or load one: *Table on the logger*, *Last sent*, any version in the **History**, or **Import CSV file...** (for example the table written during the on-site check, section 4). *Edit as text* takes a pasted table. *Download CSV* saves the table being edited. Yellow lines differ from the logger's, green lines are not on the logger.
+3. **Check** shows the errors (nothing can be sent until they are fixed) and the warnings (for example a standard name missing: the alarms that use it stop).
+4. Write why in the comment box, then **Send to the logger**. The logger takes it at its next check (every 15 min, or the console command `config`), checks it again, writes `/config/registers.csv` (the old file becomes `registers.bak`) and restarts. Click **Refresh**: the state goes to **Applied** once the logger has reported after its restart.
+5. **Back to the built-in table** makes the logger rename its file to `registers.bak` and use the firmware's table.
+6. **Meter link settings** (same page): `meters` (id and Modbus address), `mb_baud`, `mb_format`, `ct_mult`. They are sent as remote settings; the logger applies them and restarts. A new meter usually needs both the table and these settings.
+
+From the VPS command line, the same: `manage.py set-registers LOG-0001 table.csv --comment "..."`, `manage.py set-registers LOG-0001 --builtin`, `manage.py show-registers LOG-0001`.
+
+**Rules** (checked by the page and again by the logger): one line per value `name,fc,addr,type,scale,ct,agg`; `name` 1 to 7 characters `a-z 0-9`, unique; `fc` 3 or 4; `addr` 0-based (`0x0018` or `24`); `type` `u16 s16 u32 s32 u32sw s32sw f32 f32sw`; `scale` not 0; `ct` 0 or 1; `agg` `mean`, `last` or `minmax`; at most 32 lines. **Keep the standard names** (`v1 v2 v3 v12 v23 v31 i1 i2 i3 f p1 p2 p3 p q s pf e eq`) and units (V, A, Hz, kW, kvar, kVA, kWh, kvarh): the alarms, the daily report and the OED export use them. A changed table changes the record's columns: the platform starts a `_2` day file that day.
+
+**After any change**, check the values against the meter's LCD (within 1 %, tutorial 1 step B10), then commit the verified table to this folder (for example `registers-fcn300.csv`) through a pull request. Once a table is final, also put it in `DEFAULT_TABLE` and release a firmware, so that a new SD card does not bring back the wrong table.

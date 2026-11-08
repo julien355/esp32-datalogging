@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Meter registers</title>
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;background:#f5f6f8;color:#1f2933}
+  header{background:#0f2747;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+  header a{color:#cfe0ff;margin-left:12px}
+  main{padding:12px;max-width:1100px;margin:auto}
+  h2{font-size:1.05em;margin:18px 0 6px}
+  .card{background:#fff;border-radius:8px;padding:12px;box-shadow:0 1px 2px rgba(0,0,0,.08);margin-bottom:12px}
+  .muted{color:#52606d;font-size:.9em}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-weight:600;font-size:.85em}
+  .b-applied{background:#d1fadf;color:#05603a}.b-waiting{background:#fef0c7;color:#93370d}
+  .b-bad{background:#fee4e2;color:#b42318}.b-none{background:#e4e7eb;color:#323f4b}
+  table{border-collapse:collapse;width:100%}
+  td,th{padding:4px 6px;border-bottom:1px solid #e4e7eb;text-align:left;font-size:.9em}
+  th{background:#f0f2f5}
+  input,select,textarea,button{font:inherit}
+  #regs input,#regs select{width:100%;box-sizing:border-box;padding:3px 4px;border:1px solid #cbd2d9;border-radius:4px}
+  #regs input[type=checkbox]{width:auto}
+  #regs tr.changed td{background:#fffbeb}
+  #regs tr.new td{background:#ecfdf3}
+  #regs td.n{width:2em;color:#7b8794}
+  #regs th:nth-child(2){width:15%}#regs th:nth-child(3){width:7%}#regs th:nth-child(4){width:13%}
+  #regs th:nth-child(5){width:12%}#regs th:nth-child(6){width:13%}#regs th:nth-child(7){width:4%}#regs th:nth-child(8){width:13%}
+  .scroll{overflow-x:auto}.scroll table{min-width:640px}
+  button{padding:6px 12px;border-radius:6px;border:1px solid #cbd2d9;background:#fff;cursor:pointer}
+  button.primary{background:#0f2747;color:#fff;border-color:#0f2747}
+  button.danger{color:#b42318;border-color:#f4b4ae}
+  button.small{padding:2px 8px;font-size:.85em}
+  button:disabled{opacity:.5;cursor:default}
+  .bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}
+  .msg{padding:8px 10px;border-radius:6px;margin:6px 0;white-space:pre-wrap}
+  .err{background:#fee4e2;color:#7a271a}.warn{background:#fef0c7;color:#7a2e0e}.ok{background:#d1fadf;color:#05603a}
+  textarea{width:100%;box-sizing:border-box;min-height:220px;font-family:ui-monospace,monospace;font-size:.85em}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px 16px}
+  .kv b{display:inline-block;min-width:9em;font-weight:600}
+  .settings label{display:block;font-size:.85em;color:#52606d}
+  .settings input,.settings select{width:100%;box-sizing:border-box;padding:4px}
+  details summary{cursor:pointer;font-weight:600}
+  code{background:#f0f2f5;padding:0 3px;border-radius:3px}
+</style>
+</head>
+<body>
+<header>
+  <strong id="title">Meter registers</strong>
+  <span><select id="devsel" hidden></select><a id="liveLink" href="/live/">Live</a><a href="/live/">All sites</a></span>
+</header>
+<main>
+  <div id="pick" class="card" hidden></div>
+  <div id="app" hidden>
+
+    <div class="card">
+      <div class="bar"><span id="state"></span><span id="stateText" class="muted"></span>
+        <button class="small" id="reload" style="margin-left:auto">Refresh</button></div>
+      <div class="grid2">
+        <div class="kv" id="onLogger"></div>
+        <div class="kv" id="asked"></div>
+      </div>
+    </div>
+
+    <h2>Register table</h2>
+    <div class="card">
+      <div class="bar">
+        Load:
+        <button class="small" id="loadLogger">Table on the logger</button>
+        <button class="small" id="loadAsked">Last sent</button>
+        <label class="small" style="margin-left:6px"><button class="small" id="importBtn">Import CSV file...</button>
+          <input type="file" id="importFile" accept=".csv,.txt,text/csv,text/plain" hidden></label>
+        <button class="small" id="exportBtn">Download CSV</button>
+        <button class="small" id="textBtn">Edit as text</button>
+      </div>
+      <div id="textBox" hidden>
+        <textarea id="csvText" spellcheck="false"></textarea>
+        <div class="bar"><button class="small" id="textApply">Use this text</button>
+          <span class="muted">One line per value: name,fc,addr,type,scale,ct,agg. Lines starting with # are ignored.</span></div>
+      </div>
+      <div class="scroll"><table id="regs">
+        <thead><tr><th></th><th>name</th><th>fc</th><th>addr</th><th>type</th><th>scale</th><th>ct</th><th>agg</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div class="bar"><button class="small" id="addRow">+ Add a line</button>
+        <span class="muted" id="count"></span>
+        <span class="muted">Yellow: differs from the table on the logger. Green: not on the logger.</span></div>
+      <div id="result"></div>
+      <div class="bar">
+        <input id="comment" placeholder="Why (e.g. current scale fixed after the LCD check)" style="flex:1;min-width:220px;padding:6px">
+        <button id="checkBtn">Check</button>
+        <button class="primary" id="sendBtn">Send to the logger</button>
+        <button class="danger" id="builtinBtn">Back to the built-in table</button>
+      </div>
+      <details class="muted">
+        <summary>What the columns mean</summary>
+        <p><b>name</b>: column suffix, the record column is <code>EM01_&lt;name&gt;</code>. 1 to 7 characters, a-z and 0-9.
+        Keep the standard names (<span id="stdNames"></span>): the alarms, the daily report and the OED export look for them.<br>
+        <b>fc</b>: 3 = holding registers, 4 = input registers. <b>addr</b>: 0-based address, <code>0x0018</code> or <code>24</code>
+        (PLC number 40025 with fc 3 = <code>0x0018</code>).<br>
+        <b>type</b>: <code>u16 s16</code> (one register), <code>u32 s32 f32</code> (two registers, high word first),
+        <code>u32sw s32sw f32sw</code> (low word first).<br>
+        <b>scale</b>: raw value x scale = value in V, A, Hz, kW, kvar, kVA, kWh, kvarh (a meter in W needs 0.001).<br>
+        <b>ct</b>: also multiplied by the logger's <code>ct_mult</code> (meters that give secondary values).<br>
+        <b>agg</b>: <code>minmax</code> = mean + <code>_min</code> + <code>_max</code> columns, <code>mean</code>,
+        <code>last</code> for energy counters.</p>
+        <p>How it reaches the logger: the logger asks for a new table every <code>rcfg_check_m</code> minutes (15 by default)
+        or at once with the console command <code>config</code>. It checks the table, writes <code>/config/registers.csv</code>
+        on its SD card (the previous file is kept as <code>registers.bak</code>) and restarts. The columns of that day's
+        records change, so the platform starts a <code>_2</code> day file.</p>
+      </details>
+    </div>
+
+    <h2>Meter link settings</h2>
+    <div class="card settings">
+      <div class="grid2">
+        <div><label>meters (id:Modbus address, comma separated)</label><input id="s_meters" placeholder="EM01:1"></div>
+        <div><label>mb_baud</label><select id="s_mb_baud"></select></div>
+        <div><label>mb_format</label><select id="s_mb_format"></select></div>
+        <div><label>ct_mult (1 unless the meter gives secondary values)</label><input id="s_ct_mult" placeholder="1"></div>
+      </div>
+      <div class="bar"><button id="settingsBtn">Send these settings</button>
+        <span class="muted" id="settingsInfo"></span></div>
+      <div id="settingsResult"></div>
+    </div>
+
+    <h2>History</h2>
+    <div class="card"><table id="hist"><thead><tr><th>Version</th><th>Sent (UTC)</th><th>By</th><th>What</th><th>Comment</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+</main>
+<script>
+const el = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// /live/<site>/register, and ?device=LOG-0002 when the site has several loggers (default: the first one)
+const m = location.pathname.match(/^\/live\/([a-z0-9-]+)\/register\/?$/);
+const site = m ? m[1] : null;
+let device = new URLSearchParams(location.search).get('device');
+let view = null, TYPES = ['u16','s16','u32','s32','u32sw','s32sw','f32','f32sw'], AGGS = ['mean','last','minmax'];
+const BAUDS = ['1200','2400','4800','9600','19200','38400','57600','115200'], FORMATS = ['8N1','8E1','8O1','8N2'];
+const fmtTime = t => t ? String(t).replace('T', ' ').replace('Z', '') : '-';
+
+async function api(method, path, body) {
+  const r = await fetch(path, {method, cache: 'no-store', headers: body ? {'Content-Type': 'application/json'} : {},
+                               body: body ? JSON.stringify(body) : undefined});
+  let j = null;
+  try { j = await r.json(); } catch (e) { j = {ok: false, error: `HTTP ${r.status}`}; }
+  j._status = r.status;
+  return j;
+}
+
+// ---------------------------------------------------------------- CSV <-> rows
+function hex(a) { return '0x' + Number(a).toString(16).toUpperCase().padStart(4, '0'); }
+function rowsToCsv(rows) {
+  return 'name,fc,addr,type,scale,ct,agg\n' + rows.map(r =>
+    [r.name, r.fc, typeof r.addr === 'number' ? hex(r.addr) : r.addr, r.type, r.scale, r.ct ? 1 : 0, r.agg].join(',')).join('\n') + '\n';
+}
+function csvToRows(text) {   // loose: the server does the real check
+  const rows = [];
+  for (let line of text.replace(/^﻿/, '').split(/\r?\n/)) {
+    line = line.trim();
+    if (!line || line.startsWith('#') || /^name\s*,/i.test(line)) continue;
+    const f = line.split(',').map(x => x.trim());
+    rows.push({name: f[0] || '', fc: f[1] || '3', addr: f[2] || '', type: (f[3] || 'u16').toLowerCase(),
+               scale: f[4] || '1', ct: f[5] === '1', agg: (f[6] || 'mean').toLowerCase()});
+  }
+  return rows;
+}
+
+// ---------------------------------------------------------------- editor
+function opts(list, cur) {
+  const all = list.includes(cur) ? list : [cur, ...list];
+  return all.map(v => `<option${v === cur ? ' selected' : ''}>${esc(v)}</option>`).join('');
+}
+function setRows(rows) {
+  const tb = el('regs').tBodies[0];
+  tb.innerHTML = rows.map(r => `<tr>
+    <td class="n"></td>
+    <td><input data-k="name" value="${esc(r.name)}" maxlength="7"></td>
+    <td><select data-k="fc">${opts(['3','4'], String(r.fc))}</select></td>
+    <td><input data-k="addr" value="${esc(typeof r.addr === 'number' ? hex(r.addr) : r.addr)}"></td>
+    <td><select data-k="type">${opts(TYPES, r.type)}</select></td>
+    <td><input data-k="scale" value="${esc(r.scale)}"></td>
+    <td><input type="checkbox" data-k="ct"${r.ct ? ' checked' : ''}></td>
+    <td><select data-k="agg">${opts(AGGS, r.agg)}</select></td>
+    <td><button class="small" data-act="up" title="Move up">&uarr;</button>
+        <button class="small danger" data-act="del" title="Delete">&times;</button></td></tr>`).join('');
+  refreshMarks();
+}
+function getRows() {
+  return [...el('regs').tBodies[0].rows].map(tr => {
+    const g = k => tr.querySelector(`[data-k="${k}"]`);
+    return {name: g('name').value.trim(), fc: g('fc').value, addr: g('addr').value.trim(), type: g('type').value,
+            scale: g('scale').value.trim(), ct: g('ct').checked, agg: g('agg').value};
+  });
+}
+function sameRow(a, b) {
+  const num = x => typeof x === 'number' ? x : Number(x);
+  return a && b && String(a.fc) === String(b.fc) && num(a.addr) === num(b.addr) && a.type === b.type &&
+    Math.abs(num(a.scale) - num(b.scale)) <= Math.abs(num(b.scale)) * 1e-5 && !!a.ct === !!b.ct && a.agg === b.agg;
+}
+function refreshMarks() {
+  const onLogger = {};
+  for (const r of (view?.reported?.rows || [])) onLogger[r.name] = r;
+  const trs = [...el('regs').tBodies[0].rows];
+  getRows().forEach((r, i) => {
+    const tr = trs[i];
+    tr.cells[0].textContent = i + 1;
+    const l = onLogger[r.name.toLowerCase()];
+    tr.className = !view?.reported?.rows?.length ? '' : !l ? 'new' : sameRow(r, l) ? '' : 'changed';
+  });
+  el('count').textContent = `${trs.length} of ${view?.max_regs || 32} values`;
+}
+el('regs').addEventListener('input', refreshMarks);
+el('regs').addEventListener('change', refreshMarks);
+el('regs').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const tr = b.closest('tr');
+  if (b.dataset.act === 'del') tr.remove();
+  if (b.dataset.act === 'up' && tr.previousElementSibling) tr.parentNode.insertBefore(tr, tr.previousElementSibling);
+  refreshMarks();
+});
+el('addRow').onclick = () => setRows([...getRows(), {name: '', fc: '3', addr: '0x0000', type: 'u16', scale: '1', ct: false, agg: 'minmax'}]);
+
+// ---------------------------------------------------------------- load / import / export
+el('loadLogger').onclick = () => {
+  if (!view?.reported?.rows?.length) return show('result', 'warn', 'The logger has not reported a table yet.');
+  setRows(view.reported.rows); show('result', 'ok', 'Loaded the table the logger reported.');
+};
+el('loadAsked').onclick = () => {
+  const p = view?.platform;
+  if (!p || p.builtin || !p.csv) return show('result', 'warn', 'No table sent yet (or the last one sent was "back to built-in").');
+  setRows(csvToRows(p.csv)); show('result', 'ok', `Loaded version ${p.version}.`);
+};
+el('importBtn').onclick = () => el('importFile').click();
+el('importFile').onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  if (f.size > 65536) return show('result', 'err', 'File too large for a register table.');
+  const text = await f.text();
+  setRows(csvToRows(text));
+  e.target.value = '';
+  await check(`Imported ${f.name}.`);
+};
+el('exportBtn').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([rowsToCsv(getRows())], {type: 'text/csv'}));
+  a.download = `registers-${device}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+el('textBtn').onclick = () => {
+  const box = el('textBox');
+  box.hidden = !box.hidden;
+  if (!box.hidden) el('csvText').value = rowsToCsv(getRows());
+};
+el('textApply').onclick = async () => { setRows(csvToRows(el('csvText').value)); await check(); };
+
+// ---------------------------------------------------------------- check / send
+function show(id, cls, text) { el(id).innerHTML = text ? `<div class="msg ${cls}">${esc(text)}</div>` : ''; }
+function showCheck(j, prefix) {
+  let h = '';
+  if (prefix) h += `<div class="msg ok">${esc(prefix)}</div>`;
+  if (j.errors?.length) h += `<div class="msg err">Errors (nothing can be sent until they are fixed):\n${esc(j.errors.join('\n'))}</div>`;
+  if (j.warnings?.length) h += `<div class="msg warn">Warnings:\n${esc(j.warnings.join('\n'))}</div>`;
+  if (j.ok && !j.errors?.length && !j.warnings?.length) h += '<div class="msg ok">Table OK.</div>';
+  if (!j.ok && !j.errors) h += `<div class="msg err">${esc(j.error || 'failed')}</div>`;
+  el('result').innerHTML = h;
+}
+async function check(prefix) {
+  const j = await api('POST', `/api/v1/admin/registers/${device}/check`, {csv: rowsToCsv(getRows())});
+  showCheck(j, prefix);
+  return j;
+}
+el('checkBtn').onclick = () => check();
+el('sendBtn').onclick = async () => {
+  const j = await check();
+  if (!j.ok) return;
+  const msg = `Send this table (${j.rows.length} values) to ${device}?` +
+    (j.warnings.length ? `\n\nThere are ${j.warnings.length} warning(s): read them first.` : '') +
+    `\n\nThe logger takes it at its next check (every ${view?.reported?.settings?.rcfg_check_m || 15} min, ` +
+    `or "config" on its console), writes it to its SD card and restarts. Its record columns change from then on.`;
+  if (!confirm(msg)) return;
+  const r = await api('POST', `/api/v1/admin/registers/${device}`, {csv: j.csv, comment: el('comment').value});
+  if (!r.ok) return showCheck(r);
+  showCheck(r, `Version ${r.version} saved: waiting for the logger.`);
+  el('comment').value = '';
+  load(false);
+};
+el('builtinBtn').onclick = async () => {
+  if (!confirm(`Tell ${device} to delete /config/registers.csv (kept as registers.bak) and use the table built into its firmware?`)) return;
+  const r = await api('POST', `/api/v1/admin/registers/${device}`, {builtin: true, comment: el('comment').value});
+  if (!r.ok) return show('result', 'err', r.error || 'failed');
+  show('result', 'ok', `Version ${r.version} saved (built-in table): waiting for the logger.`);
+  load(false);
+};
+
+// ---------------------------------------------------------------- meter link settings
+el('s_mb_baud').innerHTML = BAUDS.map(b => `<option>${b}</option>`).join('');
+el('s_mb_format').innerHTML = FORMATS.map(b => `<option>${b}</option>`).join('');
+el('settingsBtn').onclick = async () => {
+  const cur = view?.reported?.settings || {}, body = {}, changes = [];
+  for (const k of ['meters', 'mb_baud', 'mb_format', 'ct_mult']) {
+    const v = el('s_' + k).value.trim();
+    if (v && v !== String(cur[k] ?? '')) { body[k] = v; changes.push(`${k}: ${cur[k] ?? '?'} -> ${v}`); }
+  }
+  if (!changes.length) return show('settingsResult', 'warn', 'Nothing changed from what the logger reported.');
+  if (!confirm(`Send to ${device}?\n\n${changes.join('\n')}\n\nThe logger applies them at its next check and restarts.`)) return;
+  const r = await api('POST', `/api/v1/admin/meter-settings/${device}`, body);
+  if (!r.ok) return show('settingsResult', 'err', (r.errors || [r.error]).join('\n'));
+  show('settingsResult', 'ok', `Settings version ${r.version} saved: waiting for the logger.`);
+  load(false);
+};
+
+// ---------------------------------------------------------------- page
+const STATES = {
+  none: ['b-none', 'No table sent from here', 'The logger uses its own table (SD card file or built-in).'],
+  waiting: ['b-waiting', 'Waiting for the logger', 'The logger has not taken the last version yet.'],
+  applied: ['b-applied', 'Applied', 'The logger reports the table that was sent.'],
+  differs: ['b-bad', 'Differs', 'The logger took the version but now reports another table (SD card changed or edited by hand?). Send again if needed.'],
+  refused: ['b-bad', 'Refused by the logger', ''],
+  unsupported: ['b-bad', 'Firmware too old', 'This logger\'s firmware cannot take a register table remotely: it needs 0.4.0 or later (OTA).'],
+};
+function render(fillEditor) {
+  const v = view, rep = v.reported, p = v.platform;
+  el('title').textContent = `Meter registers: ${v.site}, ${v.device}`;
+  const st = STATES[v.state] || STATES.none;
+  el('state').innerHTML = `<span class="badge ${st[0]}">${esc(st[1])}</span>`;
+  el('stateText').textContent = v.state === 'refused' ? `Reason: ${rep?.reg_error || '?'}` : st[2];
+  el('onLogger').innerHTML = rep ? `<div><b>On the logger</b> reported ${esc(fmtTime(rep.received))} UTC</div>
+    <div><b>Firmware</b>${esc(rep.fw)}</div>
+    <div><b>Table</b>${rep.reg_source === 'sd' ? 'SD card /config/registers.csv' : rep.reg_source === 'builtin' ? 'built-in (firmware)' : '?'}, ${rep.rows.length} values</div>
+    <div><b>Version applied</b>${esc(rep.reg_version ?? '-')}</div>
+    <div><b>Meters</b>${esc(rep.settings.meters)} ${esc(rep.settings.mb_baud)} ${esc(rep.settings.mb_format)}, ct_mult ${esc(rep.settings.ct_mult)}</div>`
+    : '<div><b>On the logger</b>not reported yet (it reports after each boot)</div>';
+  el('asked').innerHTML = p ? `<div><b>Last sent</b>version ${esc(p.version)}, ${esc(fmtTime(p.updated))} UTC</div>
+    <div><b>By</b>${esc(p.by || '-')}</div><div><b>What</b>${p.builtin ? 'back to the built-in table' : 'register table'}</div>
+    <div><b>Comment</b>${esc(p.comment || '-')}</div>` : '<div><b>Last sent</b>nothing</div>';
+  if (v.config?.settings) {
+    const pend = Object.entries(v.config.settings).filter(([k]) => ['meters','mb_baud','mb_format','ct_mult'].includes(k));
+    el('settingsInfo').textContent = pend.length ? `Asked so far (settings version ${v.config.version}): ` +
+      pend.map(([k, x]) => `${k}=${x}`).join(', ') : '';
+  }
+  if (fillEditor) {
+    const s = rep?.settings || {};
+    for (const k of ['meters', 'mb_baud', 'mb_format', 'ct_mult']) if (s[k] != null) el('s_' + k).value = s[k];
+    if (p && !p.builtin && p.csv && v.state !== 'applied') setRows(csvToRows(p.csv));
+    else if (rep?.rows?.length) setRows(rep.rows);
+    else setRows([]);
+  } else refreshMarks();
+  el('hist').tBodies[0].innerHTML = v.history.map((h, i) => `<tr><td>${esc(h.version)}</td><td>${esc(fmtTime(h.updated))}</td>
+    <td>${esc(h.by || '-')}</td><td>${h.builtin ? 'built-in table' : `${csvToRows(h.csv || '').length} values`}</td>
+    <td>${esc(h.comment || '')}</td><td>${h.builtin ? '' : `<button class="small" data-h="${i}">Load into the editor</button>`}</td></tr>`).join('')
+    || '<tr><td colspan="6" class="muted">Nothing sent yet.</td></tr>';
+  el('stdNames').textContent = (v.standard || []).join(' ');
+}
+el('hist').addEventListener('click', e => {
+  const b = e.target.closest('button[data-h]');
+  if (!b) return;
+  const h = view.history[Number(b.dataset.h)];
+  setRows(csvToRows(h.csv || ''));
+  show('result', 'ok', `Loaded version ${h.version} into the editor. "Send to the logger" makes it a new version.`);
+  window.scrollTo({top: el('regs').offsetTop - 80, behavior: 'smooth'});
+});
+async function load(fillEditor) {
+  const j = await api('GET', `/api/v1/admin/registers/${device}`);
+  if (j._status !== 200 || j.site !== site) {
+    el('app').hidden = true; el('pick').hidden = false;
+    el('pick').textContent = j._status === 200 ? `${device} is not a logger of ${site}.` : (j.error || 'Not found');
+    return;
+  }
+  view = j; TYPES = j.types || TYPES; AGGS = j.aggs || AGGS;
+  el('app').hidden = false;
+  render(fillEditor);
+}
+el('reload').onclick = () => load(false);
+
+(async () => {
+  const pick = text => { el('pick').hidden = false; el('pick').textContent = text; };
+  if (!site) return pick('Open this page from a site: /live/<site>/register');
+  el('liveLink').href = `/live/${site}/`;
+  const s = await api('GET', '/api/v1/status');
+  const devs = Object.keys((s.sites || {})[site] || {});
+  if (!devs.length) return pick(`No logger registered for ${site}.`);
+  device = device || devs[0];
+  el('devsel').innerHTML = devs.map(d => `<option${d === device ? ' selected' : ''}>${esc(d)}</option>`).join('');
+  el('devsel').hidden = devs.length < 2;
+  el('devsel').onchange = e => { location.href = `/live/${site}/register?device=${encodeURIComponent(e.target.value)}`; };
+  load(true);
+})();
+</script>
+</body>
+</html>

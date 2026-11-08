@@ -1,6 +1,7 @@
 // Modbus RTU master for the power meters (FORT FCN300-3E4Y / 3EH4Y).
 // The register table is built in (from docs/meter/fcn300-3e4y-modbus-guide.md, NOT VERIFIED)
-// and can be replaced without reflashing by /config/registers.csv on the SD card.
+// and can be replaced without reflashing by /config/registers.csv on the SD card, written by hand
+// or sent by the platform's register page (GET /api/v1/registers, see net.cpp).
 #pragma once
 #include <Arduino.h>
 #include <FS.h>
@@ -41,5 +42,12 @@ bool read(int i, double *values, bool *ok);
 // Console helper: raw dump of registers.
 void dump(uint8_t slave, uint8_t fc, uint16_t start, uint16_t count, Print &out);
 String describeTable();
+// "sd" (/config/registers.csv) or "builtin" (firmware table): the table in use since boot.
+const char *source();
+// Remote register table (net.cpp). Both check the table with the strict rules (every line valid,
+// names a-z0-9 of 1 to 7 characters and unique, at most MAX_REGS lines) before touching the card.
+// The new table is used after a restart. err says why on false.
+bool installFile(const String &csv, String &err);   // writes /config/registers.csv (old one kept as .bak)
+bool removeFile(String &err);                       // back to the built-in table (file renamed to .bak)
 
 }  // namespace meter

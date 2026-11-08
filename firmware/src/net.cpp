@@ -9,6 +9,7 @@
 
 #include "app.h"
 #include "certs.h"
+#include "meter.h"
 #include "rtclock.h"
 #include "sampler.h"
 #include "settings.h"
@@ -26,6 +27,8 @@ static bool liveOn = true, otaOn = false, rcfgOn = true;
 static uint32_t rcfgPeriodMs = 15UL * 60000UL, lastRcfg = 0;
 static bool rcfgReported = false;
 static volatile bool forceRcfg = false;
+static long regRefused = 0;          // remote register table version refused since boot (not retried)
+static String regError;
 
 static volatile bool forceUpload = false, forceOta = false, hintOta = false;
 static uint32_t lastUploadTry = 0, lastOta = 0, authBlockedUntil = 0, liveBlockedUntil = 0;
@@ -312,6 +315,13 @@ static void reportSettings() {
   doc["boot"] = st.bootReason;
   doc["th1_chip"] = st.th1Chip;
   doc["header"] = sampler::header();
+  doc["reg_version"] = cfg::getCounter("reg_ver");
+  doc["reg_source"] = meter::source();
+  doc["registers"] = meter::describeTable();
+  if (regRefused) {
+    doc["reg_refused"] = regRefused;
+    doc["reg_error"] = regError;
+  }
   JsonObject set = doc["settings"].to<JsonObject>();
   for (size_t i = 0; i < cfg::NDEFS; i++) {
     const cfg::Def &d = cfg::DEFS[i];
@@ -324,6 +334,34 @@ static void reportSettings() {
   if (code == 200 || code == 204) rcfgReported = true;
 }
 
+// Register table sent by the platform's register page. Returns true when a new table was written to the
+// card (the caller restarts so that the meter reads it). A table that fails the checks is refused, logged
+// and reported, and not tried again until the next boot.
+static bool doRemoteRegisters() {
+  String resp;
+  int code = request("GET", "/api/v1/registers", "", "", resp, HTTP_TIMEOUT_MS);
+  if (code != 200) return false;   // 204: nothing set; 404: older server
+  JsonDocument doc;
+  if (deserializeJson(doc, resp)) return false;
+  long ver = doc["version"] | 0L;
+  if (ver <= cfg::getCounter("reg_ver") || ver == regRefused) return false;
+  bool builtin = doc["builtin"] | false;
+  String csv = doc["csv"].as<String>();
+  String err;
+  bool ok = builtin ? meter::removeFile(err) : meter::installFile(csv, err);
+  if (!ok) {
+    regRefused = ver;
+    regError = err;
+    rcfgReported = false;   // tell the platform why
+    evlog("Remote register table version %ld refused: %s", ver, err.c_str());
+    return false;
+  }
+  cfg::setCounter("reg_ver", ver);
+  evlog("Remote register table version %ld: %s", ver,
+        builtin ? "back to the built-in table" : "written to " FILE_REGISTERS);
+  return true;
+}
+
 static void doRemoteConfig() {
   if (!token.length()) return;
   if (!rcfgReported) reportSettings();
@@ -331,13 +369,16 @@ static void doRemoteConfig() {
   if (!forceRcfg && lastRcfg && millis() - lastRcfg < rcfgPeriodMs) return;
   forceRcfg = false;
   lastRcfg = millis();
+  bool regs = doRemoteRegisters();
   String resp;
   int code = request("GET", "/api/v1/config", "", "", resp, HTTP_TIMEOUT_MS);
-  if (code != 200) return;   // 204: nothing set on the platform
   JsonDocument doc;
-  if (deserializeJson(doc, resp)) return;
-  long ver = doc["version"] | 0L;
-  if (ver <= cfg::getCounter("cfg_ver")) return;
+  long ver = 0;
+  if (code == 200 && !deserializeJson(doc, resp)) ver = doc["version"] | 0L;   // 204: nothing set
+  if (ver <= cfg::getCounter("cfg_ver")) {
+    if (regs) safeRestart("remote_regs");
+    return;
+  }
   int changed = 0;
   for (JsonPair kv : doc["settings"].as<JsonObject>()) {
     const char *key = kv.key().c_str();
@@ -360,7 +401,7 @@ static void doRemoteConfig() {
   }
   cfg::setCounter("cfg_ver", ver);
   evlog("Remote settings version %ld applied: %d change(s)", ver, changed);
-  if (changed) safeRestart("remote_cfg");
+  if (changed || regs) safeRestart(regs ? "remote_regs" : "remote_cfg");
   rcfgReported = false;   // report the new version
 }
 

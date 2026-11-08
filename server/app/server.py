@@ -6,7 +6,8 @@ Device endpoints (token in "Authorization: Bearer <token>", no web login in Cadd
   GET  /api/v1/ota?fw=x.y.z    204 = up to date, 200 = {"version","url","md5","size"}
   GET  /api/v1/firmware/<file> firmware image for the OTA update
   GET  /api/v1/config          204 = nothing set, 200 = {"version", "settings"} (manage.py set-config)
-  POST /api/v1/config/report   JSON: the logger's firmware, settings (no secrets), columns, after each boot
+  POST /api/v1/config/report   JSON: the logger's firmware, settings (no secrets), columns, register table
+  GET  /api/v1/registers       204 = nothing set, 200 = {"version", "builtin", "csv"} (register table page)
 
 People endpoints (behind the Caddy web login, never published without it):
   GET  /health                 {"ok": true}
@@ -14,6 +15,14 @@ People endpoints (behind the Caddy web login, never published without it):
   GET  /api/v1/live/<site>     live values, 60-minute history and open alarms of a site
   GET  /api/v1/alarms/<site>   open alarms and the last 200 lines of the alarm log
   GET  /live/  /live/<site>/   live page (refresh every 15 s)
+  GET  /live/<site>/register   meter register table page of the site's logger (?device=LOG-0002 if several):
+                               see, edit, import, send to the logger
+  GET  /api/v1/admin/registers/<device>          table on the logger, table asked, history
+  POST /api/v1/admin/registers/<device>/check    JSON {"csv"}: errors, warnings, normalised table
+  POST /api/v1/admin/registers/<device>          JSON {"csv", "comment"} or {"builtin": true}: new version
+  POST /api/v1/admin/meter-settings/<device>     JSON {meters, mb_baud, mb_format, ct_mult}: remote settings
+  Admin POSTs must be JSON (Content-Type application/json) and same-origin: a page on another site
+  cannot make a logged-in browser send them.
 
 Firmware update from the live page (people in ADMIN_USERS only, see docs/OTA.md):
   GET  /api/v1/admin/me                     {"user", "admin", "github"}
@@ -41,6 +50,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import registers  # noqa: E402
 from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, IngestError, iso_now  # noqa: E402
@@ -50,6 +60,14 @@ DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
 HERE = os.path.dirname(os.path.abspath(__file__))
+PAGES = {"live": "live.html", "registers": "registers.html"}
+# Meter link settings the register page may change remotely (firmware/src/settings.cpp).
+METER_KEYS = ("meters", "mb_baud", "mb_format", "ct_mult")
+BAUDS = ("1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200")
+FORMATS = ("8N1", "8E1", "8O1", "8N2")
+METERS_RE = re.compile(r"^[A-Za-z0-9]{1,7}:\d{1,3}(,[A-Za-z0-9]{1,7}:\d{1,3}){0,3}$")
+# Register page endpoints (JSON, same origin); every other /api/v1/admin/ POST is a firmware update.
+REGISTERS_ADMIN_RE = re.compile(r"^/api/v1/admin/(registers|meter-settings)/")
 
 
 class Live:
@@ -128,11 +146,13 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------ routes
     def do_POST(self):
         path = urlparse(self.path).path
-        if path.startswith("/api/v1/admin/"):
-            return self.admin_post(path)
+        if path.startswith("/api/v1/admin/") and not REGISTERS_ADMIN_RE.match(path):
+            return self.admin_post(path)       # firmware update (reads its own body, larger limit)
         body = self.read_body()
         if body is None:
             return self.send_json(413, {"ok": False, "error": "body too large"})
+        if path.startswith("/api/v1/admin/"):
+            return self.registers_post(path, body)
         who = self.device()
         if not who:
             return self.send_json(401, {"ok": False, "error": "unknown or missing device token"})
@@ -191,15 +211,16 @@ class Handler(BaseHTTPRequestHandler):
         if m and CODE_RE.match(m.group(1)):
             return self.send_json(200, self.alarm_view(m.group(1)))
         if path in ("/live", "/live/") or re.match(r"^/live/[a-z0-9-]+/?$", path):
-            with open(os.path.join(HERE, "live.html"), "rb") as f:
-                page = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(page)))
-            self.end_headers()
-            return self.wfile.write(page)
+            return self.page("live")
+        if re.match(r"^/live/[a-z0-9-]+/register/?$", path):
+            return self.page("registers")
+        m = re.match(r"^/api/v1/admin/registers/([A-Za-z0-9_-]+)$", path)
+        if m:
+            return self.registers_view(m.group(1))
         if path.startswith("/api/v1/admin/"):
             return self.admin_get(path)
+        if path == "/api/v1/registers":
+            return self.device_registers()
         if path == "/api/v1/ota":
             return self.ota(parse_qs(u.query).get("fw", [""])[0])
         if path == "/api/v1/config":
@@ -214,6 +235,147 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             return self.firmware(m.group(1))
         return self.send_json(404, {"ok": False, "error": "not found"})
+
+    def page(self, name):
+        with open(os.path.join(HERE, PAGES[name]), "rb") as f:
+            page = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(page)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        return self.wfile.write(page)
+
+    # ------------------------------------------------------------------ register table
+    def device_site(self, device):
+        if not DEVICE_RE.match(device):
+            return None
+        info = self.store.load_devices().get("devices", {}).get(device)
+        return info.get("site") if info else None
+
+    def auth_user(self):
+        """Login name passed by Caddy (header_up X-Auth-User), for the history. Empty when run locally."""
+        return re.sub(r"[^A-Za-z0-9_.@-]", "", self.headers.get("X-Auth-User", ""))[:40]
+
+    def device_registers(self):
+        who = self.device()
+        if not who:
+            return self.send_json(401, {"ok": False, "error": "unknown or missing device token"})
+        device, site = who
+        cur = self.store.get_registers(site, device)
+        if not cur or not cur.get("version"):
+            return self.send_empty(204)
+        csv = None
+        if not cur.get("builtin"):
+            by = re.sub(r"[^A-Za-z0-9_.@ -]", "", cur.get("by") or "")
+            csv = f"# register table version {cur['version']} from the platform, {cur.get('updated', '')}" \
+                  f"{', by ' + by if by else ''}\n" + cur["csv"]
+        return self.send_json(200, {"version": cur["version"], "builtin": bool(cur.get("builtin")), "csv": csv})
+
+    def registers_view(self, device):
+        site = self.device_site(device)
+        if not site:
+            return self.send_json(404, {"ok": False, "error": "no such logger"})
+        want = self.store.get_registers(site, device)
+        rep = self.store.get_report(site, device)
+        reported = None
+        state = "none"
+        if rep:
+            rows, errs, _ = registers.parse(rep.get("registers") or "")
+            sett = rep.get("settings") or {}
+            reported = {k: rep.get(k) for k in ("received", "fw", "boot", "reg_version", "reg_source", "reg_error",
+                                                 "reg_refused", "registers", "header")}
+            reported["rows"] = rows if not errs else []
+            reported["settings"] = {k: sett.get(k) for k in METER_KEYS + ("rcfg_on", "rcfg_check_m")}
+        if want:
+            if not rep:
+                state = "waiting"
+            elif "reg_version" not in rep:
+                state = "unsupported"      # firmware before 0.4.0: no remote register table
+            elif rep.get("reg_refused") == want["version"]:
+                state = "refused"
+            elif int(rep.get("reg_version") or 0) >= want["version"]:
+                if want.get("builtin"):
+                    state = "applied" if rep.get("reg_source") == "builtin" else "differs"
+                else:
+                    wrows, _, _ = registers.parse(want.get("csv") or "")
+                    state = "applied" if registers.same(wrows, reported["rows"]) else "differs"
+            else:
+                state = "waiting"
+        hist = list(reversed(self.store.registers_history(site, device)))[:50]
+        return self.send_json(200, {
+            "device": device, "site": site, "time": iso_now(), "state": state, "platform": want,
+            "reported": reported, "history": hist, "config": self.store.get_config(site, device),
+            "types": registers.TYPES, "aggs": registers.AGGS, "standard": registers.STANDARD,
+            "max_regs": registers.MAX_REGS})
+
+    def registers_post(self, path, body):
+        # Behind the Caddy web login. A form on another site cannot send JSON, a cross-site fetch with
+        # JSON needs a CORS preflight that this service never answers, and the Origin must be this host.
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype != "application/json":
+            return self.send_json(415, {"ok": False, "error": "JSON only"})
+        origin = self.headers.get("Origin")
+        if origin and urlparse(origin).netloc != self.headers.get("Host", ""):
+            return self.send_json(403, {"ok": False, "error": "cross-site request refused"})
+        try:
+            req = json.loads(body or b"{}")
+            if not isinstance(req, dict):
+                raise ValueError
+        except ValueError:
+            return self.send_json(400, {"ok": False, "error": "bad JSON"})
+        m = re.match(r"^/api/v1/admin/(registers|meter-settings)/([A-Za-z0-9_-]+)(/check)?$", path)
+        site = self.device_site(m.group(2)) if m else None
+        if not site:
+            return self.send_json(404, {"ok": False, "error": "not found"})
+        device = m.group(2)
+        if m.group(1) == "meter-settings" and not m.group(3):
+            return self.save_meter_settings(site, device, req)
+        if m.group(1) != "registers":
+            return self.send_json(404, {"ok": False, "error": "not found"})
+        if req.get("builtin") and not m.group(3):
+            ver = self.store.set_registers(site, device, builtin=True, by=self.auth_user(),
+                                           comment=str(req.get("comment") or ""))
+            return self.send_json(200, {"ok": True, "version": ver})
+        text = req.get("csv")
+        if not isinstance(text, str):
+            return self.send_json(400, {"ok": False, "error": "csv missing"})
+        rows, errors, warnings = registers.parse(text)
+        res = {"ok": not errors, "errors": errors, "warnings": warnings, "rows": rows,
+               "csv": registers.to_csv(rows) if not errors else None}
+        if m.group(3) or errors:
+            return self.send_json(200 if m.group(3) else 400, res)
+        res["version"] = self.store.set_registers(site, device, res["csv"], by=self.auth_user(),
+                                                  comment=str(req.get("comment") or ""))
+        return self.send_json(200, res)
+
+    def save_meter_settings(self, site, device, req):
+        changes, errors = {}, []
+        for k in METER_KEYS:
+            v = str(req.get(k) or "").strip()
+            if not v:
+                continue
+            if k == "meters":
+                ok = bool(METERS_RE.match(v)) and all(1 <= int(x.split(":")[1]) <= 247 for x in v.split(","))
+                ids = [x.split(":")[0] for x in v.split(",")] if ok else []
+                ok = ok and len(set(ids)) == len(ids)
+            elif k == "mb_baud":
+                ok = v in BAUDS
+            elif k == "mb_format":
+                v = v.upper()
+                ok = v in FORMATS
+            else:
+                try:
+                    ok = 0 < float(v) <= 100000
+                except ValueError:
+                    ok = False
+            if not ok:
+                errors.append(f"{k}: '{v}' is not valid")
+            changes[k] = v
+        if errors or not changes:
+            return self.send_json(400, {"ok": False, "errors": errors or ["nothing to change"]})
+        ver = self.store.set_config(site, device, changes)
+        return self.send_json(200, {"ok": True, "version": ver, "settings": changes})
 
     # ------------------------------------------------------------------ pieces
     def public_profile(self, site):
