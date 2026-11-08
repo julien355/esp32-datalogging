@@ -289,11 +289,36 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(code, 204)
         code, body = self.req("GET", "/api/v1/live/adab")
         self.assertEqual(json.loads(body)["devices"]["LOG-0001"]["last"]["values"]["EM01_p"], 12.3)
+        prof = json.loads(body)["profile"]   # what the live page needs, and nothing private
+        self.assertIn("sensors", prof)
+        self.assertEqual(prof["nominal_v"], 230)
+        self.assertNotIn("devices", prof)
         code, body = self.req("GET", "/api/v1/status")
         self.assertEqual(json.loads(body)["sites"]["adab"]["LOG-0001"]["last_record"], ts(1))
         code, body = self.req("GET", "/live/adab/")
         self.assertEqual(code, 200)
         self.assertIn("<title>Live</title>", body)
+
+    def test_history(self):
+        # 6 minutes, the counter going up 0.5 kWh a minute: 2.5 kWh between the first and the last record
+        rows = [row(ts(m), e=1000 + (5 - m) * 0.5) for m in range(5, -1, -1)]
+        code, body = self.req("POST", "/api/v1/ingest", HEADER + "\n" + "\n".join(rows) + "\n", self.token)
+        self.assertEqual(code, 200, body)
+        code, body = self.req("GET", "/api/v1/history/adab?days=2")
+        self.assertEqual(code, 200, body)
+        h = json.loads(body)["hours"]
+        self.assertAlmostEqual(sum(r["kwh"] for r in h), 2.5, places=3)
+        self.assertEqual(sum(r["minutes"] for r in h), 6)
+        self.assertAlmostEqual(h[-1]["p"], 12.345, places=3)
+        self.assertAlmostEqual(h[-1]["p_max"], 13.1, places=3)
+        self.assertAlmostEqual(h[-1]["TH1_t"], 31.2, places=2)
+        local = (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%Y-%m-%d")
+        code, body = self.req("GET", f"/api/v1/history/adab/day/{local}")
+        self.assertEqual(code, 200, body)
+        self.assertGreaterEqual(len(json.loads(body)["minutes"]), 1)   # rows before 00:00 WITA fall on the previous day
+        self.assertEqual(self.req("GET", "/api/v1/history/nosite")[0], 404)
+        self.assertEqual(self.req("GET", "/api/v1/history/adab/day/2026-13-40")[0], 400)
+        self.assertEqual(self.req("GET", "/api/v1/history/adab?meter=../x")[0], 400)
 
     def write_image(self, version, env="usb", **kw):
         p = os.path.join(self.data, f"build-{env}-{version}.bin")

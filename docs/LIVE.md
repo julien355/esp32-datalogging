@@ -47,14 +47,35 @@ Default for Adab:
 - A restart empties the 60 minutes; they refill as snapshots arrive.
 - The live alarms (A04 phase lost, A07 frequency) are checked on the snapshots, so they react within 15 to 30 s.
 
-**Live page `/live/<site>/`:**
-- Big tiles for the chosen values, each with a 60-minute sparkline.
-- A status line: "Live, updated 4 s ago", or "No data for 2 min" in red.
-- The open alarms.
-- Links to the site's OED graphs.
+**Live page `/live/<site>/`** (layout of the dashboard mockup, `docs/mockup/`, approved 8 November 2026):
+- A navy header: site name, a status pill ("Live · updated 4 s ago", or "No data for 2 min" in red), the hotel time, and links to **History (OED)** and **All sites**.
+- The open alarms first (severity icon, label and colour), or "No open alarm".
+- **Power:** total kW, kVA with a bar against the PLN contract (`contracted_kva`), power factor, frequency.
+- **Per phase:** one card for the three voltages and one for the three currents, each with a 3-line sparkline (L1 blue, L2 orange, L3 green); the current card has a bar against the PLN per-phase limit (`contracted_kva` / 3 / `contract_v_ln`, 125 A at Adab).
+- **Environment:** each sensor's temperature and humidity, the room-minus-outdoor difference and the outdoor dew point (same formula as the alarms).
+- Every value card: the value rounded for reading, its 60-minute range and sparkline; hover a sparkline for the values at that time.
+- **Logger:** last reading, WiFi signal, backlog, SD card, firmware, running time. Then the alarm log (last 20, hotel time).
+- Values listed in `site.json` that the page does not group are shown under "Other values", so adding one needs no code.
+- Not yet: the time of the last push to OED (the push service is not written yet).
 - Plain HTML and a few lines of JavaScript that fetch the JSON every 15 s; no chart library.
 - Behind the same login as OED (`hub-users.caddy`).
 - Readable on a phone.
+
+**History pages of `/live/<site>/`** (side menu, added 8 November 2026 from the mockup's graph screens):
+
+| Menu | Address | What it shows |
+|---|---|---|
+| Live now | `#now` (default) | the live view above |
+| Power | `#power` | mean kW of each hour and the highest 15-second sample in it; 7, 14 or 31 days |
+| One day | `#day` | the 1-minute power of one hotel day, with the day before and after; the day's kWh, highest sample, base load |
+| Energy per day | `#energy` | kWh per hotel day from the meter's counter (today and incomplete days lighter); today, yesterday, mean of full days |
+| This week vs last | `#week` | complete hours of this week (from Sunday 00:00) against the same hours last week, and day by day; says "not comparable" when records are missing in either week |
+| Temperature, Humidity | `#temperature`, `#humidity` | hourly means of each sensor, hover for the hour's lowest and highest |
+
+- Data: `GET /api/v1/history/<site>?days=N` (one row per hotel hour: kWh, mean and peak kW, sensor means, min and max) and `GET /api/v1/history/<site>/day/<date>` (1-minute power), read from the day files by `server/app/history.py`. Same login as the rest (`/api/v1/*` behind `hub-users.caddy`).
+- Energy is the step of the cumulative counter `EM01_e` between records less than an hour apart; a counter going down is ignored (A19 reports it). It matches `daily.csv` (`manage.py daily`).
+- Each day file is summarised once and kept in memory until it changes: the first 14-day request reads the files (under a second for 14 days), later ones take a few milliseconds.
+- These pages overlap with OED's line, bar and compare graphs. OED stays for what they do not do: groups of sites, export, maps, the comparison of any period.
 
 **`/live/`** lists all sites with their status and total kW: the multi-site live overview.
 
