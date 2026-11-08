@@ -706,7 +706,7 @@ async function fwInit() {
     + 'The logger restarts once; a firmware that keeps restarting goes back to the previous one by itself. See docs/OTA.md.')}`;
   for (const dev of devs) {
     const d = esc(dev);
-    h += `<details class="fw"><summary id="fwsum-${d}">Firmware update: ${d}</summary>
+    h += `<details class="fw"${devs.length === 1 ? ' open' : ''}><summary id="fwsum-${d}">Firmware update: ${d}</summary>
       <div id="fws-${d}">Loading...</div>
       <div class="row"><b>From a GitHub release</b><select id="fwgh-${d}"><option value="">${me.github ? 'loading...' : 'FW_GITHUB_REPO not set on the server'}</option></select>
         <button data-dev="${d}" data-act="github">Send to ${d}</button></div>

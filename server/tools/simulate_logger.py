@@ -34,7 +34,7 @@ class Sim:
         self.minute_no = 0
         self.e = 184522.70
         self.eq = 40210.10
-        self.boot = "poweron@0.3.0"
+        self.boot = "poweron@0.4.0"
         self.t0 = time.time()
 
     def values(self, t, advance=False):
@@ -97,7 +97,7 @@ class Sim:
 def post(url, token, path, body, ctype):
     req = urllib.request.Request(url.rstrip("/") + path, data=body.encode(), method="POST",
                                  headers={"Authorization": "Bearer " + token, "Content-Type": ctype,
-                                          "X-Fw": "0.3.0", "X-Schema": "1"})
+                                          "X-Fw": "0.4.0", "X-Schema": "1"})
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             return r.status, r.read().decode()

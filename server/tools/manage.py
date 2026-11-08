@@ -20,7 +20,7 @@ Commands:
   backfill <site> <device> <folder>     merge an SD card copy (its /data folder) into the site
   publish-fw <file.bin> [--version X] [--device D] [--force]
                                         offer a firmware image to the loggers (OTA; only to older versions).
-                                        Same as the "Firmware update" panel of the live page (docs/OTA.md)
+                                        Same as "Firmware update" in the site page menu (docs/OTA.md)
   set-config <device> key=value ... [--force]
                                         settings sent to the logger (value @default = back to default)
   show-config <device>                  settings asked for, and the settings the logger reported

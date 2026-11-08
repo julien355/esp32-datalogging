@@ -297,8 +297,9 @@ el('builtinBtn').onclick = async () => {
 };
 
 // ---------------------------------------------------------------- meter link settings
-el('s_mb_baud').innerHTML = BAUDS.map(b => `<option>${b}</option>`).join('');
-el('s_mb_format').innerHTML = FORMATS.map(b => `<option>${b}</option>`).join('');
+// An empty first choice: nothing is sent for a field left on it (the logger may not have reported yet).
+el('s_mb_baud').innerHTML = '<option value="">(unchanged)</option>' + BAUDS.map(b => `<option>${b}</option>`).join('');
+el('s_mb_format').innerHTML = '<option value="">(unchanged)</option>' + FORMATS.map(b => `<option>${b}</option>`).join('');
 el('settingsBtn').onclick = async () => {
   const cur = view?.reported?.settings || {}, body = {}, changes = [];
   for (const k of ['meters', 'mb_baud', 'mb_format', 'ct_mult']) {

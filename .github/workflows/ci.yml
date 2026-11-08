@@ -50,7 +50,7 @@ jobs:
         run: docker build -f server/Dockerfile -t arkan-monitoring-ingest:ci .
 
   # Tag fw-v<version> (equal to FW_VERSION in firmware/include/config.h): a GitHub release with the
-  # two OTA images, which the live page's "Firmware update" panel can send to a logger (docs/OTA.md).
+  # two OTA images, which "Firmware update" on the site page can send to a logger (docs/OTA.md).
   release:
     if: startsWith(github.ref, 'refs/tags/fw-v')
     needs: firmware

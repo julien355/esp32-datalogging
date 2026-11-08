@@ -26,7 +26,7 @@ People endpoints (behind the Caddy web login, never published without it):
   Admin POSTs must be JSON (Content-Type application/json) and same-origin: a page on another site
   cannot make a logged-in browser send them.
 
-Firmware update from the live page (people in ADMIN_USERS only, see docs/OTA.md):
+Firmware update from the site page (people in ADMIN_USERS only, see docs/OTA.md):
   GET  /api/v1/admin/me                     {"user", "admin", "github"}
   GET  /api/v1/admin/fw/<device>            running firmware, what is offered, stored files, recent events
   GET  /api/v1/admin/github/releases        logger-*.bin assets of the repository's releases
@@ -58,7 +58,7 @@ from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, IngestError, iso_now  # noqa: E402
 
-VERSION = "0.2.0"
+VERSION = "0.4.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s

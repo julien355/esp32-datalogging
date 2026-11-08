@@ -9,7 +9,7 @@ Every image is checked before it is offered (check_image): an ESP32-S3 app image
 logger's marker "ARKAN-LOGGER-FW;ver=x.y.z;env=usb;" (firmware/include/config.h, FW_TAG). A sketch
 from the lab, a file for another chip or a truncated download is refused.
 
-The images can come from a file uploaded on the live page, from a GitHub release made by CI
+The images can come from a file uploaded on the site page (Firmware update), from a GitHub release made by CI
 (tag fw-v<version>, see .github/workflows/ci.yml), or from tools/manage.py publish-fw.
 """
 
