@@ -79,5 +79,10 @@ jobs:
           cp build/logger/partitions.bin "partitions-$VER.bin"
           notes="OTA images: logger-$VER.bin (native USB build, the default) and logger-uart-$VER.bin (UART build)."
           notes="$notes First flash by cable: bootloader 0x0, partitions 0x8000, firmware 0x10000."
-          gh release create "$GITHUB_REF_NAME" --title "Logger firmware $VER" --notes "$notes" \
-            "logger-$VER.bin" "logger-uart-$VER.bin" "bootloader-$VER.bin" "partitions-$VER.bin"
+          files="logger-$VER.bin logger-uart-$VER.bin bootloader-$VER.bin partitions-$VER.bin"
+          # The release may already exist (made on GitHub's "Draft a new release" page): add the files to it.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" $files --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" --title "Logger firmware $VER" --notes "$notes" $files
+          fi
