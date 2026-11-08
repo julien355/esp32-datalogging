@@ -4,7 +4,7 @@ Everything here is done **at the office, on the bench**, before the logger goes 
 
 Reference: functions and settings [`FIRMWARE.md`](FIRMWARE.md), data format [`DATA-FORMAT.md`](DATA-FORMAT.md), VPS [`VPS-SETUP.md`](VPS-SETUP.md), questions still open [`QUESTIONS.md`](QUESTIONS.md). Hardware theory, wiring drawings and site labs: [`install/README.md`](install/README.md).
 
-> **Status.** Firmware 0.3.0 (power quality min/max, sensors every 5 min, firmware version logged, remote settings, OTA on) and the ingest service with the alarm log are written; CI compiles the firmware and runs the server tests. **Nothing has run on the real board yet.** The pin map and the meter register map are still **to verify** (T2, T4 below). Expect small fixes during the first bench day.
+> **Status.** Firmware 0.3.0 (power quality min/max, sensors every 5 min, firmware version logged, remote settings, OTA on) and the ingest service with the alarm log are written; CI compiles the firmware and runs the server tests. **Nothing has run on the real board yet.** The pin map is still **to verify** (T2 below); the meter register map is verified **on site** (T4 below, `docs/meter/README.md`). Expect small fixes during the first bench day.
 
 ---
 
@@ -86,21 +86,16 @@ Tick each line in the record sheet (section 5). Times are in UTC.
 3. Pull the AM2301 data wire: `TH2=fault` on the console; the next 5-minute rows have `err` in `TH2_t`, `TH2_rh`. Within 15 min the alarm log on the VPS shows **A14 start**; plug it back: **A14 clear** at the next 5-minute row.
 4. Next to a reference thermometer/hygrometer for 30 min: note the differences. They become `th1_off_t`, `th2_off_t` etc. on the install day (the office is not the site).
 
-### T4. RS485 and the spare meter (register check at the office)
-The spare FCN300 at the office (owner, 7 November 2026) moves the register check from the hotel to the bench. **Mains wiring of the meter is done by a qualified electrician**, on a test board with a breaker; a known load (heater, kettle, lamps) on one or more phases.
-1. Note the meter's label (FCN300-3E4Y or 3EH4Y), its Modbus address and baud rate (meter menu), and its CT setting.
-2. RS485 wiring: A to A, B to B, shielded twisted pair, 120 ohm termination jumper on at the logger end.
-3. `mb 1 3 0 64`, then `mb 1 4 0 64`. Timeouts: swap A/B, check address and baud (`set mb_baud`, `set meters EM01:<addr>`).
-4. At the same moment, photograph the LCD pages (V, A, kW, kvar, kVA, PF, Hz, kWh) and compare word by word: which register, which scale, which word order. Use `docs/install/labs/modbus_dump.py` on the laptop for the 32-bit pairs.
-5. Write the result in `docs/meter/fcn300-3e4y-verified.md`. Corrections go in `/config/registers.csv` on the card (start from the output of `regs`): **no reflashing needed**. (Remote settings cannot change the register table; only `meters`, `mb_baud`, `mb_format` and `ct_mult` can be changed remotely.) **Check the ranges:** with the guide's 16-bit scales, current cannot exceed 65.5 A and power 32.8 kW; see `docs/meter/README.md` step 4.
-6. `status`: `EM01_v1=...` etc. within 1 % of the LCD. Switch the load on and off: kW and A follow; `EM01_e` counts up.
-7. **Power quality check:** switch a heavy load on and off a few times. The minute's `EM01_v1_min` / `_max` and `EM01_p_max` show the step even when the mean barely moves.
-8. **CT direction check:** reverse one CT on purpose for 6 minutes: the alarm log shows **A30 Negative power on a phase**. Put it back.
-9. Without the meter connected: `EM01: no answer`, `EM01_n` = 0, empty values, and after a minute **A03 Meter not answering** in the alarm log.
+### T4. RS485 wiring and the meter-off test (the register check moves to the site)
+The spare FCN300 at the office has **no Modbus port** (owner, 8 November 2026), so the meter's registers **cannot be read on the bench**. The register check, the CT-direction check (A30) and the power quality check are done **on site** at the first visit: `docs/meter/README.md` section 4, with the proposed table `docs/meter/registers-proposed.csv`. The bench still tests the wiring and the "meter not answering" path:
+1. RS485 wiring: A to A, B to B, shielded twisted pair, 120 ohm termination jumper on at the logger end. The pins (TX, RX, DE) are verified in T2.
+2. With no meter answering, `mb 1 3 0 64` on the console prints a timeout with the hint "wiring, A/B, id, baud".
+3. **Meter not answering:** `status` shows `EM01: no answer`, the record has `EM01_n` = 0 and empty meter values, and after a minute the alarm log has **A03 Meter not answering**.
+4. Put the proposed table on the card as `/config/registers.csv`, boot, and read the boot log: `Meter: register table from SD /config/registers.csv (19 values)`. This proves the file is read; it does not verify any value.
 
 ### T5. Records on the SD card
 1. Wait 6 minutes (the sensor values appear on the rows at :00, :05, ... only). `ls /data/2026/11` (this month), `tail /data/2026/11/2026-11-07.csv 3`.
-2. One row per minute, timestamps on the minute, `EM01_n` = 4 (with the meter), `TH1_t` filled every 5th row. The first row after the boot has `boot` = `poweron@0.3.0`.
+2. One row per minute, timestamps on the minute, `EM01_n` = 0 (no meter answers at the office; 4 = all reads good, on site), `TH1_t` filled every 5th row. The first row after the boot has `boot` = `poweron@0.3.0`.
 3. `header` shows the columns.
 
 ### T6. WiFi and upload
@@ -144,7 +139,7 @@ The spare FCN300 at the office (owner, 7 November 2026) moves the register check
 
 ### T12c. Alarm log
 1. On the VPS: `manage.py alarms adab` lists the open alarms and the last log lines; `/live/adab/` shows them too.
-2. Check that T3, T4, T7, T8, T9 left their lines: A14, A03, A30, A01 (start and clear), A02 with the outage length, A15.
+2. Check that T3, T4, T7, T8, T9 left their lines: A14, A03, A01 (start and clear), A02 with the outage length, A15.
 3. Before the site: `manage.py alarms adab --rebuild` after deleting the office data, so the site starts with an empty log.
 
 ### T13. 48-hour soak (plan exit criterion P2)
@@ -160,7 +155,8 @@ docker compose exec ingest python tools/manage.py daily adab
 - [ ] `portal_pass` = the logger's own setup WiFi password from `manage.py add-device` (in the password manager)
 - [ ] **A small hole in the box lid over the BOOT button**, labelled "Setup: hold 3 s" (reachable with the box closed, owner 7 November 2026)
 - [ ] Site profile on the VPS: 82.5 kVA, 200 A, 230 V in `site.json` (`add-site ... --contracted-kva 82.5 --rated-a 200`), so A08, A29 and A37 work
-- [ ] Verified register table on the card (`/config/registers.csv`) from T4
+- [ ] Register table on the card: `docs/meter/registers-proposed.csv` as `/config/registers.csv` (**proposal, not verified**: edited and confirmed on site, `docs/meter/README.md` section 4)
+- [ ] Laptop with `docs/install/labs/modbus_dump.py`, the USB-RS485 adapter and a clamp meter, for the on-site register and CT check
 - [ ] `tls_verify` = 1, `srv_url` = `https://arkan-monitoring.duckdns.org`
 - [ ] Simulated or office test data removed from the VPS (`VPS-SETUP.md` step 8)
 - [ ] SD card: `/data` emptied on a laptop (the office rows would be resent, harmless but confusing), `/state/upload.txt` deleted
@@ -177,8 +173,10 @@ docker compose exec ingest python tools/manage.py daily adab
 | T2 SD CS pin verified | | |
 | T2 RS485 TX / RX / DE verified | | |
 | T3 TH1 chip, TH2 reading, fault shown | | |
-| T4 spare meter: registers verified, within 1 % of the LCD | | |
-| T4 CT reversed: A30 logged | | |
+| T4 meter not answering: A03 logged | | |
+| T4 `registers.csv` read at boot | | |
+| On site: registers verified, within 1 % of the LCD | | |
+| On site: CT reversed: A30 logged | | |
 | T5 one row per minute on the card | | |
 | T6 day file on the VPS, live page | | |
 | T7 1 h outage: rows received, each once | | |

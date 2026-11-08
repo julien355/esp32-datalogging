@@ -478,7 +478,7 @@ Worked example: outdoors T = 29.8 C, RH = 66.5 %: gamma = ln(0.665) + 17.62 x 29
 
 **Theory.** 4.4, 4.5, 4.6. Drawing (c).
 
-**Equipment.** Board, USB-RS485 adapter, 2 m of the RS485 cable, laptop with Python and `minimalmodbus`, multimeter, 120 ohm resistor. For part B and C: the **spare meter at the office** (owner, 7 November 2026) or the meter at the hotel, the electrician, a camera.
+**Equipment.** Board, USB-RS485 adapter, 2 m of the RS485 cable, laptop with Python and `minimalmodbus`, multimeter, 120 ohm resistor. For part B and C: the meter at the hotel (the spare meter at the office has **no Modbus port**, owner, 8 November 2026), the electrician, a camera.
 
 **Sketch and script.** [`labs/lab3_modbus_dump/lab3_modbus_dump.ino`](labs/lab3_modbus_dump/lab3_modbus_dump.ino) and [`labs/modbus_dump.py`](labs/modbus_dump.py) (neither tested on the hardware yet). The plan also foresees `tools/modbus_dump.py` in session S2; until then use this one.
 

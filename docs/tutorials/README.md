@@ -11,7 +11,7 @@ Three tutorials written for beginners: every term explained, where every thing i
 ## Order of work
 
 ```
- 2. VPS setup  ──>  1A. logger at the office (bench tests with the spare meter)  ──>  1B. logger on site
+ 2. VPS setup  ──>  1A. logger at the office (bench tests; the spare meter has no Modbus port)  ──>  1B. logger on site
       │
       └──>  3. Open Energy Dashboard (history graphs; the live page /live/ works without it)
 ```
