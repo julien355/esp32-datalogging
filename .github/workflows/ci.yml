@@ -3,6 +3,7 @@ name: ci
 on:
   push:
     branches: ["**"]
+    tags: ["fw-v*"]
   pull_request:
 
 jobs:
@@ -47,3 +48,41 @@ jobs:
         run: python -m unittest discover -s server/tests -v
       - name: Docker image builds
         run: docker build -f server/Dockerfile -t arkan-monitoring-ingest:ci .
+
+  # Tag fw-v<version> (equal to FW_VERSION in firmware/include/config.h): a GitHub release with the
+  # two OTA images, which the live page's "Firmware update" panel can send to a logger (docs/OTA.md).
+  release:
+    if: startsWith(github.ref, 'refs/tags/fw-v')
+    needs: firmware
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ github.sha }}
+          path: build
+      - name: Tag must match FW_VERSION
+        run: |
+          ver=$(sed -n 's/^#define FW_VERSION "\(.*\)"/\1/p' firmware/include/config.h)
+          echo "FW_VERSION=$ver, tag=${GITHUB_REF_NAME}"
+          test "fw-v$ver" = "$GITHUB_REF_NAME"
+          echo "VER=$ver" >> "$GITHUB_ENV"
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/logger/firmware.bin "logger-$VER.bin"
+          cp build/logger-uart/firmware.bin "logger-uart-$VER.bin"
+          cp build/logger/bootloader.bin "bootloader-$VER.bin"
+          cp build/logger/partitions.bin "partitions-$VER.bin"
+          notes="OTA images: logger-$VER.bin (native USB build, the default) and logger-uart-$VER.bin (UART build)."
+          notes="$notes First flash by cable: bootloader 0x0, partitions 0x8000, firmware 0x10000."
+          files="logger-$VER.bin logger-uart-$VER.bin bootloader-$VER.bin partitions-$VER.bin"
+          # The release may already exist (made on GitHub's "Draft a new release" page): add the files to it.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" $files --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" --title "Logger firmware $VER" --notes "$notes" $files
+          fi

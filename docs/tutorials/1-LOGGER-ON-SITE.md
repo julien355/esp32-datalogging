@@ -1083,11 +1083,11 @@ Be careful with remote changes of `meters`, `mb_baud`, `mb_format` and the `pin_
 
 **OTA** (over the air, the normal way, `ota_on` = 1 by default):
 1. A new version is built with a new `FW_VERSION` in [`firmware/include/config.h`](../../firmware/include/config.h), tested on the bench first.
-2. The operator copies `firmware.bin` to the VPS data folder and offers it:
+2. The operator sends it from the logger's **Firmware update** panel on the live page (a GitHub release or the `.bin` file, see [../OTA.md](../OTA.md)), or copies `firmware.bin` to the VPS data folder and offers it:
    ```bash
    docker compose exec ingest python tools/manage.py publish-fw /data/firmware.bin --version 0.3.1
    ```
-3. The logger checks every 6 hours (`ota_check_h`); the console command `ota` makes it check at once. It downloads the file, checks it, writes it to its second flash slot and restarts.
+3. An online logger checks within a minute; otherwise every 6 hours (`ota_check_h`); the console command `ota` makes it check at once. It downloads the file, checks it, writes it to its second flash slot and restarts.
    Expected: `manage.py list` shows the new version; the alarm log has **A35 Firmware updated** "0.3.0 -> 0.3.1, by remote update (OTA)".
 4. If the new firmware restarts 3 times before 10 minutes of uptime, the logger **goes back to the previous version by itself** (`boot=sw:ota_rollback@...`, **A36** in the alarm log). Tell the supervisor.
 

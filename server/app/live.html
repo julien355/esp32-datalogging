@@ -22,6 +22,14 @@
   .al{padding:6px 10px;border-radius:6px;margin:4px 0;background:#fff}
   .critical{border-left:6px solid #b42318}.warning{border-left:6px solid #d97706}.info{border-left:6px solid #2563eb}
   .log td{font-size:.85em}
+  details.fw{background:#fff;border-radius:8px;padding:8px 12px;margin:8px 0;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  details.fw summary{cursor:pointer;font-weight:600}
+  .fw .row{margin:8px 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .fw .row b{min-width:210px}
+  .fw select{max-width:340px}
+  .fw .msg{margin:6px 0;font-weight:600}
+  .fw .ev{font-size:.85em;color:#52606d;margin:2px 0}
+  .warn{color:#b45309}
 </style>
 </head>
 <body>
@@ -29,6 +37,7 @@
 <main>
   <div id="status" class="status">Loading...</div>
   <div id="content"></div>
+  <div id="fw"></div>
 </main>
 <script>
 const m = location.pathname.match(/^\/live\/([a-z0-9-]+)\/?$/);
@@ -105,12 +114,145 @@ async function loadAll() {
   el('status').textContent = `All sites, ${j.time}`;
 }
 
+// ---------------------------------------------------------------- firmware update (ADMIN_USERS only)
+const fwState = {};   // device -> last view from the server
+const fwPost = (url, body, json) => fetch(url, {method: 'POST', cache: 'no-store', body,
+  headers: {'X-Requested-With': 'arkan', 'Content-Type': json ? 'application/json' : 'application/octet-stream'}});
+
+function fwStatusHtml(v, off) {
+  let h = `Running <b>${esc(v.running || 'unknown')}</b>${v.env ? ` (${esc(v.env)} build)` : ''}. `;
+  const o = v.offer;
+  if (!o) h += 'No firmware offered.';
+  else {
+    const who = `${o.scope === 'default' ? 'to every logger' : 'to this logger'}${o.by ? ' by ' + esc(o.by) : ''}, ${localTime(o.published, off)}`;
+    const what = `<b>${esc(o.version)}</b> (${esc(o.source || o.file)}) offered ${who}`;
+    h += {installed: `<span class="ok">${what}: installed.</span>`,
+          waiting: `<span class="warn">${what}: waiting for the logger (within a minute if it is online, else at its next check).</span>`,
+          rolled_back: `<span class="bad">${what}: the logger kept restarting on it and went back to ${esc(v.running)}. Not offered again.</span>`,
+          not_newer: `${what}: not newer than the running version, nothing to do.`}[v.state] || what;
+  }
+  if (v.ota_on === '0') h += '<br><span class="bad">ota_on is 0 on this logger: it does not take updates (manage.py set-config ota_on=1).</span>';
+  for (const e of v.events.slice(0, 6)) {
+    const d = e.kind === 'firmware' ? (e.from ? `firmware ${esc(e.from)} -> ${esc(e.to)}` : `first seen with firmware ${esc(e.to)}`)
+            : e.kind === 'boot' ? `restart: ${esc(e.reason)}`
+            : `${esc(e.kind.replace('ota_', ''))} ${esc(e.version || '')} ${e.by ? 'by ' + esc(e.by) : ''}`;
+    h += `<div class="ev">${localTime(e.ts, off)}: ${d}</div>`;
+  }
+  return h;
+}
+
+async function fwRefresh(dev, off) {
+  const r = await fetch(`/api/v1/admin/fw/${encodeURIComponent(dev)}`, {cache: 'no-store'});
+  if (!r.ok) return;
+  const v = await r.json();
+  fwState[dev] = v;
+  el(`fws-${dev}`).innerHTML = fwStatusHtml(v, off);
+  el(`fwsum-${dev}`).textContent = `Firmware update: ${dev} (running ${v.running || 'unknown'}${v.state === 'waiting' ? ', update waiting' : ''})`;
+  const sel = el(`fwfile-${dev}`);
+  if (!sel.dataset.done) {
+    sel.innerHTML = v.files.length ? v.files.map(f => `<option value="${esc(f.file)}">${esc(f.file)} (${Math.round(f.size / 1024)} kB)</option>`).join('')
+                                   : '<option value="">none yet</option>';
+    sel.dataset.done = 1;
+  }
+}
+
+async function fwGithub(devs) {
+  let rel = [], err = '';
+  try {
+    const r = await fetch('/api/v1/admin/github/releases', {cache: 'no-store'});
+    const j = await r.json();
+    if (r.ok) rel = j.releases; else err = j.error;
+  } catch (e) { err = 'server not reachable'; }
+  for (const dev of devs) {
+    const sel = el(`fwgh-${dev}`), env = fwState[dev]?.env || 'usb';
+    if (err || !rel.length) { sel.innerHTML = `<option value="">${esc(err || 'no release with a logger-*.bin file')}</option>`; continue; }
+    let opts = '', picked = false;
+    for (const x of rel) for (const a of x.assets) {
+      const aEnv = (a.name.match(/^logger-([a-z0-9]+)-\d/) || [, 'usb'])[1];
+      const pick = !picked && aEnv === env;
+      picked = picked || pick;
+      opts += `<option value="${a.id}"${pick ? ' selected' : ''}>${esc(x.tag)}: ${esc(a.name)}${x.prerelease ? ' (pre-release)' : ''}</option>`;
+    }
+    sel.innerHTML = opts;
+  }
+}
+
+async function fwAction(dev, kind, off) {
+  const msg = el(`fwmsg-${dev}`), force = el(`fwforce-${dev}`).checked;
+  let label, call;
+  if (kind === 'cancel') {
+    if (!confirm(`Withdraw the firmware offered to ${dev}?`)) return;
+    call = () => fwPost(`/api/v1/admin/fw/${dev}/cancel`, '{}', true);
+  } else {
+    if (kind === 'github') {
+      const id = el(`fwgh-${dev}`).value;
+      if (!id) return;
+      label = el(`fwgh-${dev}`).selectedOptions[0].textContent;
+      call = () => fwPost(`/api/v1/admin/fw/${dev}/github`, JSON.stringify({asset_id: +id, force}), true);
+    } else if (kind === 'upload') {
+      const f = el(`fwup-${dev}`).files[0];
+      if (!f) { msg.innerHTML = '<span class="bad">Choose a .bin file first.</span>'; return; }
+      label = f.name;
+      call = () => fwPost(`/api/v1/admin/fw/${dev}/upload?force=${force ? 1 : 0}&name=${encodeURIComponent(f.name)}`, f, false);
+    } else {
+      const file = el(`fwfile-${dev}`).value;
+      if (!file) return;
+      label = file;
+      call = () => fwPost(`/api/v1/admin/fw/${dev}/offer`, JSON.stringify({file, force}), true);
+    }
+    if (!confirm(`Send ${label} to ${dev}?\n\nThe logger installs it and restarts (about 30 s without readings, nothing is lost: the SD card keeps recording). If the new firmware keeps restarting, it goes back to the current one by itself.`)) return;
+  }
+  msg.textContent = 'Working...';
+  try {
+    const r = await call();
+    const j = await r.json();
+    msg.innerHTML = r.ok ? `<span class="ok">${kind === 'cancel' ? (j.cancelled ? 'Offer withdrawn.' : 'Nothing was offered to this logger.') : `Firmware ${esc(j.offer.version)} offered to ${esc(dev)}.`}</span>`
+                         : `<span class="bad">${esc(j.error || 'HTTP ' + r.status)}</span>`;
+    if (r.ok) el(`fwfile-${dev}`).dataset.done = '';
+  } catch (e) { msg.innerHTML = '<span class="bad">Server not reachable.</span>'; }
+  fwRefresh(dev, off);
+}
+
+async function fwInit() {
+  let me;
+  try { me = await (await fetch('/api/v1/admin/me', {cache: 'no-store'})).json(); } catch (e) { return; }
+  if (!me.admin) return;
+  const st = await (await fetch('/api/v1/status', {cache: 'no-store'})).json();
+  const devs = Object.keys((st.sites || {})[site] || {});
+  if (!devs.length) return;
+  const off = (await (await fetch(`/api/v1/live/${site}`, {cache: 'no-store'})).json()).profile?.utc_offset_h ?? 8;
+  let h = '<h2>Firmware update (remote)</h2>';
+  for (const dev of devs) {
+    const d = esc(dev);
+    h += `<details class="fw"><summary id="fwsum-${d}">Firmware update: ${d}</summary>
+      <div id="fws-${d}">Loading...</div>
+      <div class="row"><b>From a GitHub release</b><select id="fwgh-${d}"><option value="">${me.github ? 'loading...' : 'FW_GITHUB_REPO not set on the server'}</option></select>
+        <button data-dev="${d}" data-act="github">Send to ${d}</button></div>
+      <div class="row"><b>From a file on this computer</b><input type="file" id="fwup-${d}" accept=".bin">
+        <button data-dev="${d}" data-act="upload">Upload and send to ${d}</button></div>
+      <div class="row"><b>Already on the server</b><select id="fwfile-${d}"></select>
+        <button data-dev="${d}" data-act="offer">Send to ${d}</button></div>
+      <div class="row"><label><input type="checkbox" id="fwforce-${d}"> force: allow an older version or the other build variant</label>
+        <button data-dev="${d}" data-act="cancel">Withdraw the offer</button></div>
+      <div class="msg" id="fwmsg-${d}"></div></details>`;
+  }
+  el('fw').innerHTML = h;
+  el('fw').addEventListener('click', ev => {
+    const b = ev.target.closest('button[data-act]');
+    if (b) fwAction(b.dataset.dev, b.dataset.act, off);
+  });
+  await Promise.all(devs.map(dev => fwRefresh(dev, off)));
+  if (me.github) fwGithub(devs);
+  setInterval(() => devs.forEach(dev => fwRefresh(dev, off)), 30000);
+}
+
 async function tick() {
   try { await (site ? loadSite() : loadAll()); }
   catch (e) { el('status').innerHTML = '<span class="bad">Server not reachable</span>'; }
 }
 tick();
 setInterval(tick, 15000);
+if (site) fwInit();
 </script>
 </body>
 </html>

@@ -134,7 +134,7 @@ The spare FCN300 at the office (owner, 7 November 2026) moves the register check
 
 ### T12. Daily reboot and watchdog
 1. `set reboot_hr <current UTC hour + 1>`, `reboot`, wait: at hh:05 a reboot with `boot=sw:daily`. Set it back to 19.
-2. **OTA** (on by default): change `FW_VERSION` to 0.3.1, build, `manage.py publish-fw firmware.bin --version 0.3.1`, then `ota` on the console (or wait up to 6 h): the logger updates, `manage.py list` shows 0.3.1, and the alarm log has **A35 Firmware updated** "0.3.0 -> 0.3.1, by remote update (OTA)". Then publish a build that crashes at boot (test only): it must come back to the previous version by itself (`boot=sw:ota_rollback@0.3.1`, **A36** in the alarm log).
+2. **OTA** (on by default): change `FW_VERSION` to 0.3.1, build, send it from the logger's **Firmware update** panel on the live page ([`OTA.md`](OTA.md)) or with `manage.py publish-fw firmware.bin --version 0.3.1`; an online logger takes it within a minute (or `ota` on the console): the logger updates, `manage.py list` shows 0.3.1, and the alarm log has **A35 Firmware updated** "0.3.0 -> 0.3.1, by remote update (OTA)". Then publish a build that crashes at boot (test only): it must come back to the previous version by itself (`boot=sw:ota_rollback@0.3.1`, **A36** in the alarm log).
 
 ### T12b. Remote settings
 1. After a boot, `manage.py show-config LOG-0001` shows what the logger reported (firmware, settings, TH1 chip).

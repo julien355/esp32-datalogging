@@ -2,7 +2,7 @@
 
     <DATA_DIR>/
       devices.json                         device -> site, token hash, firmware (no token in clear)
-      firmware/manifest.json, *.bin        OTA files (tools/manage.py publish-fw)
+      firmware/manifest.json, *.bin        OTA files (live page or tools/manage.py publish-fw, app/firmware.py)
       sites/<site>/site.json               site profile: name, timezone, devices, notes
       sites/<site>/<device>/raw/YYYY/MM/YYYY-MM-DD.csv   1-minute records of that UTC day
       sites/<site>/<device>/raw/YYYY/MM/YYYY-MM-DD_2.csv  same day, if the columns changed
@@ -76,6 +76,7 @@ class DataStore:
         self._devices = None
         self._devices_mtime = None
         self.alarms = None   # AlarmEngine, set by the server (evaluates each upload)
+        self.on_rollback = None   # Firmware.note_rollback, set by the server
 
     # ------------------------------------------------------------------ paths
     def site_dir(self, site):
@@ -263,6 +264,11 @@ class DataStore:
                         reason = line.split(",")[boot_col]
                         if reason:
                             self.event(site, device, "boot", {"record": ts, "reason": reason})
+                            # Only a recent row: an old one from a backfill says nothing about today's offer.
+                            if reason.startswith("sw:ota_rollback") and self.on_rollback and \
+                                    abs(time.time() - datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(
+                                        tzinfo=timezone.utc).timestamp()) < 86400:
+                                self.on_rollback(site, device)
         return stored, dup, new_lines
 
     def ingest(self, site, device, text):

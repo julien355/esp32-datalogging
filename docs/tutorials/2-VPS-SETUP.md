@@ -1694,7 +1694,9 @@ docker compose exec ingest python tools/manage.py show-config LOG-0001
 
 ### C8. Publishing a firmware for OTA
 
-OTA (over the air): the logger downloads a new firmware from the VPS by itself. With `ota_on=1` (the default) it asks every 6 hours (`ota_check_h`). Building the firmware file is covered in [../FIRMWARE.md](../FIRMWARE.md) and tutorial 1 (PlatformIO writes it to `firmware/.pio/build/logger/firmware.bin`: **to verify** on your build).
+> **Easier way:** the logger's **Firmware update** panel at the bottom of its live page sends a GitHub release or a `.bin` from your computer to that logger, with the same checks. Setup (`ADMIN_USERS` in `server/.env`) and use: [../OTA.md](../OTA.md). The steps below are the command-line way.
+
+OTA (over the air): the logger downloads a new firmware from the VPS by itself. With `ota_on=1` (the default) it asks every 6 hours (`ota_check_h`), and at once (within a minute) when it is online and a firmware waits for it. Building the firmware file is covered in [../FIRMWARE.md](../FIRMWARE.md) and tutorial 1 (PlatformIO writes it to `firmware/.pio/build/logger/firmware.bin`: **to verify** on your build).
 
 **1. Upload the file under a new name** (Laptop, PowerShell, in the folder that holds `firmware.bin`; `0.3.1` is an example version):
 
@@ -1708,7 +1710,7 @@ scp .\firmware.bin hermes-vps:/srv/arkan-monitoring/data/firmware-upload-0.3.1.b
 docker compose exec ingest python tools/manage.py publish-fw /data/firmware-upload-0.3.1.bin --version 0.3.1 --device LOG-0001
 ```
 
-**Expected:** `logger-0.3.1.bin offered to LOG-0001 (md5 <32 hex characters>). Loggers with ota_on=1 take it at their next check.` Without `--device`, it is offered to every logger (`offered to every logger`).
+**Expected:** `logger-0.3.1.bin (usb build) offered to LOG-0001. Loggers with ota_on=1 take it within a minute if they are online (live hint), else at their next check (6 h, or console 'ota').` Without `--device`, it is offered to every logger (`offered to every logger`). The version is read from the file (`--version` is only checked against it); a file that is not the logger firmware is refused (`error: ...`).
 
 **3. Remove the uploaded copy** (it was copied into `firmware/`):
 
@@ -1719,7 +1721,7 @@ rm /srv/arkan-monitoring/data/firmware-upload-0.3.1.bin
 **4. Check within 6 hours:** `manage.py list` shows `fw 0.3.1`, and the alarm log shows **A35 Firmware updated** with `firmware 0.3.0 -> 0.3.1, by remote update (OTA)`. **A36 Firmware update rolled back** means the new firmware kept restarting and the logger went back to the old one: do not publish it to other loggers.
 
 Rules:
-- **Never publish the same version number twice**: `publish-fw` refuses if `firmware/logger-<version>.bin` exists. A logger is only offered a version **newer** than its own (a logger flashed by hand with a newer firmware is never downgraded). For a deliberate step back to an older version, add `--force` (it also replaces the file).
+- **Never publish the same version number with other content**: `publish-fw` refuses if `firmware/logger-<version>.bin` exists with different bytes (the loggers already offered it check its MD5). Build again with a new `FW_VERSION`. A logger is only offered a version **newer** than its own (a logger flashed by hand with a newer firmware is never downgraded). For a deliberate step back to an older version, add `--force`.
 
 ### C9. SD card backfill
 

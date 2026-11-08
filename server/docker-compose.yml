@@ -17,6 +17,10 @@ services:
     environment:
       DATA_DIR: /data
       MAX_BODY: "262144"
+      # Firmware update from the live page (docs/OTA.md): set in server/.env, never in this file.
+      ADMIN_USERS: ${ADMIN_USERS:-}
+      FW_GITHUB_REPO: ${FW_GITHUB_REPO:-}
+      FW_GITHUB_TOKEN: ${FW_GITHUB_TOKEN:-}
     user: "1000:1000"
     read_only: true                    # the only writable place is /data
     tmpfs:

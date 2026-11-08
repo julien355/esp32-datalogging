@@ -86,7 +86,11 @@ One CSV file per UTC day, same columns as the server's files. **The day files ar
 - Connection kept open between requests (keep-alive).
 
 ### 2.8 OTA (on by default since 0.2.0)
-With `ota_on=1` (default), every `ota_check_h` hours the logger asks `GET /api/v1/ota?fw=<version>`. If the server offers another version (`manage.py publish-fw`), it downloads it, checks the MD5, writes it to the other flash slot and restarts. Rollback as in 2.5.
+With `ota_on=1` (default), every `ota_check_h` hours the logger asks `GET /api/v1/ota?fw=<version>`. If the server offers another version (the **Firmware update panel of the live page**, or `manage.py publish-fw`), it downloads it, checks the MD5, writes it to the other flash slot and restarts. Rollback as in 2.5.
+- **Check now:** when a firmware waits for it, the server answers the live snapshot with `{"ota":1}` and the logger checks at once (at most once per 5 min), so an online logger updates within about a minute.
+- **Build marker:** every build carries `ARKAN-LOGGER-FW;ver=<FW_VERSION>;env=<usb|uart>;` (`FW_TAG`, `config.h`; the variant comes from the env in `platformio.ini`). The server refuses a file without it, for another chip or for the other variant. The boot report sends `env` too.
+- **A version that rolled back** is remembered (counter `ota_bad`) and never installed again by itself; the console command `ota` tries it again on purpose.
+- Releases, the panel and its checks: [`OTA.md`](OTA.md).
 
 ### 2.9 Setup without a laptop: the portal
 - Opens when **no WiFi is set**, when the **BOOT button is held 3 s**, or with the console command `portal`.

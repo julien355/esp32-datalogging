@@ -18,8 +18,9 @@ Commands:
   export-oed <site> [--from D] [--to D] [--all] [--out DIR]
                                         one CSV per value in Open Energy Dashboard upload format
   backfill <site> <device> <folder>     merge an SD card copy (its /data folder) into the site
-  publish-fw <file.bin> --version X [--device D] [--force]
-                                        offer a firmware image to the loggers (OTA; only to older versions)
+  publish-fw <file.bin> [--version X] [--device D] [--force]
+                                        offer a firmware image to the loggers (OTA; only to older versions).
+                                        Same as the "Firmware update" panel of the live page (docs/OTA.md)
   set-config <device> key=value ... [--force]
                                         settings sent to the logger (value @default = back to default)
   show-config <device>                  settings asked for, and the settings the logger reported
@@ -29,7 +30,6 @@ Commands:
 
 import argparse
 import csv
-import hashlib
 import json
 import os
 import re
@@ -40,6 +40,7 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app"))
 from alarms import AlarmEngine  # noqa: E402
+from firmware import Firmware, FirmwareError, check_image  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, atomic_write, iso_now, token_hash  # noqa: E402
 
 
@@ -377,22 +378,20 @@ def cmd_backfill(store, a):
 
 
 def cmd_publish_fw(store, a):
-    if not re.match(r"^[0-9A-Za-z._-]{1,20}$", a.version):
-        die("bad version")
-    fw_dir = os.path.join(store.root, "firmware")
-    os.makedirs(fw_dir, exist_ok=True)
-    name = f"logger-{a.version}.bin"
-    dst = os.path.join(fw_dir, name)
-    if os.path.exists(dst) and not a.force:
-        die(f"{dst} exists already: give a new version number (or --force to replace it)")
-    shutil.copyfile(a.file, dst)
-    md5 = hashlib.md5(open(dst, "rb").read()).hexdigest()
-    p = os.path.join(fw_dir, "manifest.json")
-    man = json.load(open(p)) if os.path.exists(p) else {}
-    man[a.device or "default"] = {"version": a.version, "file": name, "md5": md5,
-                                  "size": os.path.getsize(dst), "published": iso_now(), "force": bool(a.force)}
-    atomic_write(p, json.dumps(man, indent=2) + "\n")
-    print(f"{name} offered to {a.device or 'every logger'} (md5 {md5}). Loggers with ota_on=1 take it at their next check.")
+    fw = Firmware(store)
+    try:
+        with open(a.file, "rb") as f:
+            data = f.read()
+        info = check_image(data)
+        if a.version and a.version != info["version"]:
+            die(f"the file is version {info['version']} (FW_VERSION in the build), not {a.version}")
+        _, name = fw.store_image(data)
+        target = a.device or "default"
+        fw.offer(target, name, force=a.force, by="manage.py", source="manage.py " + os.path.basename(a.file))
+    except (FirmwareError, OSError) as e:
+        die(str(e))
+    print(f"{name} ({info['env']} build) offered to {a.device or 'every logger'}. Loggers with ota_on=1 take it "
+          "within a minute if they are online (live hint), else at their next check (6 h, or console 'ota').")
 
 
 def device_site(store, device):
@@ -481,10 +480,11 @@ def main():
     p.add_argument("--all", action="store_true", help="every value, not only energy, temperature, humidity")
     p.add_argument("--out")
     p = sub.add_parser("backfill"); p.add_argument("site"); p.add_argument("device"); p.add_argument("folder")
-    p = sub.add_parser("publish-fw"); p.add_argument("file"); p.add_argument("--version", required=True)
+    p = sub.add_parser("publish-fw"); p.add_argument("file")
+    p.add_argument("--version", help="optional: checked against the version written in the file")
     p.add_argument("--device")
     p.add_argument("--force", action="store_true",
-                   help="replace an existing file, and offer it even to loggers with a newer version (step back)")
+                   help="offer it even to a logger with a newer version (step back) or another build variant")
     p = sub.add_parser("set-config"); p.add_argument("device"); p.add_argument("pairs", nargs="+")
     p.add_argument("--force", action="store_true", help="accept keys before the logger has reported its settings")
     p = sub.add_parser("show-config"); p.add_argument("device")
