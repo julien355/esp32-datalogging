@@ -132,7 +132,7 @@ Positions below are for the top photo above, with the USB-C connector on the lef
 | **TH1** sensor module (blue) | Centre bottom | Temperature and humidity of the room air (I2C) | Chip type: AHT10 (0x38)? **to verify** with `i2c` (T2) |
 | **I2C (OLED)** header (4 pins) | Bottom edge, under the blue module | Optional small display, not used | |
 | **ADS1115** | Top right corner (silkscreen `ADS1115`) | 4-channel analog input, spare | I2C 0x48 expected |
-| **GPIO header** (two rows) | Right side, beside the green terminals | Pins of the ESP32-S3: numbers, `GND`, `3V3`, `5V` | `TH2` data on **GPIO 4** (proposed, **to verify**) |
+| **GPIO header** (two rows) | Right side, beside the green terminals | Pins of the ESP32-S3: numbers, `GND`, `3V3`, `5V` | `TH2` data on **GPIO 1** (confirmed) |
 | **Green screw terminals** | Right edge: a long block and a 3-way block | Field wiring. The 3-way block near the `120` jumper is probably the **RS485 A, B, G** terminal | Which terminal is A, B and G: **to verify** on the board (drawing (c) note 5) |
 | **RS485 transceiver** (8-pin chip) | Bottom right, beside the `120` jumper | Turns the ESP32's serial signals into the RS485 pair | TX/RX/DE GPIOs **unknown, to verify** (T2) |
 | **`120` jumper** | Bottom right, silkscreen `120` | Connects a 120 ohm termination resistor across A and B | **ON** at the logger (the logger is one end of the bus) |
@@ -361,7 +361,7 @@ The **serial console** is a text window on the laptop where the logger prints wh
    [uptime 1s] SD card ok: 15193 MB, 0 MB used, upload pointer 0 part 1 offset 0
    [uptime 1s] BOOT fw=0.3.0 reason=poweron boot#1 dev=LOG-0001 heap=...
    [uptime 1s] TH1 sensor: aht (0x38)
-   [uptime 1s] TH2 sensor: AM2301 on GPIO 4
+   [uptime 1s] TH2 sensor: AM2301 on GPIO 1
    [uptime 1s] Meter: built-in FCN300 register table (19 values, not verified)
    [uptime 1s] Meter: RS485 pins not set (pin_rs_tx / pin_rs_rx): meter reading disabled
    [uptime 1s] Sampling every 15 s, ... columns
@@ -501,7 +501,7 @@ Drawings (e) and (d): [`../install/schematics/e-enclosure-layout.svg`](../instal
    Expected: with the lid closed, the pin reaches and presses BOOT; you feel the click.
    The documents do not say how this hole is kept closed against dust and water (the box is IP54): decide with the supervisor (for example a removable rubber plug or a label over it) and write it in the as-built record.
    Do **not** press RESET through any hole: BOOT held during a reset puts the board in download mode (the logger stops logging until the next RESET or power cycle).
-4. **TS1 terminal strip for `TH2`:** fit it with the **4.7 kohm pull-up resistor between 3V3 and DATA**. Short leads from TS1 to the board header: TS1 3V3 to the **3V3** pin, TS1 DATA to **GPIO 4** (**to verify**, from T2/Lab 1), TS1 GND to a **GND** pin. Sleeved leads, in ferrules.
+4. **TS1 terminal strip for `TH2`:** fit it with the **4.7 kohm pull-up resistor between 3V3 and DATA**. Short leads from TS1 to the board header: TS1 3V3 to the **3V3** pin, TS1 DATA to **GPIO 1** (confirmed on the board), TS1 GND to a **GND** pin. Sleeved leads, in ferrules.
    Expected: with the power off, DATA to 3V3 on TS1 reads 4.47 to 4.94 kohm.
 5. **RS485 terminal:** set the board's **`120` jumper ON**.
 6. **The microSD card:** formatted FAT32, labelled `LOG-0001`, with the verified `/config/registers.csv` from T4. Insert it.
@@ -914,7 +914,7 @@ The console commands need the laptop on USB (a power swap). Many checks are also
 |---|---|---|---|
 | **No WiFi** | `status`: `WiFi: down for n s`. `wifi`: is the network seen, at what RSSI? `tail /log/<YYYY-MM>.log 20`: `WiFi: connection failed (attempt n, status s)` | **A01** Logger offline (no record for 15 min); **A17** Weak WiFi (below -80 dBm for 60 min) | Re-enter the name and password with the portal (B8); the network must be 2.4 GHz WPA2 without a login page; the hotel may have changed the password (ask the owner); RSSI must be better than -70 dBm. After 6 h offline the logger reboots by itself (`sw:offline`): that is normal and harmless |
 | **No meter answer** | `status`: `EM01: no answer (n in a row)`. `mb 1 3 0 16` (with the meter's address): `error 0xE2 (timeout ...)`. Boot log or `mb`: `RS485 pins not set` | **A03** Meter not answering | Swap A/B once (power off); check `meters`, `mb_baud`, `mb_format` against the meter menu; check `pin_rs_tx`, `pin_rs_rx`, `pin_rs_de` against the record; `120` jumper ON; ask the electrician to check the meter end. **If the RS485 pins are not set, the meter columns are missing completely and A03 cannot fire**: check `status` shows `EM01_...` values |
-| **Sensor err** | `status`: `TH1=fault` or `TH2=fault`. `i2c` for `TH1` (its address must be listed). Day file: `err` in `TH1_t`/`TH2_t` | **A14** Temp/RH sensor fault | `TH2`: check TS1 wiring and colours, DATA idle 3.2 to 3.4 V, pull-up 4.7 kohm, `th2_on` = 1, `pin_dht` = 4. `TH1`: `th1_type` = `auto`. Outdoors after rain, 99 to 100 % RH for hours is normal (A25 only after a day) |
+| **Sensor err** | `status`: `TH1=fault` or `TH2=fault`. `i2c` for `TH1` (its address must be listed). Day file: `err` in `TH1_t`/`TH2_t` | **A14** Temp/RH sensor fault | `TH2`: check TS1 wiring and colours, DATA idle 3.2 to 3.4 V, pull-up 4.7 kohm, `th2_on` = 1, `pin_dht` = 1. `TH1`: `th1_type` = `auto`. Outdoors after rain, 99 to 100 % RH for hours is normal (A25 only after a day) |
 | **Clock not set** | `time`: `System UTC NOT SET, RTC invalid or absent`. `status`: `Time: NOT SET`; `Last sample: (clock not set, nothing recorded)` | **A01** (no record without a valid clock); **A18** Clock wrong (more than 2 min off) | Connect to WiFi (NTP sets the clock and the RTC), or `time set 2026-11-12T03:15:00` in **UTC**. If the time is lost at every power cut: replace the CR1220 cell (+ side up) |
 | **SD failed** | `status`: `SD: FAILED`, `RAM queue n rows`. `ls /`: `no such folder` | **A15** SD card error | The logger keeps 3 h of rows in RAM and still uploads them. Power off, reseat the card, check it is FAT32 (8 to 32 GB); check `pin_sd_cs` (10 or 21); replace the card if it fails again |
 | **Backlog growing** | `status`: `Backlog: n min`, `Uploads: ... failed n, last error ...`. `upload` forces a try | **A16** Backlog growing (over 60 min while WiFi is up) | Read `last error`: 401/403 = token (next line); a number like -1 or 5xx = server or network problem: ask the operator to check the service. Nothing is lost: the rows wait on the card |
@@ -979,7 +979,7 @@ All settings: [`../FIRMWARE.md` section 3](../FIRMWARE.md#3-all-settings). Every
 | `th2_off_t`, `th2_off_rh` | `0` | `TH2` offsets from B11 | Yes |
 | `th2_on` | `1` | 0 only if the AM2301 is removed | Yes |
 | `pin_rs_tx`, `pin_rs_rx`, `pin_rs_de` | `-1` | Only the values verified in T2 | Yes (careful) |
-| `pin_sd_cs`, `pin_sda`, `pin_scl`, `pin_dht` | `10`, `8`, `9`, `4` | Only the values verified in T2 | Yes (careful) |
+| `pin_sd_cs`, `pin_sda`, `pin_scl`, `pin_dht` | `10`, `8`, `9`, `1` | Only the values verified in T2 | Yes (careful) |
 
 **Do not change** without the supervisor and the owner: `dev_id` (`LOG-0001`), `srv_url`, `tls_verify` (1), `sample_s` (15), `th_avg_min` (5), `reboot_hr` (19 = 03:05 WITA), `offline_rbt_h` (6), `ota_on` (1), `rcfg_on` (1), `live_on` (1), and the others.
 

@@ -74,6 +74,7 @@ static bool parseType(const String &s, Type &t) {
 
 // Line format: name,fc,addr,type,scale,ct,agg   e.g.  p,3,0x000D,s16,0.001,1,minmax
 static bool loadOverride(fs::FS &fs) {
+  if (!fs.exists(FILE_REGISTERS)) return false;   // optional file: open() would log an error
   File f = fs.open(FILE_REGISTERS, FILE_READ);
   if (!f) return false;
   f.setTimeout(10);

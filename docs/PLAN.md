@@ -67,7 +67,7 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 | I2C SDA / SCL | 8 / 9 |
 | SD SCK / MISO / MOSI / CS | 12 / 13 / 11 / 10 or 21 |
 | RS485 TX / RX / DE-RE | top 3 rows of the back table, to verify |
-| AM2301 data | **GPIO 4** proposed (free on the header, not a strapping pin); to confirm in S4 |
+| AM2301 data | **GPIO 1** (free on the header, not a strapping pin); confirmed on the board 8 Nov 2026 |
 
 **The AM2301 (`TH2`)**
 - **Signal:** one data wire with its own timing protocol (DHT family), not I2C or Modbus. It needs one free GPIO and a **pull-up resistor of 4.7 to 10 kohm from the data line to 3.3 V**. Many cased AM2301 have no pull-up inside; fit one at the board end.
