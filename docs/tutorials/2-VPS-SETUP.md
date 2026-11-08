@@ -13,7 +13,7 @@ It is written for a beginner. Every term is explained the first time, every comm
 | **After** | [Tutorial 1](1-LOGGER-ON-SITE.md) (the logger) and [tutorial 3](3-OPEN-ENERGY-DASHBOARD.md) (Open Energy Dashboard) |
 | **Short reference** | [../VPS-SETUP.md](../VPS-SETUP.md) is the short version of this tutorial. This tutorial follows its steps and explains them |
 
-**Status (7 November 2026).** The ingest service, the alarm engine, the live page, the remote settings, the OTA files and the admin tool `manage.py` exist and pass their tests ([../../server/tests/test_ingest.py](../../server/tests/test_ingest.py)). **WhatsApp alerts through Hermes are not built yet** (session S6). **Open Energy Dashboard (OED) is not installed yet** (tutorial 3).
+**Status (8 November 2026).** The ingest service, the alarm engine, the site page (live values, history pages, meter register page, remote firmware update), the remote settings, the OTA files and the admin tool `manage.py` exist and pass their tests ([../../server/tests/test_ingest.py](../../server/tests/test_ingest.py)). **WhatsApp alerts through Hermes are not built yet** (session S6). **Open Energy Dashboard (OED) is not installed yet** (tutorial 3).
 
 ## How to read this tutorial
 
@@ -36,7 +36,7 @@ Rules for every block:
 | `<VPS_PUBLIC_IP>` | The public IP address of hermes-vps (ask the owner) |
 | `<VPS_USER>` | The Linux user you log in as: normally `ai` (ask the owner) |
 | `<your-name>` | Your name, to label your SSH key |
-| `<tag>` | The git tag to install, for example `v0.3.0` (ask the owner) |
+| `<tag>` | The git tag to install, for example `v0.4.0` (ask the owner) |
 | `<previous-tag>` | The tag that was running before an update |
 | `<stamp>` | The time part of a backup file name, for example `20261108T0230Z` |
 | `<date>` | Today's date, for example `2026-11-07` |
@@ -84,7 +84,7 @@ Real secrets (tokens, passwords, IP addresses) never go into this file, a chat, 
 
 **Token.** A long random password that belongs to one logger. The logger sends it with every request (`Authorization: Bearer <token>`). The service keeps only a **hash** of it (SHA-256, a one-way fingerprint), never the token itself, so it is shown **once**, when the logger is added. A lost token cannot be recovered: you make a new one.
 
-**Git tag.** A fixed name for one version of the code, for example `v0.3.0`. House rule: **the VPS only runs tagged versions**, never "the latest work in progress". Updating = checking out a newer tag.
+**Git tag.** A fixed name for one version of the code, for example `v0.4.0`. House rule: **the VPS only runs tagged versions**, never "the latest work in progress". Updating = checking out a newer tag.
 
 **cron.** The Linux scheduler. A line in a **crontab** (a user's list of scheduled jobs) runs a command at fixed times, for example the backup every night at 02:30.
 
@@ -144,9 +144,10 @@ Where the next parts will plug in:
 | `/srv/arkan-monitoring/data/sites/adab/LOG-0001/raw/2026/11/2026-11-07.csv` | **The 1-minute records**, one file per UTC day, same as on the SD card | The service only. **Never delete** |
 | `/srv/arkan-monitoring/data/sites/adab/LOG-0001/events.jsonl` | Boots, firmware changes, settings, backfills | The service and `manage.py` |
 | `/srv/arkan-monitoring/data/sites/adab/LOG-0001/config.json` | Settings asked for the logger (`set-config`) | `manage.py set-config` |
-| `/srv/arkan-monitoring/data/sites/adab/LOG-0001/settings-reported.json` | Settings the logger reported after its last boot | The service |
+| `/srv/arkan-monitoring/data/sites/adab/LOG-0001/settings-reported.json` | Settings the logger reported after its last boot (and the register table it reads) | The service |
+| `/srv/arkan-monitoring/data/sites/adab/LOG-0001/registers.json`, `registers-history.jsonl` | Meter register table last sent from the page `/live/adab/register`, and every version sent | The register page, `manage.py set-registers` |
 | `/srv/arkan-monitoring/data/sites/adab/LOG-0001/alarm-state.json` | Open alarms and pending delays (internal) | The service |
-| `/srv/arkan-monitoring/data/firmware/` | `manifest.json` and `logger-x.y.z.bin` for OTA updates | `manage.py publish-fw` |
+| `/srv/arkan-monitoring/data/firmware/` | `manifest.json` and `logger-x.y.z.bin` for OTA updates | **Firmware update** on the site page, `manage.py publish-fw` |
 | `/srv/arkan-monitoring/data/export/` | Working folder: OED files, SD card copies, temporary files | Operator; keep it tidy |
 | `/srv/arkan-monitoring/data/logs/` | Created by the setup script, not used yet (the service log is in Docker, section C1) | |
 | `/srv/arkan-monitoring/backups/` | `data-<stamp>.tar.gz` (14 kept) and `backup.log` | `backup.sh` from cron |
@@ -161,16 +162,19 @@ Where the next parts will plug in:
 
 | File | What it is |
 |---|---|
-| [../../server/app/server.py](../../server/app/server.py) | The web service: device endpoints, live page, status, alarms API |
+| [../../server/app/server.py](../../server/app/server.py) | The web service: device endpoints, site page, status, alarms, history and admin API |
 | [../../server/app/store.py](../../server/app/store.py) | The data folder: checks and stores the rows, tokens, settings |
 | [../../server/app/alarms.py](../../server/app/alarms.py) | The alarm engine |
-| [../../server/app/live.html](../../server/app/live.html) | The live page |
+| [../../server/app/live.html](../../server/app/live.html) | The site page `/live/<site>/`: live now, history pages, firmware update (and the overview `/live/`) |
+| [../../server/app/history.py](../../server/app/history.py) | Hourly and 1-minute summaries of the day files for the history pages |
+| [../../server/app/registers.html](../../server/app/registers.html), [../../server/app/registers.py](../../server/app/registers.py) | The meter register page `/live/<site>/register` and its checks |
+| [../../server/app/firmware.py](../../server/app/firmware.py) | Firmware checks, offers per logger, GitHub releases ([../OTA.md](../OTA.md)) |
 | [../../server/tools/manage.py](../../server/tools/manage.py) | The admin tool (every command in Part C) |
 | [../../server/tools/simulate_logger.py](../../server/tools/simulate_logger.py) | A fake logger, to test without the board |
 | [../../server/tests/test_ingest.py](../../server/tests/test_ingest.py) | The automatic tests |
 | [../../server/Dockerfile](../../server/Dockerfile) | How the image is built |
 | [../../server/docker-compose.yml](../../server/docker-compose.yml) | How the container runs (port, data folder, limits) |
-| [../../server/.env.example](../../server/.env.example) | Example of the optional `.env` |
+| [../../server/.env.example](../../server/.env.example) | Example of `.env`: port, and who may update firmware from the web page |
 | [../../.dockerignore](../../.dockerignore) | What goes into the image (only the app, the tools and the alarm register) |
 | [../../server/deploy/setup-vps.sh](../../server/deploy/setup-vps.sh) | One-time preparation of the data folder (owner) |
 | [../../server/deploy/backup.sh](../../server/deploy/backup.sh) | Nightly backup |
@@ -674,7 +678,7 @@ List the tags:
 git tag --list
 ```
 
-**Expected:** a list of version names, for example `v0.3.0`. **If the list is empty**, no version has been tagged yet (the case on 7 November 2026): the owner creates the tag on GitHub first (**to verify**: the tag name), then you fetch it with `git fetch --tags`.
+**Expected:** a list of version names, for example `v0.4.0`. **If the list is empty**, no version has been tagged yet (the case on 8 November 2026; the first tag is planned as `v0.4.0`): the owner creates the tag on GitHub first (**to verify**: the tag name), then you fetch it with `git fetch --tags`.
 
 Check out the tag the owner chose:
 
@@ -688,7 +692,7 @@ git checkout <tag>
 git describe --tags
 ```
 
-**Expected:** the tag name alone, for example `v0.3.0`. Write it down: it is the "current tag" for the next update.
+**Expected:** the tag name alone, for example `v0.4.0`. Write it down: it is the "current tag" for the next update.
 
 ### B12. The setup script, dry run (owner)
 
@@ -728,11 +732,9 @@ ls -l /srv/arkan-monitoring/data
 
 **Expected:** `devices.json`, `export`, `firmware`, `logs`, `sites`, all owned by `ai ai` (if ai is uid 1000) or by `1000 1000`.
 
-### B14. Only if port 8800 is taken: the `.env` file
+### B14. The `.env` file: who may update firmware (and the port, if 8800 is taken)
 
-Skip this step if B6 showed 8800 free.
-
-The port is set in an optional file `server/.env` (read by docker compose). Start from the example; `cp -n` never overwrites an existing file.
+`server/.env` (read by docker compose, never in git) holds the settings of this VPS. Start from the example; `cp -n` never overwrites an existing file.
 
 **Where:** VPS, user ai.
 
@@ -745,10 +747,25 @@ cp -n .env.example .env
 ```
 
 ```bash
+chmod 600 .env
+```
+
+```bash
 nano .env
 ```
 
-Change `INGEST_PORT=8800` to the port agreed with the owner, save (Ctrl+O, Enter) and quit (Ctrl+X). The same port must then replace `8800` in the three `reverse_proxy 127.0.0.1:8800` lines of the Caddy site file (B22, done by the owner), and in the `curl` commands of this tutorial. The port inside the container stays 8800.
+- `ADMIN_USERS=`: the Arkan login names (from `hub-users.caddy`, ask the owner) allowed to send a firmware to a logger from the site page, comma separated, for example `ADMIN_USERS=julien`. Empty = **Firmware update** is off for everyone (the command line `manage.py publish-fw` still works). Everyone else with a login still sees the live values, the history and the register page.
+- `FW_GITHUB_REPO=julien355/esp32-datalogging`: where the firmware releases are. Leave it.
+- `FW_GITHUB_TOKEN=`: only if the repository is private ([../OTA.md](../OTA.md) section 6). Leave it empty otherwise.
+- `INGEST_PORT=8800`: change it **only if B6 showed 8800 taken**, to the port agreed with the owner. The same port must then replace `8800` in the three `reverse_proxy 127.0.0.1:8800` lines of the Caddy site file (B22, done by the owner), and in the `curl` commands of this tutorial. The port inside the container stays 8800.
+
+Save (Ctrl+O, Enter) and quit (Ctrl+X).
+
+```bash
+grep -E '^(ADMIN_USERS|FW_GITHUB_REPO|INGEST_PORT)=' .env
+```
+
+**Expected:** the three lines with your values. Never paste the token line into a chat or a screenshot.
 
 ### B15. Build and start the container (owner approves)
 
@@ -790,7 +807,7 @@ docker compose ps
 curl -s http://127.0.0.1:8800/health
 ```
 
-**Expected:** `{"ok": true, "version": "0.2.0", "time": "2026-11-07T06:18:50Z"}` (your time; the version is the service version, not the tag).
+**Expected:** `{"ok": true, "version": "0.4.0", "time": "2026-11-07T06:18:50Z"}` (your time; the version is the service version, not the tag).
 
 ```bash
 ss -ltn | grep 8800
@@ -802,7 +819,7 @@ ss -ltn | grep 8800
 docker compose logs --tail 20 ingest
 ```
 
-**Expected:** a first line `... arkan-ingest 0.2.0 on 0.0.0.0:8800, data in /data` (0.0.0.0 here is **inside** the container; the outside is limited to the loopback by compose), then one line per request, for example `127.0.0.1 "GET /health HTTP/1.1" 200 -`. Docker's own health check calls `/health` every minute, so you will see that line every minute: it is normal.
+**Expected:** a first line `... arkan-ingest 0.4.0 on 0.0.0.0:8800, data in /data` (0.0.0.0 here is **inside** the container; the outside is limited to the loopback by compose), then one line per request, for example `127.0.0.1 "GET /health HTTP/1.1" 200 -`. Docker's own health check calls `/health` every minute, so you will see that line every minute: it is normal.
 
 ```bash
 docker stats --no-stream arkan-monitoring-ingest
@@ -942,11 +959,11 @@ Read [monitoring.caddy](../../server/deploy/monitoring.caddy) before the owner i
 | `arkan-monitoring.duckdns.org { ... }` | Everything inside applies to this name only. Caddy gets the HTTPS certificate for it automatically and redirects `http://` to `https://` |
 | `encode gzip` | Compresses the answers (faster pages) |
 | `header { ... }` | Security headers on every answer: `Strict-Transport-Security` (browsers use HTTPS only), `X-Robots-Tag "noindex, nofollow"` (search engines do not list the site), `X-Content-Type-Options "nosniff"`, and `-Server` removes the server name |
-| `@device { path /api/v1/ingest /api/v1/ota /api/v1/firmware/* /api/v1/config /api/v1/config/report }` | A **matcher**: a name for "requests to the logger paths" |
+| `@device { path /api/v1/ingest /api/v1/ota /api/v1/firmware/* /api/v1/config /api/v1/config/report /api/v1/registers }` | A **matcher**: a name for "requests to the logger paths" |
 | `@livepost { method POST  path /api/v1/live }` | A matcher for the logger's live snapshots (POST only) |
 | `handle @device { request_body { max_size 256KB } reverse_proxy 127.0.0.1:8800 }` | Logger paths: **no web login** (a logger cannot type one; the service checks the token), body limited to 256 KB, then passed to our container |
 | `handle @livepost { request_body { max_size 16KB } reverse_proxy 127.0.0.1:8800 }` | Same for live snapshots, limited to 16 KB |
-| `handle { basicauth { import /opt/edge/secrets/hub-users.caddy } redir / /live/ 302  reverse_proxy 127.0.0.1:8800 { header_up X-Auth-User {http.auth.user.id} } }` | **Everything else** (the live page, `/api/v1/status`, `GET /api/v1/live/<site>`, `/api/v1/alarms/<site>`, `/health`): **Arkan login first** (the shared login file), then `/` is sent to `/live/` until OED takes `/`, then passed to the container with the user's name in `X-Auth-User` |
+| `handle { basicauth { import /opt/edge/secrets/hub-users.caddy } redir / /live/ 302  reverse_proxy 127.0.0.1:8800 { header_up X-Auth-User {http.auth.user.id} } }` | **Everything else** (the site page `/live/<site>/` and its register page, `/api/v1/status`, `GET /api/v1/live/<site>`, `/api/v1/alarms/<site>`, `/api/v1/history/<site>`, the admin API `/api/v1/admin/...`, `/health`): **Arkan login first** (the shared login file), then `/` is sent to `/live/` until OED takes `/`, then passed to the container with the user's name in `X-Auth-User` (the service uses it for `ADMIN_USERS` and writes it in the register history) |
 | `log { output file /var/log/caddy/arkan-monitoring.log { roll_size 10mb  roll_keep 5 } format filter { ... } }` | Access log of our site, at most 5 files of 10 MB, with the `Authorization` (token or password) and `Cookie` headers **deleted** before writing |
 
 A `handle` block with a matcher wins over the plain `handle` block, so the logger paths never meet the login.
@@ -1062,7 +1079,7 @@ Test-NetConnection arkan-monitoring.duckdns.org -Port 8800
 curl.exe -s -u <hub-user> https://arkan-monitoring.duckdns.org/health
 ```
 
-**Expected:** `{"ok": true, "version": "0.2.0", "time": "..."}`.
+**Expected:** `{"ok": true, "version": "0.4.0", "time": "..."}`.
 
 **If any check gives an error like `schannel: ...` or `SSL certificate problem`**, the certificate is not there yet: wait two minutes and try again, then see Part D, "Certificate not issued". **If** a check gives `502`, see Part D.
 
@@ -1070,8 +1087,8 @@ curl.exe -s -u <hub-user> https://arkan-monitoring.duckdns.org/health
 
 1. Open https://arkan-monitoring.duckdns.org/ in Chrome, Edge or Firefox.
 2. The browser shows its own small sign-in box. Type your Arkan dashboard login (`<hub-user>` and its password, from the owner).
-3. **Expected:** the page moves to `/live/` and shows `All sites, <time>` and a table with the columns `Site`, `Logger`, `Last record (UTC)`, `Live`, `Firmware`, and one row: `adab`, `LOG-0001`, `-`, `none` (in red), `-`. Nothing has been received yet: that is correct.
-4. Click `adab`. **Expected:** the page `/live/adab/` with the title `Live: Adab hotel` and the red line `No live data for this site (logger offline or not installed yet).` (the open alarms and the alarm log are still shown below it).
+3. **Expected:** the page moves to `/live/`: a dark blue header `All sites · Live` with the time, and a table with the columns `Site`, `Logger`, `Power now`, `Live`, `Last record (UTC)`, `Firmware`, and one row: `adab`, `LOG-0001`, `–`, `none` (in red), `–`, `–`. Nothing has been received yet: that is correct.
+4. Click `adab`. **Expected:** the site page `/live/adab/`: the header `Adab hotel` with a red pill `No live data`, a side menu (**Live now**; **History**: Power, One day, Energy per day, This week vs last, Temperature, Humidity; **Logger**: Meter registers, and Firmware update if your login is in `ADMIN_USERS`; **Elsewhere**), and in the page the red box `No live data for this site (logger offline or not installed yet).` (the open alarms and the alarm log are still shown). The history pages say there is nothing yet.
 5. Check the padlock next to the address: it should say the connection is secure.
 
 **If** the sign-in box keeps coming back, the login is wrong or not in `hub-users.caddy`: ask the owner.
@@ -1137,7 +1154,7 @@ What to check: 3 batches with `"stored": 60` each, `"rejected_rows": 0`, the res
 
 **1. The live page.** In the browser, open https://arkan-monitoring.duckdns.org/live/adab/.
 
-**Expected:** within 15 s, the green line `Live, updated N s ago`, a heading `LOG-0001: <local time> (UTC+8), RSSI -63 dBm, backlog 0 min, fw sim-0.1.0`, and tiles (`Total power (kW)`, `V L1-N`, `Electrical room (C)`...) each with a small line graph that grows every 15 s. Above them `No open alarm`, and below them `Alarm log (last 20, local time)`. The overview `/live/` now shows `adab`, `LOG-0001`, a last record time, `N s ago` in green, firmware `0.3.0`.
+**Expected:** within 15 s, the green pill `Live · updated N s ago` and `Hotel time HH:MM` in the header; `✓ No open alarm`; the cards **Power** (`Total power`, `Apparent power` with `% of the 82.5 kVA PLN contract`, `Power factor`, `Frequency`), **Per phase** (`Voltage L-N (V)` and `Current (A)`, L1 L2 L3 in each), **Environment** (`Electrical room temperature`, `Outdoor temperature`, humidity, room minus outdoor, outdoor dew point), each with a small line graph that grows every 15 s; then **Logger** (`LOG-0001`, WiFi signal `-63 dBm`, upload backlog `0 min`, SD card `OK`, firmware `sim-0.1.0`) and `Alarm log · last 20, hotel time`. Click **Power** and **Energy per day** in the menu: the hours sent by the simulator are there. The overview `/live/` now shows `adab`, `LOG-0001`, the power now, `● N s ago` in green, a last record time, firmware `0.4.0`.
 
 **2. The status of every logger.** Where: VPS, user ai, in `/opt/arkan-monitoring/server`.
 
@@ -1149,7 +1166,7 @@ docker compose exec ingest python tools/manage.py list
 
 ```text
 adab: Adab hotel (Asia/Makassar)
-  LOG-0001: fw 0.3.0, last record 2026-11-07T06:18:00Z
+  LOG-0001: fw 0.4.0, last record 2026-11-07T06:18:00Z
 ```
 
 **3. The day file** (one file per UTC day; if the 3 hours crossed midnight UTC, there are two).
@@ -1197,7 +1214,7 @@ How to read it:
 - **A16** starts at the first minute: the simulated rows say the oldest unsent record is 180 minutes old (a 3-hour outage); it clears when that falls under 5 minutes, near the end of the backlog.
 - **A26 and A05** start 29 minutes after the first minute (the simulated dip), at the **time of the records**, not the time they arrived; they clear 6 minutes later.
 
-No line starts with `OPEN`: no alarm is still open. The same lines appear at the bottom of the live page.
+No line starts with `OPEN`: no alarm is still open. The same lines appear at the bottom of "Live now" on the site page.
 
 **5. The events of the logger.**
 
@@ -1205,7 +1222,7 @@ No line starts with `OPEN`: no alarm is still open. The same lines appear at the
 cat /srv/arkan-monitoring/data/sites/adab/LOG-0001/events.jsonl
 ```
 
-**Expected:** three JSON lines: `"kind": "device_added"`, `"kind": "firmware"` (from `null` to `0.3.0`), `"kind": "boot"` with `"reason": "poweron@0.3.0"`.
+**Expected:** three JSON lines: `"kind": "device_added"`, `"kind": "firmware"` (from `null` to `0.4.0`), `"kind": "boot"` with `"reason": "poweron@0.4.0"`.
 
 Let the simulator run a few minutes, then stop it in its PowerShell window with **Ctrl+C**, and remove the token from memory:
 
@@ -1265,7 +1282,7 @@ docker compose start ingest
 docker compose exec ingest python tools/manage.py list
 ```
 
-**Expected:** `LOG-0001: fw 0.3.0, last record None`. The firmware shown is the simulator's; the real logger replaces it with its own at its first upload. The live page shows `No live data for this site (logger offline or not installed yet).`
+**Expected:** `LOG-0001: fw 0.4.0, last record None`. The firmware shown is the simulator's; the real logger replaces it with its own at its first upload. The live page shows `No live data for this site (logger offline or not installed yet).`
 
 ### B28. Set up the backups and the daily summary
 
@@ -1284,6 +1301,7 @@ Do sections [C4](#c4-backups) (backup crontab and a first backup by hand) and [C
 | Secrets | password manager | token and `portal_pass` of LOG-0001 saved; no `settings-*.txt` left in `/srv/arkan-monitoring/data/export/` |
 | Caddy | B23 checks | 401, 401, 401, JSON 401, 308, port 8800 closed |
 | Browser | `/live/` | login, then the table |
+| Firmware update | `/live/adab/`, side menu | **Firmware update** shows for the logins in `ADMIN_USERS` (B14), not for the others |
 | Backups | `ls -l /srv/arkan-monitoring/backups/` | one `data-<stamp>.tar.gz` |
 | Note for the next person | | the tag installed, the B1 uid result, the answers to every "to verify" |
 
@@ -1505,7 +1523,7 @@ cd /opt/arkan-monitoring
 git describe --tags
 ```
 
-**Expected:** for example `v0.3.0`. Write it down: it is `<previous-tag>`.
+**Expected:** for example `v0.4.0`. Write it down: it is `<previous-tag>`.
 
 **2. Make a backup by hand** (C4 step 1):
 
@@ -1531,6 +1549,26 @@ git checkout <tag>
 
 **Expected:** `HEAD is now at ...`. Read the release notes of the new tag (on GitHub) for any extra step.
 
+**3a. New settings in `.env`?** Compare the setting names of the example with yours:
+
+```bash
+cd /opt/arkan-monitoring/server
+```
+
+```bash
+grep -oE '^[A-Z_]+=' .env.example | sort > /tmp/env-new; grep -oE '^[A-Z_]+=' .env 2>/dev/null | sort > /tmp/env-mine; comm -23 /tmp/env-new /tmp/env-mine; rm /tmp/env-new /tmp/env-mine
+```
+
+**Expected:** no output. **If** names are printed (for example `ADMIN_USERS=` the first time you update to `v0.4.0`), add them to `.env` as in B14 (`cp -n .env.example .env` first if you have no `.env` at all).
+
+**3b. Did the Caddy site file change?**
+
+```bash
+diff /opt/edge/sites/monitoring.caddy /opt/arkan-monitoring/server/deploy/monitoring.caddy && echo same
+```
+
+**Expected:** `same`. (Once OED is installed, compare with `server/deploy/oed/monitoring-oed.caddy` instead.) **If** lines are printed (for example `/api/v1/registers` added to the `@device` line in `v0.4.0`), the owner installs the new file, validates it and reloads Caddy exactly as in B22, **after** step 4 below. Without it, a logger cannot fetch a register table sent from the register page: it is asked for the web login and gives up.
+
 **4. Rebuild and restart:**
 
 ```bash
@@ -1555,7 +1593,7 @@ docker compose ps
 docker compose logs --tail 20 ingest
 ```
 
-**Expected:** `{"ok": true, ...}` (the version may have changed), `Up ... (healthy)` after a minute, and the logger's `POST /api/v1/ingest 200` lines coming back. The logger kept its records on the SD card during the restart, so nothing is lost.
+**Expected:** `{"ok": true, "version": ...}` (the service version of the new tag, for example `0.4.0`), `Up ... (healthy)` after a minute, and the logger's `POST /api/v1/ingest 200` lines coming back. The logger kept its records on the SD card during the restart, so nothing is lost.
 
 **Going back (rollback)** if anything is wrong:
 
@@ -1688,37 +1726,39 @@ docker compose exec ingest python tools/manage.py show-config LOG-0001
 
 **Expected:** `asked by the platform:` with the version and settings, then `reported by the logger at <time>: fw ..., settings version 1, ...` and every setting (secrets shown only as `(set)`). Before the logger has applied it, the reported version is the old one.
 
+**From the browser:** the register page `/live/adab/register` (side menu of the site page, **Meter registers**) sends the meter link settings `meters`, `mb_baud`, `mb_format`, `ct_mult` the same way, and the meter register table itself (firmware 0.4.0 or later). Steps: [../meter/README.md](../meter/README.md#changing-the-register-table). By command: `manage.py set-registers LOG-0001 <file.csv> --comment "..."`, `manage.py show-registers LOG-0001`.
+
 **What is refused, and why:**
 - `dev_id`, `dev_token`, `srv_url`, `tls_verify`, `wifi_ssid`, `wifi_pass`, `wifi_ssid2`, `wifi_pass2`, `portal_pass`: **never remotely**, because a wrong value would cut the logger off for good. Message: `error: <key> cannot be changed remotely (it could cut the logger off): use the setup portal on site`.
 - A name the logger did not report: `error: <key>: not a setting of this logger (see show-config)`. This protects against typing mistakes, but only once the logger has reported its settings: **before its first report, any name is accepted**, so check the spelling against [../FIRMWARE.md](../FIRMWARE.md).
 
 ### C8. Publishing a firmware for OTA
 
-> **Easier way:** the logger's **Firmware update** panel at the bottom of its live page sends a GitHub release or a `.bin` from your computer to that logger, with the same checks. Setup (`ADMIN_USERS` in `server/.env`) and use: [../OTA.md](../OTA.md). The steps below are the command-line way.
+> **Easier way:** **Firmware update** in the side menu of the site page `/live/adab/` sends a GitHub release or a `.bin` from your computer to one logger, with the same checks. Setup (`ADMIN_USERS` in `server/.env`) and use: [../OTA.md](../OTA.md). The steps below are the command-line way.
 
 OTA (over the air): the logger downloads a new firmware from the VPS by itself. With `ota_on=1` (the default) it asks every 6 hours (`ota_check_h`), and at once (within a minute) when it is online and a firmware waits for it. Building the firmware file is covered in [../FIRMWARE.md](../FIRMWARE.md) and tutorial 1 (PlatformIO writes it to `firmware/.pio/build/logger/firmware.bin`: **to verify** on your build).
 
-**1. Upload the file under a new name** (Laptop, PowerShell, in the folder that holds `firmware.bin`; `0.3.1` is an example version):
+**1. Upload the file under a new name** (Laptop, PowerShell, in the folder that holds `firmware.bin`; `0.4.1` is an example version):
 
 ```powershell
-scp .\firmware.bin hermes-vps:/srv/arkan-monitoring/data/firmware-upload-0.3.1.bin
+scp .\firmware.bin hermes-vps:/srv/arkan-monitoring/data/firmware-upload-0.4.1.bin
 ```
 
 **2. Publish it**, first for `LOG-0001` only (VPS, user ai, in `/opt/arkan-monitoring/server`):
 
 ```bash
-docker compose exec ingest python tools/manage.py publish-fw /data/firmware-upload-0.3.1.bin --version 0.3.1 --device LOG-0001
+docker compose exec ingest python tools/manage.py publish-fw /data/firmware-upload-0.4.1.bin --device LOG-0001
 ```
 
-**Expected:** `logger-0.3.1.bin (usb build) offered to LOG-0001. Loggers with ota_on=1 take it within a minute if they are online (live hint), else at their next check (6 h, or console 'ota').` Without `--device`, it is offered to every logger (`offered to every logger`). The version is read from the file (`--version` is only checked against it); a file that is not the logger firmware is refused (`error: ...`).
+**Expected:** `logger-0.4.1.bin (usb build) offered to LOG-0001. Loggers with ota_on=1 take it within a minute if they are online (live hint), else at their next check (6 h, or console 'ota').` Without `--device`, it is offered to every logger (`offered to every logger`). The version is read from the file (`--version`, if you add it, is only checked against it); a file that is not the logger firmware is refused (`error: ...`).
 
 **3. Remove the uploaded copy** (it was copied into `firmware/`):
 
 ```bash
-rm /srv/arkan-monitoring/data/firmware-upload-0.3.1.bin
+rm /srv/arkan-monitoring/data/firmware-upload-0.4.1.bin
 ```
 
-**4. Check within 6 hours:** `manage.py list` shows `fw 0.3.1`, and the alarm log shows **A35 Firmware updated** with `firmware 0.3.0 -> 0.3.1, by remote update (OTA)`. **A36 Firmware update rolled back** means the new firmware kept restarting and the logger went back to the old one: do not publish it to other loggers.
+**4. Check within 6 hours:** `manage.py list` shows `fw 0.4.1`, and the alarm log shows **A35 Firmware updated** with `firmware 0.4.0 -> 0.4.1, by remote update (OTA)`. **A36 Firmware update rolled back** means the new firmware kept restarting and the logger went back to the old one: do not publish it to other loggers.
 
 Rules:
 - **Never publish the same version number with other content**: `publish-fw` refuses if `firmware/logger-<version>.bin` exists with different bytes (the loggers already offered it check its MD5). Build again with a new `FW_VERSION`. A logger is only offered a version **newer** than its own (a logger flashed by hand with a newer firmware is never downgraded). For a deliberate step back to an older version, add `--force`.
@@ -1876,11 +1916,13 @@ Run the diagnosis commands on the **VPS, user ai, in `/opt/arkan-monitoring/serv
 | **Disk full** | Errors `No space left on device`; `df -h` above 95 % | `df -h /`; `du -sh /srv/arkan-monitoring/*`; `ls -la /srv/arkan-monitoring/data/export/`; `docker system df` | Leftovers in `export/` (SD copies, OED files): remove them. Backups keep 14 automatically. **Never delete day files in `raw/`.** Anything else: the owner (other services share the disk) |
 | **Memory** | VPS slow; container restarted; `docker stats` near 96 MiB | `free -h`; `docker stats --no-stream`; `docker inspect -f '{{.State.OOMKilled}} {{.RestartCount}}' arkan-monitoring-ingest` | `true` = the container hit its 96 MB limit and was stopped (Docker restarts it, the logger resends, nothing is lost). Note the time and the log, tell the owner. Plan and limits: [../VPS-MEMORY.md](../VPS-MEMORY.md) |
 | **Alarm log empty** | `manage.py alarms adab` prints nothing, or no `alarms/` folder | `ls -l /srv/arkan-monitoring/data/sites/adab/alarms/`; `head -n 2 /srv/arkan-monitoring/data/alarm-register.csv` | No records yet (normal before the logger). Register saved by Excel with `;`: every alarm disappears (C6 step 2); put back the copy from `export/`. Rows added by a backfill are not evaluated until `alarms adab --rebuild` (C6) |
-| **Live page shows no data** | `No live data for this site (logger offline or not installed yet).`, or `No data for N min` in red | `curl -s http://127.0.0.1:8800/api/v1/live/adab` (look for `"devices": {}`); `docker compose logs --since 5m ingest \| grep live` | Snapshots are kept **in memory only**: after a restart the page is empty until the next snapshot (15 s). No `POST /api/v1/live` lines: the logger does not send live data (tutorial 1). Wrong site code in the address. Note: while there is no live data, the page also hides the open alarms and the log: use `manage.py alarms adab` |
+| **Live page shows no data** | `No live data for this site (logger offline or not installed yet).`, or the red pill `No data for N min` | `curl -s http://127.0.0.1:8800/api/v1/live/adab` (look for `"devices": {}`); `docker compose logs --since 5m ingest \| grep live` | Snapshots are kept **in memory only**: after a restart the page is empty until the next snapshot (15 s). No `POST /api/v1/live` lines: the logger does not send live data (tutorial 1). Wrong site code in the address. Note: while there is no live data, the page also hides the open alarms and the log: use `manage.py alarms adab` |
 | **Clock alarm (A18)** | **A18 Clock wrong** in the alarm log; or rows rejected as "in the future" | VPS: `timedatectl` (`System clock synchronized: yes`?); the logger's time in `curl -s http://127.0.0.1:8800/api/v1/live/adab` (`"ts"` of `last`) compared with `date -u` | VPS clock not synchronized: owner. Logger clock wrong: NTP or the RTC on the logger ([../FIRMWARE.md](../FIRMWARE.md), tutorial 1). A18 clears by itself when the clocks agree within 1 minute |
 | **git refuses in /opt/arkan-monitoring** | `detected dubious ownership` or `Permission denied` | `ls -ld /opt/arkan-monitoring` | Owned by root: owner runs `sudo chown -R ai:ai /opt/arkan-monitoring` (B11) |
 | **Docker refuses** | `permission denied while trying to connect to the Docker daemon socket` | `id` | `ai` is not in the `docker` group (B1): owner |
 | **Login box keeps coming back** | Browser asks again and again | | Wrong login, or not in `/opt/edge/secrets/hub-users.caddy`: owner |
+| **No "Firmware update" in the menu** | The side menu of `/live/adab/` has no **Firmware update**, or it says `only for the logins listed in ADMIN_USERS` | `grep ADMIN_USERS /opt/arkan-monitoring/server/.env`; `curl -s -u <hub-user> https://arkan-monitoring.duckdns.org/api/v1/admin/me` | Your login name is not in `ADMIN_USERS` (B14), or `.env` was changed without `docker compose up -d` (owner approves). `"user": ""` in the answer: the Caddy file lacks `header_up X-Auth-User` (B21) |
+| **Register table stays "Waiting"** | The register page shows *Waiting* for more than 15 minutes | `diff /opt/edge/sites/monitoring.caddy /opt/arkan-monitoring/server/deploy/monitoring.caddy`; `manage.py show-registers LOG-0001` | The Caddy file has no `/api/v1/registers` in `@device` (C5 step 3b); the logger is offline; its firmware is older than 0.4.0 (the page then says *Firmware too old*) |
 
 ---
 
@@ -1905,7 +1947,8 @@ Check each line after the install, then every few months.
 | 13 | SSH by key only | Owner: `sudo sshd -T \| grep -i passwordauthentication` (**to verify** the VPS policy) | `passwordauthentication no` |
 | 14 | The other services are untouched | VPS: `docker ps` and `ss -ltn`, compared with B2 | Same as before, plus `arkan-monitoring-ingest` and `127.0.0.1:8800` |
 | 15 | Backups exist **off the VPS** (not done yet) | | Today the backups are on the same disk as the data: if the VPS is lost, both are lost. To decide with the owner: a copy elsewhere (for example Google Drive, [../PLAN.md](../PLAN.md) section 5.3). Until then the logger's SD card is the second copy of the records |
-| 16 | Rate limit per device (not done yet) | | Low risk with one logger ([../VPS-SETUP.md](../VPS-SETUP.md) section 11); to add with more sites |
+| 16 | Firmware update only for named logins | VPS: `grep ADMIN_USERS /opt/arkan-monitoring/server/.env` | Named logins only (not empty if you use it, never `*` without the owner's OK). `FW_GITHUB_TOKEN`, if set, is read-only for this repository only and `.env` is `-rw-------` |
+| 17 | Rate limit per device (not done yet) | | Low risk with one logger ([../VPS-SETUP.md](../VPS-SETUP.md) section 11); to add with more sites |
 
 ---
 
@@ -1938,7 +1981,8 @@ VPS commands with `docker compose` run in `/opt/arkan-monitoring/server`. `manag
 | Daily summary | VPS | `manage.py daily adab` |
 | OED files | VPS | `manage.py export-oed adab [--from 2026-11-01] [--to 2026-11-30] [--all] [--out <folder>]` |
 | SD card backfill | VPS | service stopped: `docker compose run --rm ingest python tools/manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001` (C9) |
-| Publish a firmware | VPS | `manage.py publish-fw /data/firmware-upload-0.3.1.bin --version 0.3.1 [--device LOG-0001]` |
+| Publish a firmware | VPS | `manage.py publish-fw /data/firmware-upload-0.4.1.bin [--device LOG-0001]` (or the site page, **Firmware update**) |
+| Send a register table | VPS | `manage.py set-registers LOG-0001 /data/export/registers.csv --comment "..."`, `manage.py set-registers LOG-0001 --builtin`, `manage.py show-registers LOG-0001` (or the page `/live/adab/register`) |
 | Remote settings | VPS | `manage.py set-config LOG-0001 key=value ...`, `manage.py show-config LOG-0001` |
 | Backup by hand | VPS | `/opt/arkan-monitoring/server/deploy/backup.sh` |
 | Crontab | VPS | `crontab -l`, `crontab -e` |

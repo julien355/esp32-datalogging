@@ -1,6 +1,6 @@
 # Logger firmware: functions and settings
 
-Firmware **0.3.0** (CSV schema 3), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
+Firmware **0.4.0** (CSV schema 3; 0.4.0 adds the remote register table (2.9.2) and the OTA build marker (2.8)), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
 Status: **written, compiled by CI, not yet run on the board.** The pin map and the meter register map are still **to verify** (Lab 1 and Lab 3 of the install manual).
 
 How to build, flash, configure and test it: [`OFFICE-PREP.md`](OFFICE-PREP.md). The file format: [`DATA-FORMAT.md`](DATA-FORMAT.md).
@@ -34,7 +34,7 @@ A task stuck for 60 s reboots the board (task watchdog with panic). Records are 
 - **Sensors: a 5-minute average only** (`TH1_t`, `TH1_rh`, `TH2_t`, `TH2_rh`; owner, 7 November 2026; setting `th_avg_min`). Written on the rows at :00, :05, :10... as the mean of the 5 minutes **before** that time; empty on the other rows; `err` if the window had no valid reading (sensor fault). The sensors are still read every 15 s for the live page.
 - **Last** value of the energy counters (`EM01_e` kWh, `EM01_eq` kvarh): consumption is computed on the server from the counter, so a gap never corrupts totals.
 - **Meter sample count** (`EM01_n`, 0 to 4): a fault is an empty value plus a low count, never a fake zero.
-- **Health**: `rssi`, `heap_kb`, `up_s`, `backlog_min`, `sd` (0 = the SD card was failing, the row came from the RAM queue), and `boot` (on the first record after a boot only: the reset reason and the firmware version, `reason@version`, for example `poweron@0.3.0`, `sw:ota@0.3.1`, `sw:ota_rollback@0.3.0`, `brownout`, `task_wdt`, `panic`, `sw:daily`, `sw:offline`...). The VPS logs firmware changes from it (A35, A36).
+- **Health**: `rssi`, `heap_kb`, `up_s`, `backlog_min`, `sd` (0 = the SD card was failing, the row came from the RAM queue), and `boot` (on the first record after a boot only: the reset reason and the firmware version, `reason@version`, for example `poweron@0.4.0`, `sw:ota@0.4.1`, `sw:ota_rollback@0.4.0`, `brownout`, `task_wdt`, `panic`, `sw:daily`, `sw:offline`...). The VPS logs firmware changes from it (A35, A36).
 - **No record without a valid clock.** A timestamp the logger cannot trust is worse than a gap. With the DS3231 and its coin cell this only happens if the cell is dead and there is no internet.
 
 ### 2.2.1 Alarms and warnings
@@ -86,7 +86,7 @@ One CSV file per UTC day, same columns as the server's files. **The day files ar
 - Connection kept open between requests (keep-alive).
 
 ### 2.8 OTA (on by default since 0.2.0)
-With `ota_on=1` (default), every `ota_check_h` hours the logger asks `GET /api/v1/ota?fw=<version>`. If the server offers another version (the **Firmware update panel of the live page**, or `manage.py publish-fw`), it downloads it, checks the MD5, writes it to the other flash slot and restarts. Rollback as in 2.5.
+With `ota_on=1` (default), every `ota_check_h` hours the logger asks `GET /api/v1/ota?fw=<version>`. If the server offers another version (**Firmware update** in the site page's menu, or `manage.py publish-fw`), it downloads it, checks the MD5, writes it to the other flash slot and restarts. Rollback as in 2.5.
 - **Check now:** when a firmware waits for it, the server answers the live snapshot with `{"ota":1}` and the logger checks at once (at most once per 5 min), so an online logger updates within about a minute.
 - **Build marker:** every build carries `ARKAN-LOGGER-FW;ver=<FW_VERSION>;env=<usb|uart>;` (`FW_TAG`, `config.h`; the variant comes from the env in `platformio.ini`). The server refuses a file without it, for another chip or for the other variant. The boot report sends `env` too.
 - **A version that rolled back** is remembered (counter `ota_bad`) and never installed again by itself; the console command `ota` tries it again on purpose.

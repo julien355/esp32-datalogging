@@ -75,6 +75,12 @@ sudo bash /opt/arkan-monitoring/server/deploy/setup-vps.sh --apply
 
 ## 5. Start the service
 
+First the `.env` file (who may send a firmware from the site page, [`OTA.md`](OTA.md) section 6; the port only if 8800 is taken):
+```bash
+cd /opt/arkan-monitoring/server && cp -n .env.example .env && chmod 600 .env && nano .env
+```
+Set `ADMIN_USERS=<your Arkan login>`; leave `FW_GITHUB_REPO` as it is and `FW_GITHUB_TOKEN` empty unless the repository is private.
+
 ```bash
 cd /opt/arkan-monitoring/server && docker compose up -d --build
 ```
@@ -120,8 +126,8 @@ sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 ```
 `cp -n` never overwrites an existing file. The site file:
-- `/api/v1/ingest`, `/api/v1/ota`, `/api/v1/firmware/*`, `/api/v1/config`, `/api/v1/config/report` and `POST /api/v1/live`: **no web login** (the logger cannot log in), the device token is checked by the service, body size capped.
-- Everything else (`/live/`, `/api/v1/status`, `/api/v1/live/<site>`, `/api/v1/alarms/<site>`): **Arkan login** (`/opt/edge/secrets/hub-users.caddy`). `/` goes to `/live/` until OED is installed.
+- `/api/v1/ingest`, `/api/v1/ota`, `/api/v1/firmware/*`, `/api/v1/config`, `/api/v1/config/report`, `/api/v1/registers` and `POST /api/v1/live`: **no web login** (the logger cannot log in), the device token is checked by the service, body size capped.
+- Everything else (`/live/`, `/live/<site>/register`, `/api/v1/status`, `/api/v1/live/<site>`, `/api/v1/alarms/<site>`, `/api/v1/history/<site>`, `/api/v1/admin/...`): **Arkan login** (`/opt/edge/secrets/hub-users.caddy`), and the login name is passed to the service (`X-Auth-User`, used for `ADMIN_USERS`). `/` goes to `/live/` until OED is installed.
 - Authorization headers removed from the access log.
 
 Check from the laptop:
@@ -139,7 +145,7 @@ python server/tools/simulate_logger.py --url https://arkan-monitoring.duckdns.or
 Expected:
 - the alarm log (`manage.py alarms adab`) shows A02 Power interruption (the simulator's first record says `poweron`), A16 Backlog growing (the simulator reports its backlog), and A26 Voltage dip and A05 Undervoltage starting and clearing 30 min into the backlog, at the times of the simulated records;
 - 3 batches of 60 rows, `"stored": 60` each; the resent batch `"stored": 0, "duplicates": 60`;
-- `/live/adab/` shows tiles updating every 15 s;
+- `/live/adab/` shows the live cards updating every 15 s, and the side menu's history pages (Power, Energy per day...) show the simulated hours;
 - on the VPS: `ls /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw/$(date -u +%Y/%m)/`.
 
 Then remove the simulated data before the real logger starts (it uses the same device code). **Stop the service first**: it keeps an index of stored timestamps in memory, and deleting files under it would make it drop the real logger's rows as duplicates (owner approves the stop and start):
@@ -176,14 +182,15 @@ And, if wanted, the daily summary at 00:20 WITA (16:20 UTC on a UTC server):
 | Status of every logger | `docker compose exec ingest python tools/manage.py list` |
 | Service log | `docker compose logs --tail 100 ingest` |
 | Restart | `docker compose restart ingest` (owner approves) |
-| Update | `git fetch --tags && git checkout <tag> && docker compose up -d --build` |
+| Update | backup, `git fetch --tags && git checkout <tag>`, new keys of `.env.example` into `.env`, `diff` the Caddy file with `/opt/edge/sites/monitoring.caddy` (owner installs and reloads if it changed), `docker compose up -d --build`: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) |
 | Daily summary | `docker compose exec ingest python tools/manage.py daily adab` |
 | Alarm log | `docker compose exec ingest python tools/manage.py alarms adab` (open alarms + last lines); the file: `/srv/arkan-monitoring/data/sites/adab/alarms/2026.csv` |
 | Change a threshold | edit `/srv/arkan-monitoring/data/alarm-register.csv` in Excel (or a per-site copy in `sites/adab/alarm-register.csv`); applies at the next record. To see what it would have given on past data: `docker compose stop ingest`, `docker compose run --rm ingest python tools/manage.py alarms adab --rebuild`, `docker compose start ingest` (A01 and A18 lines are kept) |
 | Change a logger setting remotely | `manage.py set-config LOG-0001 th1_off_t=-1.2 reboot_hr=19` (taken within 15 min, the logger restarts); `manage.py show-config LOG-0001` to check. Network settings are refused: on site only |
+| Change the meter register table | the page `/live/adab/register` (side menu **Meter registers**; firmware 0.4.0 or later), or `manage.py set-registers LOG-0001 <file.csv>`: [`meter/README.md`](meter/README.md#changing-the-register-table) |
 | OED files | `docker compose exec ingest python tools/manage.py export-oed adab --from 2026-11-01` |
 | SD card backfill | copy the card's `/data` to `/srv/arkan-monitoring/data/export/sd-LOG-0001/`, then with the service stopped (`docker compose stop ingest`): `docker compose run --rm ingest python tools/manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001`, the same with `alarms adab --rebuild`, then `docker compose start ingest` |
-| Firmware update (OTA) | the **Firmware update** panel of the logger on its live page (GitHub release, file upload or stored file; needs `ADMIN_USERS` in `server/.env`): [`OTA.md`](OTA.md). By command: copy `firmware.bin` to the data folder, `manage.py publish-fw /data/firmware.bin --device LOG-0001`. An online logger takes it within a minute, else within 6 h (`ota_on` is on by default) |
+| Firmware update (OTA) | **Firmware update** in the side menu of the site page `/live/adab/` (GitHub release, file upload or stored file; needs `ADMIN_USERS` in `server/.env`): [`OTA.md`](OTA.md). By command: copy `firmware.bin` to the data folder, `manage.py publish-fw /data/firmware.bin --device LOG-0001`. An online logger takes it within a minute, else within 6 h (`ota_on` is on by default) |
 | Read the data from the laptop | `scp -r hermes-vps:/srv/arkan-monitoring/data/sites/adab ./adab` |
 
 ## 11. Security notes

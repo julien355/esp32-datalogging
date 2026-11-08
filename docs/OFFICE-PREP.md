@@ -4,7 +4,7 @@ Everything here is done **at the office, on the bench**, before the logger goes 
 
 Reference: functions and settings [`FIRMWARE.md`](FIRMWARE.md), data format [`DATA-FORMAT.md`](DATA-FORMAT.md), VPS [`VPS-SETUP.md`](VPS-SETUP.md), questions still open [`QUESTIONS.md`](QUESTIONS.md). Hardware theory, wiring drawings and site labs: [`install/README.md`](install/README.md).
 
-> **Status.** Firmware 0.3.0 (power quality min/max, sensors every 5 min, firmware version logged, remote settings, OTA on) and the ingest service with the alarm log are written; CI compiles the firmware and runs the server tests. **Nothing has run on the real board yet.** The pin map is still **to verify** (T2 below); the meter register map is verified **on site** (T4 below, `docs/meter/README.md`). Expect small fixes during the first bench day.
+> **Status (8 November 2026).** Firmware 0.4.0 (power quality min/max, sensors every 5 min, firmware version logged, remote settings, OTA on with the build marker, register table sent from the platform) and the ingest service with the alarm log are written; CI compiles the firmware and runs the server tests. **Nothing has run on the real board yet.** The pin map is still **to verify** (T2 below); the meter register map is verified **on site** (T4 below, `docs/meter/README.md`). Expect small fixes during the first bench day.
 
 ---
 
@@ -97,13 +97,13 @@ The spare FCN300 at the office has **no Modbus port** (owner, 8 November 2026), 
 
 ### T5. Records on the SD card
 1. Wait 6 minutes (the sensor values appear on the rows at :00, :05, ... only). `ls /data/2026/11` (this month), `tail /data/2026/11/2026-11-07.csv 3`.
-2. One row per minute, timestamps on the minute, `EM01_n` = 0 (no meter answers at the office; 4 = all reads good, on site), `TH1_t` filled every 5th row. The first row after the boot has `boot` = `poweron@0.3.0`.
+2. One row per minute, timestamps on the minute, `EM01_n` = 0 (no meter answers at the office; 4 = all reads good, on site), `TH1_t` filled every 5th row. The first row after the boot has `boot` = `poweron@0.4.0`.
 3. `header` shows the columns.
 
 ### T6. WiFi and upload
 1. `status`: `WiFi: up, <ssid> <ip> rssi -55 dBm`, `Uploads: ok n`.
 2. On the VPS (or the laptop server): the day file `sites/adab/LOG-0001/raw/YYYY/MM/YYYY-MM-DD.csv` grows every minute.
-3. Browser: `https://arkan-monitoring.duckdns.org/live/adab/`: tiles refresh every 15 s, "Live, updated n s ago".
+3. Browser: `https://arkan-monitoring.duckdns.org/live/adab/`: the cards refresh every 15 s, "Live · updated n s ago".
 
 ### T7. Lost connection (the important one)
 1. Switch the office WiFi off (or `set wifi_ssid wrong` + `reboot`) for **at least 1 hour**.
@@ -131,7 +131,7 @@ The spare FCN300 at the office has **no Modbus port** (owner, 8 November 2026), 
 
 ### T12. Daily reboot and watchdog
 1. `set reboot_hr <current UTC hour + 1>`, `reboot`, wait: at hh:05 a reboot with `boot=sw:daily`. Set it back to 19.
-2. **OTA** (on by default): change `FW_VERSION` to 0.3.1, build, send it from the logger's **Firmware update** panel on the live page ([`OTA.md`](OTA.md)) or with `manage.py publish-fw firmware.bin --version 0.3.1`; an online logger takes it within a minute (or `ota` on the console): the logger updates, `manage.py list` shows 0.3.1, and the alarm log has **A35 Firmware updated** "0.3.0 -> 0.3.1, by remote update (OTA)". Then publish a build that crashes at boot (test only): it must come back to the previous version by itself (`boot=sw:ota_rollback@0.3.1`, **A36** in the alarm log).
+2. **OTA** (on by default): change `FW_VERSION` to the test number **0.4.90** (test numbers are never used for a release: the VPS keeps every file it offered, and a version number must never get other content), build, send it from **Firmware update** in the site page's menu ([`OTA.md`](OTA.md); your login must be in `ADMIN_USERS`) or with `manage.py publish-fw /data/firmware.bin`; an online logger takes it within a minute (or `ota` on the console): the logger updates, `manage.py list` shows 0.4.90, and the alarm log has **A35 Firmware updated** "0.4.0 -> 0.4.90, by remote update (OTA)". Then send a build that crashes at boot (test only, version 0.4.91): it must come back to the previous version by itself (`boot=sw:ota_rollback@0.4.90`, **A36** in the alarm log). Afterwards, flash the released firmware back by cable (A4): the logger would otherwise refuse every 0.4.x release as "not newer".
 
 ### T12b. Remote settings
 1. After a boot, `manage.py show-config LOG-0001` shows what the logger reported (firmware, settings, TH1 chip).

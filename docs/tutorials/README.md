@@ -25,8 +25,12 @@ Four tutorials written for beginners: every term explained, where every thing is
 - The alarms and the alarm log: [`../alarms/README.md`](../alarms/README.md)
 - The full bench test list: [`../OFFICE-PREP.md`](../OFFICE-PREP.md)
 - The short VPS guide: [`../VPS-SETUP.md`](../VPS-SETUP.md)
+- The site page (live, history, registers, firmware update): [`../LIVE.md`](../LIVE.md); remote firmware update: [`../OTA.md`](../OTA.md)
 - Hardware theory, wiring drawings and lab sheets: [`../install/README.md`](../install/README.md)
 - Decisions and open questions: [`../QUESTIONS.md`](../QUESTIONS.md), plan: [`../PLAN.md`](../PLAN.md)
 
-## Status (7 November 2026)
-The firmware (0.3.0) and the ingest service are written and tested by CI and with a simulated logger, **not yet on the real board**. The board's RS485 pins and the meter register map are **to verify** on the bench (tutorial 1, part A). Open Energy Dashboard is **not installed yet**: tutorial 3 and its deploy files in [`../../server/deploy/oed/`](../../server/deploy/oed/) are drafts to test.
+## Updating
+New version of the VPS code or of the firmware: [`../UPDATING.md`](../UPDATING.md) (and tutorial 2, C5).
+
+## Status (8 November 2026)
+The firmware (0.4.0) and the ingest service (site page with history, meter register page, firmware update from the web) are written and tested by CI and with a simulated logger, **not yet on the real board**. The board's RS485 pins are **to verify** on the bench (tutorial 1, part A); the meter register map is verified **on site** (the spare meter has no Modbus port), after practice with the simulator (tutorial 4). Open Energy Dashboard is **not installed yet**: tutorial 3 and its deploy files in [`../../server/deploy/oed/`](../../server/deploy/oed/) were tested on a test machine, not yet on `hermes-vps`.

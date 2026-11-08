@@ -4,7 +4,7 @@ Lab manual, version 0.1, 5 November 2026. Based on `docs/PLAN.md` v0.9.
 
 This manual takes a group of students, under the supervision of an engineer, from a bare logger board on the bench to a commissioned logger at the Adab hotel. Each lab teaches the theory behind the step, then has you do it, measure it and write it down.
 
-> **Status of what you are installing (updated 7 November 2026).** The logger firmware (0.3.0) and the monitoring platform's ingest service are now **written** and tested in CI and with a simulated logger, **not yet on the real board**. The step-by-step guides that match them are the tutorials in [`../tutorials/`](../tutorials/) (logger on site, VPS, Open Energy Dashboard); where this manual and a tutorial disagree, **the tutorial is right** (upload format, sensor timing, settings). Labs 1, 2, 3 and 5 use the test sketches in [`labs/`](labs/).
+> **Status of what you are installing (updated 8 November 2026).** The logger firmware (0.4.0) and the monitoring platform's ingest service are now **written** and tested in CI and with a simulated logger, **not yet on the real board**. The step-by-step guides that match them are the tutorials in [`../tutorials/`](../tutorials/) (logger on site, VPS, Open Energy Dashboard); where this manual and a tutorial disagree, **the tutorial is right** (upload format, sensor timing, settings). Labs 1, 2, 3 and 5 use the test sketches in [`labs/`](labs/).
 
 > **Facts still to verify.** The pin map, the meter register map and its scaling are **not verified**. They are marked **to verify** wherever they appear. Part of your job in these labs is to verify them and record the result. Never treat a "to verify" value as a fact until your record sheet, signed by the supervisor, says it is.
 

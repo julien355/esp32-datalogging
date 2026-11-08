@@ -9,11 +9,12 @@ Level: beginner. Every term is explained the first time it appears, and again in
 | **Where** | Your laptop (Docker Desktop, PowerShell), `hermes-vps` over SSH, and a web browser |
 | **Time** | About 2 hours for Part A, 5 minutes for Part B (one script); 10 minutes a day for Part C until the automatic push exists |
 | **Before** | [Tutorial 2](2-VPS-SETUP.md): the ingest service runs, the site `adab` and the logger `LOG-0001` exist |
-| **After** | Nothing. The live page `/live/` works with or without OED |
+| **After** | Nothing. The site page `/live/<site>/` (live values, simple history, meter registers, firmware update) works with or without OED |
 
 **Status.**
 - The deploy files in [`server/deploy/oed/`](../../server/deploy/oed/) were **tested on 8 November 2026 on a test machine** (Linux x86_64, Docker 29, Caddy 2.6, PostgreSQL 15.3, OED v1.0.0): image build, first start, admin user, Part B by script, export and upload of two days, view refresh, graphs in a browser through the Caddy file with both logins, backup and restore. They are **not yet run on hermes-vps**: what is still open is listed in Appendix C.
 - **New in the test:** OED v1.0.0 does **not** check its own login on some write routes (units, conversions, new meters). The Caddy file now blocks them from the internet, and Part B is done with the script [`oed-setup.py`](../../server/deploy/oed/oed-setup.py) on the VPS instead of the browser (A.10, B.0).
+- Since 8 November 2026 our own site page `/live/adab/` also has **history pages** (power hour by hour, one day minute by minute, energy per day, this week against last, temperature, humidity), read straight from our files ([`LIVE.md`](../LIVE.md)). They need no upload and no view refresh. OED stays for what they do not do: groups of sites, any period and comparison, export, maps.
 - The **automatic push** from our ingest service to OED (every 5 minutes) is **not built yet**. Until it is, data goes into OED with our exporter and OED's CSV upload (Part C).
 
 **Conventions.**
@@ -57,7 +58,7 @@ What OED gives us:
 
 ### 0.2 What OED is not
 
-- **Not live.** OED shows readings only after they are uploaded, and its hourly and daily summaries only after a "view refresh" (section E.1). A graph does not refresh by itself ([`LIVE.md`](../LIVE.md)). **The live page stays ours**, at `/live/`.
+- **Not live.** OED shows readings only after they are uploaded, and its hourly and daily summaries only after a "view refresh" (section E.1). A graph does not refresh by itself ([`LIVE.md`](../LIVE.md)). **The live page stays ours**, at `/live/`, with its own simple history pages (side menu of `/live/<site>/`).
 - **Not our record.** The record is our per-site CSV files in `/srv/arkan-monitoring/data/`. OED holds a copy that can be rebuilt from them (section E.5).
 - **No alarms.** Alarms and WhatsApp messages stay in our ingest service.
 - **No logger API.** The logger never talks to OED. It posts to our ingest service.
@@ -431,7 +432,7 @@ The email must look like an email (it is checked) but does not need to receive m
 
 **What changes.** The new site file [`monitoring-oed.caddy`](../../server/deploy/oed/monitoring-oed.caddy) replaces [`server/deploy/monitoring.caddy`](../../server/deploy/monitoring.caddy):
 - the logger paths are unchanged (no web login, the device token is checked by our service);
-- `/live`, `/live/...`, `/api/v1/...` and `/health` go to our service, behind the Arkan login;
+- `/live`, `/live/...` (the site pages, their history and the register page `/live/<site>/register`), `/api/v1/...` and `/health` go to our service, behind the Arkan login, with the login name passed on (`X-Auth-User`, used for `ADMIN_USERS` and the register history);
 - a few **OED write routes are blocked** (answer `403 Blocked by Caddy`), see below;
 - **everything else goes to OED**, behind the Arkan login. The old line `redir / /live/` is gone.
 

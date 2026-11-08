@@ -3,7 +3,7 @@
 For: technicians and students, working under a supervising engineer, with a licensed electrician for the panel work.
 Site: Adab hotel, site code `adab`. Logger: `LOG-0001`. Platform: `https://arkan-monitoring.duckdns.org` on the VPS `hermes-vps`.
 
-> **Status (7 November 2026).** The logger firmware (version **0.3.0**, folder [`firmware/`](../../firmware/)) is written and compiled by CI, but it has **not yet run on the real board**. The pin map is provisional (the RS485 pins are **not known yet**) and the meter register map is **not verified**. Part A of this tutorial verifies the pins on the bench. The meter register map can only be verified on site: the spare meter at the office has no Modbus port (8 November 2026), so B10 is where it is checked. Expect small surprises on the first bench day and write down everything you find.
+> **Status (8 November 2026).** The logger firmware (version **0.4.0**, folder [`firmware/`](../../firmware/)) is written and compiled by CI, but it has **not yet run on the real board**. The pin map is provisional (the RS485 pins are **not known yet**) and the meter register map is **not verified**. Part A of this tutorial verifies the pins on the bench. The meter register map can only be verified on site: the spare meter at the office has no Modbus port (8 November 2026), so B10 is where it is checked. Expect small surprises on the first bench day and write down everything you find.
 
 This tutorial takes you through the common path from start to end. For the full details it links to the reference documents:
 - what the logger does, all its settings and console commands: [`../FIRMWARE.md`](../FIRMWARE.md)
@@ -169,7 +169,7 @@ Drawing (c): [`../install/schematics/c-rs485-wiring.svg`](../install/schematics/
 |---|---|
 | [`firmware/`](../../firmware/) | The logger firmware (PlatformIO project). Open this folder in VS Code |
 | [`firmware/platformio.ini`](../../firmware/platformio.ini) | The build settings: the two builds `logger` and `logger-uart` |
-| [`firmware/include/config.h`](../../firmware/include/config.h) | The firmware version (`FW_VERSION "0.3.0"`) and the SD card paths |
+| [`firmware/include/config.h`](../../firmware/include/config.h) | The firmware version (`FW_VERSION "0.4.0"`) and the SD card paths |
 | [`firmware/src/settings.cpp`](../../firmware/src/settings.cpp) | The list of all settings and their defaults |
 | [`firmware/src/console.cpp`](../../firmware/src/console.cpp) | The console commands |
 | [`docs/OFFICE-PREP.md`](../OFFICE-PREP.md) | Bench tests T1 to T13 and the bench record sheet |
@@ -184,7 +184,7 @@ Drawing (c): [`../install/schematics/c-rs485-wiring.svg`](../install/schematics/
 
 | What | Where | Who |
 |---|---|---|
-| **Live page** of the site | `https://arkan-monitoring.duckdns.org/live/adab/` (refreshes every 15 s; open alarms at the top, last 20 alarm log lines at the bottom) | Anyone with the **Arkan login** (ask the owner) |
+| **Live page** of the site | `https://arkan-monitoring.duckdns.org/live/adab/` ("Live now" refreshes every 15 s: open alarms at the top, last 20 alarm log lines at the bottom; the side menu has the history pages (power, one day, energy per day, week, temperature, humidity), **Meter registers** and, for the logins in `ADMIN_USERS`, **Firmware update**) | Anyone with the **Arkan login** (ask the owner) |
 | All sites | `https://arkan-monitoring.duckdns.org/live/` | Same |
 | Day files on the VPS | `/srv/arkan-monitoring/data/sites/adab/LOG-0001/raw/<YYYY>/<MM>/<YYYY-MM-DD>.csv` | Operator |
 | Alarm log | `/srv/arkan-monitoring/data/sites/adab/alarms/<YYYY>.csv` | Operator |
@@ -494,7 +494,7 @@ Typing the command several times if needed is safe: a failed upload does not dam
    pio device monitor
    ```
 2. Press **RESET** on the board, wait 5 seconds, type `status` and press Enter.
-   Expected: the first line says `firmware 0.3.0` (or the version you built; the version is set in `firmware/include/config.h`, `FW_VERSION`).
+   Expected: the first line says `firmware 0.4.0` (or the version you built; the version is set in `firmware/include/config.h`, `FW_VERSION`).
 3. **If the monitor stays empty** (no text at all, even after RESET and typing `status`), the board needs the other build. Close the monitor (`Ctrl+C`), then:
    ```powershell
    pio run -e logger-uart -t upload
@@ -543,10 +543,10 @@ The **serial console** is a text window on the laptop where the logger prints wh
    If not: if the port is wrong, give it: `pio device monitor -p COM5`. If the port disappears (native USB re-enumerates at each reset), just run the command again.
 2. **Press RESET** on the board (or unplug and replug USB-C). Expected boot text (the times and numbers will differ):
    ```
-   === Arkan logger, firmware 0.3.0, boot reason poweron ===
+   === Arkan logger, firmware 0.4.0, boot reason poweron ===
    [uptime 1s] RTC time invalid (battery or first use): waiting for NTP or 'time set'
    [uptime 1s] SD card ok: 15193 MB, 0 MB used, upload pointer 0 part 1 offset 0
-   [uptime 1s] BOOT fw=0.3.0 reason=poweron boot#1 dev=LOG-0001 heap=...
+   [uptime 1s] BOOT fw=0.4.0 reason=poweron boot#1 dev=LOG-0001 heap=...
    [uptime 1s] TH1 sensor: aht (0x38)
    [uptime 1s] TH2 sensor: AM2301 on GPIO 4
    [uptime 1s] Meter: built-in FCN300 register table (19 values, not verified)
@@ -563,7 +563,7 @@ The **serial console** is a text window on the laptop where the logger prints wh
    If not: no text at all = wrong build (A4.7 step 3) or wrong port.
 4. **Type `status`.** Expected, for example:
    ```
-   Logger LOG-0001, firmware 0.3.0, CSV schema 3, up 42 s, boot poweron
+   Logger LOG-0001, firmware 0.4.0, CSV schema 3, up 42 s, boot poweron
    Time: NOT SET (RTC found)
    SD: ok, rows written 0, SD errors 0
    Heap: ... free, ... min free
@@ -662,14 +662,14 @@ The full procedure, with every step and expected result, is in [`../OFFICE-PREP.
 | **T2** Pins and I2C | `i2c`; `status` SD line; RS485 pins from the back silkscreen | 0x68 (RTC), TH1 chip (0x38, 0x40 or 0x44), 0x48 found; `SD: ok`; RS485 pins set | **The most important test.** Write the verified pins in the record sheet: `pin_rs_tx`, `pin_rs_rx`, `pin_rs_de`, `pin_sd_cs`, and SDA/SCL if swapped. Until the RS485 pins are set, the meter is not read at all |
 | **T3** Sensors | `status` "Last sample"; breathe on them; pull the TH2 data wire | Values rise within 30 s; `TH2=fault`, `err` rows, then **A14** in the alarm log, cleared when plugged back | Note the differences with the reference instrument, but the real offsets are set **on site** (B11) |
 | **T4** RS485 wiring and meter-off test | `mb 1 3 0 64` with no meter answering | A timeout with the hint "wiring, A/B, id, baud"; `status` shows `EM01: no answer`, `EM01_n` = 0; **A03** after a minute; the boot log says the table was read from the SD card | The spare meter has **no Modbus port** (8 November): it cannot be read, so the registers are checked on site (B10). Mains wiring of any meter: **electrician only** |
-| **T5** Records on the card | `ls /data/<YYYY>/<MM>`, `tail ... 3`, `header` | One row per minute, `EM01_n` = 4, `TH1_t` on every 5th row, `boot` = `poweron@0.3.0` on the first row | |
-| **T6** WiFi and upload | `status`; the day file on the VPS; the live page | `Uploads: ok n`; the VPS day file grows every minute; live page "Live, updated n s ago" | |
+| **T5** Records on the card | `ls /data/<YYYY>/<MM>`, `tail ... 3`, `header` | One row per minute, `EM01_n` = 4, `TH1_t` on every 5th row, `boot` = `poweron@0.4.0` on the first row | |
+| **T6** WiFi and upload | `status`; the day file on the VPS; the live page | `Uploads: ok n`; the VPS day file grows every minute; live page "Live · updated n s ago" | |
 | **T7** Lost connection | WiFi off 1 h (and once 12 h+) | Backlog grows, then back to 0; every minute of the outage on the VPS, each once; after 6 h offline a reboot `sw:offline` | |
 | **T8** Power cuts | Unplug 5 min; then 10 quick cuts | A 5-minute gap, `boot=poweron`; no boot loop, no "SAFE MODE" after 10 min | |
 | **T9** SD card removed | Pull the card while running, put it back | `SD: FAILED`, RAM queue, uploads go on; "SD card back" within a minute | Bench only |
 | **T10** Server down, wrong token | Server stopped 10 min; `set dev_token wrong` | No data lost; the token refusal shows in `status`; everything arrives with the right token | Put the right token back |
 | **T11** Portal and button | Hold BOOT 3 s; change `live_on` from the phone | Portal opens; logging goes on while it is open | Set `live_on` back to 1 |
-| **T12** Daily reboot, OTA | `reboot_hr` test; OTA to 0.3.1 and a rollback | `sw:daily`; **A35** then **A36** in the alarm log | Set `reboot_hr` back to 19 |
+| **T12** Daily reboot, OTA | `reboot_hr` test; OTA to a test version (0.4.90) and a rollback (OFFICE-PREP T12) | `sw:daily`; **A35** then **A36** in the alarm log | Set `reboot_hr` back to 19 |
 | **T12b** Remote settings | `manage.py set-config LOG-0001 th1_off_t=-0.5`; `config` | Logger applies it and restarts; `wifi_ssid=x` refused | Put it back with `th1_off_t=@default` |
 | **T12c** Alarm log | `manage.py alarms adab` | The lines of T3, T4, T7, T8, T9 are there | Before the site: office data removed, log rebuilt |
 | **T13** 48 h soak | 48 h with 1 h WiFi off in the middle; `manage.py daily adab` | `coverage_pct` 100 (except first and last day), `heap_kb` stable | A falling heap = a memory leak: report it |
@@ -862,7 +862,7 @@ Skip to step 7 if the hotel WiFi was set at the office and `status` showed `WiFi
    If the password is refused: if `portal_pass` was never changed, it is `arkan-setup`. Otherwise check the password manager entry for LOG-0001.
 3. **Open the page.** Most phones open it by themselves (a "sign in to network" page). If not, open a browser and type `http://192.168.4.1` (http, not https).
    Expected: a page titled **"Logger LOG-0001 setup"**, with a grey status box (firmware, time, SD card, TH1 chip, WiFi and upload status, last sample), the line **"WiFi networks seen"** with their signal in dBm, then all the settings in groups.
-4. **Check the status box first:** firmware 0.3.0, `SD card: ok`, a valid time, the last sample with `EM01_...` values. Check that the hotel staff network is in "WiFi networks seen", better than -70 dBm. (If the list says "scanning, reload in a few seconds", reload the page.)
+4. **Check the status box first:** firmware 0.4.0, `SD card: ok`, a valid time, the last sample with `EM01_...` values. Check that the hotel staff network is in "WiFi networks seen", better than -70 dBm. (If the list says "scanning, reload in a few seconds", reload the page.)
 5. **Fill in the WiFi group only:**
    - **`wifi_ssid`**: the hotel staff network's name, **exactly** as it appears in the list (capitals and spaces count);
    - **`wifi_pass`**: its WPA2 password (from the owner);
@@ -879,7 +879,7 @@ The portal closes by itself after 15 minutes without activity (`portal_min`), or
 ### B9 Checking the data on the live page and on the VPS
 
 1. **Live page.** On your phone or laptop, open `https://arkan-monitoring.duckdns.org/live/adab/` and sign in with the Arkan login.
-   Expected: the status line **"Live, updated n s ago"** (n below about 30), tiles for kW, kVA, PF, Hz, V and A per phase, room and outdoor temperature and humidity, updating every 15 s.
+   Expected: in the dark blue header, the green pill **"Live · updated n s ago"** (n below about 30) and the hotel time; under it, cards for total power, apparent power (with the share of the 82.5 kVA PLN contract), power factor and frequency, one card each for the voltage and the current of L1, L2, L3, room and outdoor temperature and humidity, and a **Logger** card (WiFi signal, upload backlog, SD card, firmware), updating every 15 s. On a phone the side menu becomes a row of tabs at the top.
    If "No data for n min" in red: the logger is not online (B8 step 8) or the token is refused (see [C6](#c6-troubleshooting)).
 2. **Ask the operator to check the day file and the alarm log.** Send him these blocks (he runs them on `hermes-vps`):
    ```bash
@@ -899,7 +899,7 @@ The portal closes by itself after 15 minutes without activity (`portal_min`), or
    ```
    (`<YYYY>/<MM>/<YYYY-MM-DD>` = today's **UTC** date. Before 08:00 WITA, the UTC date is yesterday's.)
    Expected:
-   - `list`: `LOG-0001: fw 0.3.0, last record <a time within the last 2 minutes>`;
+   - `list`: `LOG-0001: fw 0.4.0, last record <a time within the last 2 minutes>`;
    - the day file: one new line per minute, with `EM01_n` = 4 and values in the meter columns;
    - `alarms`: the install's own lines, for example **A02** Power interruption for each power swap, maybe **A03** from before the RS485 cable was connected (it must be **cleared**), **A01** if the logger was off more than 15 minutes. No unexplained open alarm;
    - `show-config`: the settings the logger reported after its last boot (firmware, settings, TH1 chip), matching what you set.
@@ -924,7 +924,7 @@ Full table: [`../install/README.md` Lab 7 Part C](../install/README.md#part-c-me
 **Word first.** An **offset** is a fixed correction added to every reading of a sensor. `TH1` reads warm (by about 1 to 3 C) because the board heats it; the box also changes what it sees. So we measure it on site, in the final conditions, against a calibrated reference instrument.
 
 1. **Close the box** (final conditions) and let it run for 30 minutes.
-2. **`TH1`:** put the reference instrument beside the box, at the same height, out of the sun and away from your breath and hands. Wait 15 minutes. Take **5 readings, 1 minute apart**, of the reference and of the logger (the `TH1` tiles on the live page, or the `Last sample` line in the portal's status box: both show the 15 s readings with the current offsets applied).
+2. **`TH1`:** put the reference instrument beside the box, at the same height, out of the sun and away from your breath and hands. Wait 15 minutes. Take **5 readings, 1 minute apart**, of the reference and of the logger (the `TH1` cards on the live page, or the `Last sample` line in the portal's status box: both show the 15 s readings with the current offsets applied).
 3. **`TH2`:** do the same with the reference beside the radiation shield, in the shade.
 4. **Compute** the mean of each, then:
    new offset = current offset + (reference mean - logger mean).
@@ -954,11 +954,11 @@ After the last change and restart, wait 30 minutes, then:
 
 | # | Check | Where | Expected |
 |---|---|---|---|
-| 1 | Live page | `/live/adab/` | "Live, updated n s ago", all tiles filled, values plausible |
+| 1 | Live page | `/live/adab/` | "Live · updated n s ago", all cards filled, values plausible |
 | 2 | Logger status | Portal status box (or console `status`) | `WiFi: up ... rssi` better than -70 dBm; `Uploads: ok n, failed 0` (a few failures early on are fine); `Backlog: 0 min`; `SD card: ok` |
 | 3 | Rows on the VPS | Operator: `tail -n 30` of today's day file | 30 rows, one per minute, no missing minute; `EM01_n` = 4; `TH1_t`, `TH2_t` filled on the rows at :00, :05, :10... (6 rows) and empty on the others, never `err` |
 | 4 | Alarm log | Operator: `manage.py alarms adab` | No open alarm except ones you can explain |
-| 5 | Settings | Operator: `manage.py show-config LOG-0001` | Offsets, `meters`, `mb_baud` as set; firmware 0.3.0 |
+| 5 | Settings | Operator: `manage.py show-config LOG-0001` | Offsets, `meters`, `mb_baud` as set; firmware 0.4.0 |
 
 ### B13 As-built record, photos, closing the box
 
@@ -995,13 +995,13 @@ This is done remotely, the next day. Full list: [`../install/README.md` Lab 7 Pa
 
 | Where | Normal |
 |---|---|
-| Live page `/live/adab/` | "Live, updated n s ago" with n below about 30; tiles moving; no open alarm at the top, or only ones you know about |
-| Alarm log (`manage.py alarms adab`, or the bottom of the live page) | Few lines. **A02** after each power cut (no UPS). **A26** Voltage dip and **A27** Voltage swell are information only. A daily reboot at 03:05 WITA is planned and gives no alarm |
+| Live page `/live/adab/` | "Live · updated n s ago" with n below about 30; values moving; no open alarm at the top, or only ones you know about |
+| Alarm log (`manage.py alarms adab`, or the bottom of "Live now" on the site page) | Few lines. **A02** after each power cut (no UPS). **A26** Voltage dip and **A27** Voltage swell are information only. A daily reboot at 03:05 WITA is planned and gives no alarm |
 | Day files on the VPS | One file per UTC day, 1440 rows, `EM01_n` mostly 4 |
 | `daily.csv` (`manage.py daily adab`) | One row per WITA day: `coverage_pct` near 100, `EM01_e_delta` = kWh of the day, `dips`, `swells`, `power_interruptions`, `alarms_started` |
 | The logger (portal or console `status`) | `WiFi: up`, `Uploads: ok n`, `Backlog: 0 min`, `SD: ok`, no "SAFE MODE" |
 
-After a power cut, the data has a gap, the first record after it has `boot=poweron@0.3.0`, and the alarm log shows **A01** (if longer than 15 minutes) and **A02** with the outage length. Nothing else to do: the clock (RTC) keeps the time and logging restarts by itself.
+After a power cut, the data has a gap, the first record after it has `boot=poweron@0.4.0`, and the alarm log shows **A01** (if longer than 15 minutes) and **A02** with the outage length. Nothing else to do: the clock (RTC) keeps the time and logging restarts by itself.
 
 ### C2 WhatsApp alerts (later)
 
@@ -1083,12 +1083,12 @@ Be careful with remote changes of `meters`, `mb_baud`, `mb_format` and the `pin_
 
 **OTA** (over the air, the normal way, `ota_on` = 1 by default):
 1. A new version is built with a new `FW_VERSION` in [`firmware/include/config.h`](../../firmware/include/config.h), tested on the bench first.
-2. The operator sends it from the logger's **Firmware update** panel on the live page (a GitHub release or the `.bin` file, see [../OTA.md](../OTA.md)), or copies `firmware.bin` to the VPS data folder and offers it:
+2. The operator sends it from **Firmware update** in the side menu of the site page `/live/adab/` (logins in `ADMIN_USERS` only; a GitHub release or the `.bin` file, see [../OTA.md](../OTA.md)), or copies `firmware.bin` to the VPS data folder and offers it (the version is read from the file):
    ```bash
-   docker compose exec ingest python tools/manage.py publish-fw /data/firmware.bin --version 0.3.1
+   docker compose exec ingest python tools/manage.py publish-fw /data/firmware.bin
    ```
 3. An online logger checks within a minute; otherwise every 6 hours (`ota_check_h`); the console command `ota` makes it check at once. It downloads the file, checks it, writes it to its second flash slot and restarts.
-   Expected: `manage.py list` shows the new version; the alarm log has **A35 Firmware updated** "0.3.0 -> 0.3.1, by remote update (OTA)".
+   Expected: `manage.py list` shows the new version; the alarm log has **A35 Firmware updated** "0.4.0 -> 0.4.1, by remote update (OTA)".
 4. If the new firmware restarts 3 times before 10 minutes of uptime, the logger **goes back to the previous version by itself** (`boot=sw:ota_rollback@...`, **A36** in the alarm log). Tell the supervisor.
 
 **By USB, on site:** as in A4 (`pio run -t upload`, with the right build). The settings are kept. This is a power swap (laptop on the USB-C port). The alarm log shows **A35 Firmware updated**, marked as flashed by hand.
@@ -1190,7 +1190,7 @@ cd /opt/arkan-monitoring/server
 | Daily summary | `docker compose exec ingest python tools/manage.py daily adab` |
 | Merge an SD card copy | `docker compose exec ingest python tools/manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001` |
 | Rebuild the alarm log | `docker compose exec ingest python tools/manage.py alarms adab --rebuild` |
-| Offer a firmware | `docker compose exec ingest python tools/manage.py publish-fw /data/firmware.bin --version 0.3.1` |
+| Offer a firmware | `docker compose exec ingest python tools/manage.py publish-fw /data/firmware.bin` (or the site page, **Firmware update**) |
 | Last rows of a day file | `tail -n 3 /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw/<YYYY>/<MM>/<YYYY-MM-DD>.csv` |
 | Rows in a day file | `wc -l /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw/<YYYY>/<MM>/<YYYY-MM-DD>.csv` |
 

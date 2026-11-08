@@ -14,7 +14,7 @@ Level: beginner. Every term is explained the first time it appears, and again in
 **Status.**
 - The **register table of the real meter is not verified**, and the spare meter at the office has **no Modbus port**: the check happens on site, at the first visit.
 - The **simulator** (`tools/modbus_sim/`) and its `check` and `dump` modes were run and have unit tests. The `serve` mode was tested with `modbus_dump.py` through a virtual serial pair, **not yet with the logger**.
-- The logger's console texts quoted here come from the firmware source (version 0.3.0), **not yet seen on the board**. Where the board prints something different, correct this tutorial.
+- The logger's console texts quoted here come from the firmware source (written for 0.3.0, still valid in 0.4.0), **not yet seen on the board**. Where the board prints something different, correct this tutorial.
 - Outputs marked **real output** were produced by the tools on a laptop.
 
 **Conventions.**
@@ -87,7 +87,7 @@ The logger shows one number; the LCD of the meter shows the truth. The **ratio**
 
 - **Built into the firmware**: the proposed table ([`docs/meter/registers-proposed.csv`](../meter/registers-proposed.csv) is the same thing as a file). It works with no SD file.
 - **`/config/registers.csv` on the SD card** replaces it entirely. It is read **once, at boot**. A change means: power off, edit the file on a laptop, put the card back, boot. No reflashing.
-- **What can be changed remotely** from the VPS (`manage.py set-config`): the settings `meters`, `mb_baud`, `mb_format` and `ct_mult`. **Never the table.**
+- **What can be changed remotely**, since firmware 0.4.0: the table itself and the settings `meters`, `mb_baud`, `mb_format` and `ct_mult`, from the platform's page **`/live/adab/register`** (side menu of the site page, **Meter registers**) or with `manage.py set-registers` / `set-config`. The logger takes a new table at its next settings check (every 15 minutes, or the console command `config`), checks every line again, writes it as `/config/registers.csv` (the old file becomes `registers.bak`) and restarts. Steps: [`docs/meter/README.md`](../meter/README.md#changing-the-register-table).
 
 ---
 
@@ -437,6 +437,8 @@ Expected (format from the firmware; the pin numbers are examples, yours are the 
 [2026-11-08T10:15:02Z] Meter: 1 meter(s), RS485 TX=17 RX=18 DE=-1 9600 8N1, 2 request(s) per read
 ```
 
+**Or send it from the platform** (the logger online, firmware 0.4.0 or later): on `/live/adab/register`, **Import CSV file...** with your table, **Check**, a comment, **Send to the logger**; then type `config` on the console so the logger fetches it at once. It restarts by itself; the page goes to **Applied**. Try it once at the bench, so that you know the way before the site, then **Back to the built-in table**.
+
 **Read these two lines every time.** The first must say *from SD* with the number of values you expect. If it says `built-in FCN300 register table (19 values, not verified)`, your file was not found, or **none** of its lines was valid. `2 request(s)` is right for the proposed table; a different number is a sign your table groups differently.
 
 ### 4.5 See the values
@@ -517,7 +519,7 @@ The loop is the same as in Parts 3 and 4, with the meter's LCD as the truth inst
 1. Prepare: read [`docs/meter/README.md`](../meter/README.md) sections 2 and 4 (the CT, and the on-site procedure). Bring the laptop with this repository, the USB-RS485 adapter, a clamp meter, and **a copy of the proposed table on the SD card**.
 2. The **electrician** opens the panel. You photograph: the CT labels (they should say 250/5), the meter's label, its back (RS485 `A`/`B`), and the LCD settings pages (address, baud, parity, CT1/CT2).
 3. Run the dump and photograph the LCD at the same moment: `python docs/install/labs/modbus_dump.py --port COM7 --fc 3 4 --start 0 --count 64 --csv dump.csv` (add `--block 1` if blocks fail). Take two, a minute apart.
-4. Use your Part 3 skills: find each value by its signature, work out the ratio, fix the table (Part 5), `check` the new table on the laptop first, then put it on the card.
+4. Use your Part 3 skills: find each value by its signature, work out the ratio, fix the table (Part 5), `check` the new table on the laptop first, then put it on the card (or send it from `/live/adab/register` if the logger is online: same result, no need to open the box).
 5. A load must be running: at no load, every value is 0 and proves nothing.
 6. **Do not experiment on site.** If the dump contradicts everything (exercise 3 with no solution), keep the dump and the photos and send them to the supervisor: a new table is quick to build from a dump.
 
@@ -527,9 +529,9 @@ The loop is the same as in Parts 3 and 4, with the meter's LCD as the truth inst
 
 - **Write it down**: raw dump, LCD photos, the final table and the CT ratio in `docs/meter/fcn300-3e4y-verified.md`; commit the final `registers.csv` to this repository so the next logger starts from it.
 - **The energy counter is cumulative.** If you change the scale of `e` while the logger is recording, the counter **jumps** (alarm **A19** "Energy counter went backwards" if it falls) and OED shows a false step. Fix the energy lines **first**, with the logger recording nothing that matters, and check the logged kWh against the LCD at the start and 10 minutes later.
-- **Old rows keep their old numbers.** The VPS stores what the logger sent; changing the table does not change history. There is no command yet to rescale old rows. A wrong factor is a constant, so a one-off script can fix it later: write down the date and time of the change (the `boot` column of the first new row, `sw:console@0.3.0` or similar, marks the restart).
+- **Old rows keep their old numbers.** The VPS stores what the logger sent; changing the table does not change history. There is no command yet to rescale old rows. A wrong factor is a constant, so a one-off script can fix it later: write down the date and time of the change (the `boot` column of the first new row marks the restart: `sw:remote_regs@0.4.0` for a table sent from the register page, `sw:console@0.4.0` or `poweron@0.4.0` for a card changed by hand; the register page's **History** also keeps the time and the comment of every version sent).
 - **Test data**: remove the office/bench data from the VPS before the site ([`docs/VPS-SETUP.md`](../VPS-SETUP.md) step 8) so the bench's fake meter does not end up in the record.
-- **`ct_mult` is a setting, the table is a file.** Remote changes (`manage.py set-config`) reach `ct_mult`, `meters`, `mb_baud`, `mb_format`. Not the table.
+- **`ct_mult` is a setting, the table is a file.** Both can be changed remotely (firmware 0.4.0 or later): the table from the register page or `manage.py set-registers`, the settings from the same page (**Meter link settings**) or `manage.py set-config`. When I and P are off by the CT ratio, change `ct_mult`, not every scale.
 
 ---
 
@@ -583,6 +585,7 @@ What it simulates and what it does not:
 | Read raw registers | `mb 1 3 0 16` (slave, function, start, count; hex allowed: `mb 1 3 0x18 4`) |
 | Change `ct_mult` | `set ct_mult 50`, `reboot` (or `manage.py set-config LOG-0001 ct_mult=50`) |
 | Reread the table | Power off, edit `/config/registers.csv`, power on, read the boot log |
+| Send a table remotely | Page `/live/adab/register` (or VPS: `manage.py set-registers LOG-0001 table.csv --comment "..."`), then `config` on the console to fetch at once |
 | Test a table on the laptop | `python tools/modbus_sim/modbus_sim.py check --regs FILE --ct-mult 50 --profile P` |
 | Practise reading a dump | `python tools/modbus_sim/modbus_sim.py dump --profile float32-fc4 --fc 4` |
 | Be the meter for the logger | `python tools/modbus_sim/modbus_sim.py serve --port COM7 -v` |

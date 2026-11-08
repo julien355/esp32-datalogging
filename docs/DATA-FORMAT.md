@@ -1,6 +1,6 @@
 # How the data is saved: on the SD card and on the VPS
 
-Status: **agreed 7 November 2026** (CSV upload Q1, UTC day files, min and max for power quality Q3, sensors as 5-minute averages, firmware version on each boot, Open Energy Dashboard Q6). Implemented in firmware 0.3.0 (CSV schema 3) and the ingest service.
+Status: **agreed 7 November 2026** (CSV upload Q1, UTC day files, min and max for power quality Q3, sensors as 5-minute averages, firmware version on each boot, Open Energy Dashboard Q6). Implemented in firmware 0.3.0 and later (CSV schema 3; 0.4.0 is the current version) and the ingest service.
 
 ## 1. The choice: one file per day, all values of a logger in one row per minute
 
@@ -44,7 +44,7 @@ Backups: `/srv/arkan-monitoring/backups/data-<date>.tar.gz`, nightly, 14 kept (`
 
 **The SD card and the server hold the same files.** Recovering a gap = copying the SD card's `/data` folder and running `manage.py backfill adab LOG-0001 <copy>`: rows already on the server are dropped, the others are merged in time order.
 
-## 3. The CSV file (schema 3, firmware 0.3.0)
+## 3. The CSV file (schema 3, firmware 0.3.0 and later)
 
 Plain text, UTF-8, comma separated, `\n` line ends, a header line, no quotes, `.` as decimal point. Empty field = no valid reading.
 
@@ -71,7 +71,7 @@ Plain text, UTF-8, comma separated, `\n` line ends, a header line, no quotes, `.
 | `up_s` | s | Uptime |
 | `backlog_min` | min | Age of the oldest record not yet uploaded |
 | `sd` | | 1 = written to the SD card, 0 = the card was failing (row kept in RAM only) |
-| `boot` | | On the first record after a boot only: `reason@firmware`, for example `poweron@0.3.0` or `sw:ota@0.3.1` |
+| `boot` | | On the first record after a boot only: `reason@firmware`, for example `poweron@0.4.0` or `sw:ota@0.4.1` |
 
 A second meter adds the same block with `EM02_`. The meter columns and their scales come from the register table: **until the register check, the values and units of currents and powers are not trusted.**
 

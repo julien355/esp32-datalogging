@@ -1,6 +1,6 @@
-# Remote firmware update from the live page
+# Remote firmware update from the site page
 
-Each logger gets its own **"Firmware update"** panel at the bottom of its site's live page, for example `https://arkan-monitoring.duckdns.org/live/adab/`. From there you send a firmware to **that logger only**. You can take it from:
+The site page, for example `https://arkan-monitoring.duckdns.org/live/adab/`, has **Firmware update** in its side menu (group *Logger*), with one panel per logger of the site. It shows only for the logins in `ADMIN_USERS` (section 6). From a panel you send a firmware to **that logger only**. You can take it from:
 
 - **a GitHub release**: built by CI from a tag, so the firmware is exactly the code in the repository at that tag;
 - **a `.bin` file on your computer**: a build from your own PlatformIO, or a file downloaded from a CI run;
@@ -11,9 +11,9 @@ Each logger gets its own **"Firmware update"** panel at the bottom of its site's
 ## 1. How it works
 
 ```
- GitHub tag fw-v0.3.1 ──CI──> release: logger-0.3.1.bin, logger-uart-0.3.1.bin
+ GitHub tag fw-v0.4.1 ──CI──> release: logger-0.4.1.bin, logger-uart-0.4.1.bin
                                       │
- live page, panel of LOG-0001 ────────┤ (or upload a .bin, or pick a stored file)
+ site page, Firmware update, LOG-0001 ┤ (or upload a .bin, or pick a stored file)
                                       ▼
  VPS: checks the file, keeps it in /data/firmware/, offers it to LOG-0001 only
                                       │  the next live snapshot (15 s) answers {"ota":1}
@@ -45,17 +45,17 @@ The version is read **from the file**, never typed by hand: it is `FW_VERSION` i
 
 ## 3. Making a release on GitHub (the normal way)
 
-1. Change `FW_VERSION` in `firmware/include/config.h`, for example to `0.3.1`. Commit and push. Test the build on the bench logger first.
-2. Create the tag **`fw-v0.3.1`** on that commit (same number, with `fw-v` in front), on GitHub ("Releases", "Draft a new release", "Choose a tag", type `fw-v0.3.1`, target the commit) or from a terminal:
+1. Change `FW_VERSION` in `firmware/include/config.h`, for example to `0.4.1`. Commit and push. Test the build on the bench logger first.
+2. Create the tag **`fw-v0.4.1`** on that commit (same number, with `fw-v` in front), on GitHub ("Releases", "Draft a new release", "Choose a tag", type `fw-v0.4.1`, target the commit) or from a terminal:
    ```bash
-   git tag fw-v0.3.1
+   git tag fw-v0.4.1
    ```
 
    ```bash
-   git push origin fw-v0.3.1
+   git push origin fw-v0.4.1
    ```
-3. CI builds both variants and creates the release **"Logger firmware 0.3.1"** with `logger-0.3.1.bin` (native USB build, the normal one), `logger-uart-0.3.1.bin`, and the bootloader and partition files for a first flash by cable. CI stops if the tag and `FW_VERSION` differ.
-4. On the live page, open the logger's panel. **From a GitHub release** lists the releases, with the file of the logger's build already selected. **Send to LOG-0001**.
+3. CI builds both variants and creates the release **"Logger firmware 0.4.1"** with `logger-0.4.1.bin` (native USB build, the normal one), `logger-uart-0.4.1.bin`, and the bootloader and partition files for a first flash by cable. CI stops if the tag and `FW_VERSION` differ.
+4. On the site page, open **Firmware update** in the menu, then the logger's panel. **From a GitHub release** lists the releases, with the file of the logger's build already selected. **Send to LOG-0001**.
 
 The `fw-v` tags are for firmware only. The `v` tags of the VPS code (tutorial 2) are separate.
 
@@ -64,6 +64,8 @@ The `fw-v` tags are for firmware only. The `v` tags of the VPS code (tutorial 2)
 Use this for a bench build that has no release. Build with `pio run`, then in the panel **From a file on this computer**, choose `firmware/.pio/build/logger/firmware.bin` and click **Upload and send**. Any file name works: the server names it `logger-<version>.bin` from the marker inside.
 
 ## 5. The panel
+
+Loggers report their build (`usb` or `uart`) from firmware **0.4.0** on, the first version that carries the build marker. A logger on an older firmware can still be updated from the panel (it already has OTA), but the panel cannot check its build: send the `usb` build unless you know it runs the UART build.
 
 - **Status line:** running version and build, what is offered, by whom and when, then one of: *waiting for the logger*, *installed*, *rolled back* (the logger kept restarting on it), *not newer*.
 - **Recent events:** offered, withdrawn, rolled back, firmware changes seen in the records.
@@ -93,7 +95,7 @@ Then apply it (the owner approves the restart, house rule):
 cd /opt/arkan-monitoring/server && docker compose up -d
 ```
 
-No Caddy change is needed: the panel's requests go through the same login as the live page, and the loggers' endpoints are unchanged.
+No Caddy change is needed for the panel: its requests go through the same login as the site page, and the loggers' OTA endpoints are unchanged. (Version 0.4.0 of the repository does change the Caddy file for another reason, the register table: tutorial 2, C5 step 3b.)
 
 ## 7. Security
 

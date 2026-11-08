@@ -48,7 +48,7 @@ Default for Adab:
 - The live alarms (A04 phase lost, A07 frequency) are checked on the snapshots, so they react within 15 to 30 s.
 
 **Live page `/live/<site>/`** (layout of the dashboard mockup, `docs/mockup/`, approved 8 November 2026):
-- A navy header: site name, a status pill ("Live · updated 4 s ago", or "No data for 2 min" in red), the hotel time, and links to **History (OED)** and **All sites**.
+- A navy header: site name, a status pill ("Live · updated 4 s ago", or "No data for 2 min" in red), the hotel time, and links to **All sites** and **Open Energy Dashboard**.
 - The open alarms first (severity icon, label and colour), or "No open alarm".
 - **Power:** total kW, kVA with a bar against the PLN contract (`contracted_kva`), power factor, frequency.
 - **Per phase:** one card for the three voltages and one for the three currents, each with a 3-line sparkline (L1 blue, L2 orange, L3 green); the current card has a bar against the PLN per-phase limit (`contracted_kva` / 3 / `contract_v_ln`, 125 A at Adab).
@@ -76,6 +76,13 @@ Default for Adab:
 - Energy is the step of the cumulative counter `EM01_e` between records less than an hour apart; a counter going down is ignored (A19 reports it). It matches `daily.csv` (`manage.py daily`).
 - Each day file is summarised once and kept in memory until it changes: the first 14-day request reads the files (under a second for 14 days), later ones take a few milliseconds.
 - These pages overlap with OED's line, bar and compare graphs. OED stays for what they do not do: groups of sites, export, maps, the comparison of any period.
+
+**Logger pages of `/live/<site>/`** (side menu, group *Logger*):
+
+| Menu | Address | What it is | Who |
+|---|---|---|---|
+| Meter registers | `/live/<site>/register` (`?device=LOG-0002` if the site has several loggers) | the meter register table the logger reads: see, edit, import, check and send it, history of versions, and the meter link settings (`meters`, `mb_baud`, `mb_format`, `ct_mult`). Firmware 0.4.0 or later. Steps: [`meter/README.md`](meter/README.md#changing-the-register-table) | everyone with the Arkan login |
+| Firmware update | `#firmware` | one panel per logger: send a GitHub release, a `.bin` file or a stored file to that logger, status and recent events. [`OTA.md`](OTA.md) | only the logins in `ADMIN_USERS` (`server/.env`); the menu entry is hidden for the others |
 
 **`/live/`** lists all sites with their status and total kW: the multi-site live overview.
 
