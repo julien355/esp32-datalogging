@@ -61,6 +61,22 @@ Default for Adab:
 - Behind the same login as OED (`hub-users.caddy`).
 - Readable on a phone.
 
+**History pages of `/live/<site>/`** (side menu, added 8 November 2026 from the mockup's graph screens):
+
+| Menu | Address | What it shows |
+|---|---|---|
+| Live now | `#now` (default) | the live view above |
+| Power | `#power` | mean kW of each hour and the highest 15-second sample in it; 7, 14 or 31 days |
+| One day | `#day` | the 1-minute power of one hotel day, with the day before and after; the day's kWh, highest sample, base load |
+| Energy per day | `#energy` | kWh per hotel day from the meter's counter (today and incomplete days lighter); today, yesterday, mean of full days |
+| This week vs last | `#week` | complete hours of this week (from Sunday 00:00) against the same hours last week, and day by day; says "not comparable" when records are missing in either week |
+| Temperature, Humidity | `#temperature`, `#humidity` | hourly means of each sensor, hover for the hour's lowest and highest |
+
+- Data: `GET /api/v1/history/<site>?days=N` (one row per hotel hour: kWh, mean and peak kW, sensor means, min and max) and `GET /api/v1/history/<site>/day/<date>` (1-minute power), read from the day files by `server/app/history.py`. Same login as the rest (`/api/v1/*` behind `hub-users.caddy`).
+- Energy is the step of the cumulative counter `EM01_e` between records less than an hour apart; a counter going down is ignored (A19 reports it). It matches `daily.csv` (`manage.py daily`).
+- Each day file is summarised once and kept in memory until it changes: the first 14-day request reads the files (under a second for 14 days), later ones take a few milliseconds.
+- These pages overlap with OED's line, bar and compare graphs. OED stays for what they do not do: groups of sites, export, maps, the comparison of any period.
+
 **`/live/`** lists all sites with their status and total kW: the multi-site live overview.
 
 ## Getting from OED to the live page

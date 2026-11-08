@@ -13,7 +13,9 @@ People endpoints (behind the Caddy web login, never published without it):
   GET  /api/v1/status          every site and logger: last record, last live, firmware
   GET  /api/v1/live/<site>     live values, 60-minute history and open alarms of a site
   GET  /api/v1/alarms/<site>   open alarms and the last 200 lines of the alarm log
-  GET  /live/  /live/<site>/   live page (refresh every 15 s)
+  GET  /api/v1/history/<site>?days=15        one row per local hour: kWh, kW, sensors (from the day files)
+  GET  /api/v1/history/<site>/day/<date>     the 1-minute power of one local day
+  GET  /live/  /live/<site>/   site page: live now (refresh every 15 s) and the history graphs
 
 Settings (environment): DATA_DIR (/data), PORT (8800), BIND (0.0.0.0 in the container),
 MAX_BODY (262144 bytes).
@@ -30,6 +32,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import history  # noqa: E402
 from alarms import AlarmEngine  # noqa: E402
 from store import CODE_RE, DataStore, IngestError, iso_now  # noqa: E402
 
@@ -177,6 +180,9 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/v1/alarms/([a-z0-9-]+)$", path)
         if m and CODE_RE.match(m.group(1)):
             return self.send_json(200, self.alarm_view(m.group(1)))
+        m = re.match(r"^/api/v1/history/([a-z0-9-]+)(?:/day/(\d{4}-\d{2}-\d{2}))?$", path)
+        if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
+            return self.history(m.group(1), m.group(2), parse_qs(u.query))
         if path in ("/live", "/live/") or re.match(r"^/live/[a-z0-9-]+/?$", path):
             with open(os.path.join(HERE, "live.html"), "rb") as f:
                 page = f.read()
@@ -206,6 +212,21 @@ class Handler(BaseHTTPRequestHandler):
         keys = ("name", "timezone", "utc_offset_h", "labels", "live", "sensors", "contracted_kva", "contract_v_ln", "rated_a",
                 "nominal_v")
         return {k: p.get(k) for k in keys if k in p}
+
+    def history(self, site, day, q):
+        devs = self.store.site_devices(site)
+        dev = q.get("device", [devs[0] if devs else ""])[0]
+        if dev not in devs:
+            return self.send_json(404, {"ok": False, "error": "no such logger on this site"})
+        meter = q.get("meter", ["EM01"])[0]
+        if not re.match(r"^[A-Z]{2}\d{2}$", meter):
+            return self.send_json(400, {"ok": False, "error": "bad meter"})
+        try:
+            if day:
+                return self.send_json(200, history.minutes(self.store, site, dev, day, meter))
+            return self.send_json(200, history.hourly(self.store, site, dev, int(q.get("days", ["15"])[0]), meter))
+        except ValueError:
+            return self.send_json(400, {"ok": False, "error": "bad date or days"})
 
     def status(self):
         out = {"time": iso_now(), "sites": {}}
