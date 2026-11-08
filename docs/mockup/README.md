@@ -7,6 +7,7 @@ Open **[`index.html`](index.html)** in a browser (it needs the `img/` folder bes
 |---|---|---|
 | Start page: all sites | `/live/` | Screenshot of the real page (`server/app/live.html`) |
 | Adab: live now (desktop and phone) | `/live/adab/` | Screenshot of the real page, fed every 15 s by the simulated logger |
+| Site page history (built) | `/live/adab/#power`, `#day`, `#energy`, `#week`, `#temperature` | Screenshots of the history pages of the side menu (approved design, built 8 November 2026) |
 | Power over two weeks | `/` (OED) | Line, group `adab`, unit kWh, rate Hour |
 | One day, minute by minute | `/` (OED) | Line zoomed on one day after Redraw |
 | Energy per day | `/` (OED) | Bar, interval Day |

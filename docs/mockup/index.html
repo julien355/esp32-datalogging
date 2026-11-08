@@ -224,10 +224,25 @@ const S = [
      <code>site.json</code> and can change without code. Readable on a phone (right).
      <ul><li>The log here shows the simulated test events: a voltage dip on L2 (A26) with 6 minutes of undervoltage (A05) and the backlog warning while 14 days of records were uploaded (A16).</li>
      <li>Screenshot of the real page <code>server/app/live.html</code> served by the local ingest service, fed by the simulated logger.</li>
-     <li><b>Approved 8 November 2026 as the design of <code>/live/adab/</code></b>; the page now in <code>server/app/live.html</code> is shown here.
+     <li><b>Approved 8 November 2026 and built</b> in <code>server/app/live.html</code>, with a side menu for the history pages (next group).
        Only the time of the last push to OED is still missing (the push service is not written yet).</li></ul>`,
    html: () => `<div class="pair"><div><img class="shot" src="img/live-adab.png" alt="Live page of Adab hotel"></div>
      <div><div class="phone"><img src="img/live-adab-phone.png" alt="Live page on a phone"></div><div class="cap">Same page on a phone (390 px wide)</div></div></div>`},
+  {grp: 'Site page history (built)', id: 'site-power', name: 'Power', url: '/live/adab/#power',
+   note: `<b>Built 8 November 2026</b> in <code>server/app/live.html</code> (side menu of the site page), from the site's day files. kW, hour by hour, with the highest 15-second sample. 7, 14 or 31 days.`,
+   html: () => `<img class="shot" src="img/site-power.png" alt="Power">`},
+  {grp: 'Site page history (built)', id: 'site-day', name: 'One day', url: '/live/adab/#day',
+   note: `<b>Built 8 November 2026</b> in <code>server/app/live.html</code> (side menu of the site page), from the site's day files. The 1-minute power of one hotel day, with the day before and after.`,
+   html: () => `<img class="shot" src="img/site-day.png" alt="One day">`},
+  {grp: 'Site page history (built)', id: 'site-energy', name: 'Energy per day', url: '/live/adab/#energy',
+   note: `<b>Built 8 November 2026</b> in <code>server/app/live.html</code> (side menu of the site page), from the site's day files. kWh per hotel day from the meter counter; today and incomplete days lighter.`,
+   html: () => `<img class="shot" src="img/site-energy.png" alt="Energy per day">`},
+  {grp: 'Site page history (built)', id: 'site-week', name: 'This week vs last', url: '/live/adab/#week',
+   note: `<b>Built 8 November 2026</b> in <code>server/app/live.html</code> (side menu of the site page), from the site's day files. Complete hours of this week against the same hours last week. Here it says "not comparable": the simulated logger was off overnight, and the page says so instead of showing a false drop.`,
+   html: () => `<img class="shot" src="img/site-week.png" alt="This week vs last">`},
+  {grp: 'Site page history (built)', id: 'site-temperature', name: 'Temperature', url: '/live/adab/#temperature',
+   note: `<b>Built 8 November 2026</b> in <code>server/app/live.html</code> (side menu of the site page), from the site's day files. Hourly means, room and outdoor; hover for the lowest and highest of each hour. Humidity has the same page.`,
+   html: () => `<img class="shot" src="img/site-temperature.png" alt="Temperature">`},
   {grp: 'Open Energy Dashboard (history)', id: 'oed-kw', name: 'Power over two weeks', url: '/',
    note: `<b>Hotel load, kW, hour by hour.</b> OED line graph, group <code>adab</code>, unit kWh, rate Hour (kWh per hour = kW).
      Peak hourly mean ${kwMax.toFixed(1)} kW against the 82.5 kVA PLN contract. OED averages long periods; short peaks show after a zoom (next screen).`,
