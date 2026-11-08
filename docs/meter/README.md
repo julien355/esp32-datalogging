@@ -50,10 +50,10 @@ A wrong register, a wrong scale, or a different meter: the table changes, the fi
 |---|---|
 | `firmware/src/meter.cpp` (`DEFAULT_TABLE`) | Built into the firmware. Used when the SD card has no `/config/registers.csv` |
 | SD card `/config/registers.csv` | Replaces the whole built-in table when present. `registers.bak` next to it is the previous one |
-| Platform, `sites/<site>/<device>/registers.json` | The table last sent from the page. `registers-history.jsonl`: every version sent |
+| Platform, `sites/<site>/<device>/registers.json` | The table last sent from the page `/live/<site>/register`. `registers-history.jsonl`: every version sent |
 | Logger's report (`settings-reported.json`) | The table the logger actually reads, its source (`sd` or `builtin`) and the version applied |
 
-**From the page `https://arkan-monitoring.duckdns.org/registers/LOG-0001/`** (Arkan login, logger firmware 0.4.0 or later):
+**From the page `https://arkan-monitoring.duckdns.org/live/adab/register`** (link "Meter registers" at the top of the site's live page; Arkan login; logger firmware 0.4.0 or later). If the site has several loggers, a list at the top right chooses one (`?device=LOG-0002`).
 
 1. The top box shows the table **on the logger** and what was **last sent**, with a state: *No table sent*, *Waiting*, *Applied*, *Differs*, *Refused*, *Firmware too old*.
 2. The editor opens with the logger's table. Change a line, add or delete lines, or load one: *Table on the logger*, *Last sent*, any version in the **History**, or **Import CSV file...** (for example the file written at the bench check). *Edit as text* takes a pasted table. *Download CSV* saves the table being edited. Yellow lines differ from the logger's, green lines are not on the logger.

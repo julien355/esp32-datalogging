@@ -23,7 +23,7 @@ A task stuck for 60 s reboots the board (task watchdog with panic). Records are 
 | Function | Detail |
 |---|---|
 | Meter reading | Modbus RTU master, any number of meters up to 4 (`meters` = `EM01:1,EM02:2`). Registers grouped into few requests (2 for the FCN300). One retry per request |
-| Register table | Built in from `docs/meter/fcn300-3e4y-modbus-guide.md` (**not verified**). Replaced **without reflashing** by `/config/registers.csv` on the SD card, written by hand or sent from the platform's `/registers/` page (2.9.2): `name,fc,addr,type,scale,ct,agg` per line. Types: `u16 s16 u32 s32 u32sw s32sw f32 f32sw` (`sw` = low word first). `ct=1`: multiplied by `ct_mult`. `agg`: `mean`, `last` (counters), `minmax` (mean + `_min` + `_max` columns) |
+| Register table | Built in from `docs/meter/fcn300-3e4y-modbus-guide.md` (**not verified**). Replaced **without reflashing** by `/config/registers.csv` on the SD card, written by hand or sent from the platform's page `/live/<site>/register` (2.9.2): `name,fc,addr,type,scale,ct,agg` per line. Types: `u16 s16 u32 s32 u32sw s32sw f32 f32sw` (`sw` = low word first). `ct=1`: multiplied by `ct_mult`. `agg`: `mean`, `last` (counters), `minmax` (mean + `_min` + `_max` columns) |
 | TH1 (board sensor) | I2C, type found at boot: AHT1x/AHT2x (0x38), SHT3x (0x44/0x45), HTU21/SHT21/Si7021 (0x40). CRC checked where the chip has one |
 | TH2 (AM2301) | DHT21 protocol on `pin_dht`. One retry after 2.1 s on a bad read |
 | Calibration | Offset per sensor (`th1_off_t`, `th1_off_rh`, `th2_off_t`, `th2_off_rh`), set after the install-day comparison with a reference |
@@ -101,7 +101,7 @@ With `ota_on=1` (default), every `ota_check_h` hours the logger asks `GET /api/v
 - The version applied is kept, so a setting is applied once even if the logger asks again.
 
 ### 2.9.2 Remote register table (since 0.4.0)
-- The meter register table can be sent from the platform's page **`/registers/<device>/`** (or `manage.py set-registers LOG-0001 table.csv`). The page shows the table the logger reports, lets you edit it line by line, import a CSV file, check it, and send it. `docs/meter/README.md`, "Changing the register table", explains the steps.
+- The meter register table can be sent from the platform's page **`/live/<site>/register`** (link "Meter registers" on the site's live page; `?device=LOG-0002` if the site has several loggers) (or `manage.py set-registers LOG-0001 table.csv`). The page shows the table the logger reports, lets you edit it line by line, import a CSV file, check it, and send it. `docs/meter/README.md`, "Changing the register table", explains the steps.
 - At the same check as the remote settings (every `rcfg_check_m` minutes, or the console command `config`), the logger asks `GET /api/v1/registers`. When the version is newer than the one it applied (counter `reg_ver`), it checks the whole table (every line valid, names `a-z0-9` of 1 to 7 characters and unique, at most 32 values). It then writes `/config/registers.csv` through `/config/registers.new`, keeps the previous file as `/config/registers.bak`, and restarts (`boot=sw:remote_regs`).
 - "Back to the built-in table" renames `/config/registers.csv` to `registers.bak`, so the firmware's table is used.
 - A table that fails the checks, or a logger with no working SD card, **refuses** the version: the reason goes to the event log and to the platform (`reg_refused`, `reg_error`), and the page shows "Refused". It is not tried again until the next boot. Send a corrected table (a new version).

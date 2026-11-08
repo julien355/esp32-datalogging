@@ -48,10 +48,10 @@
 <body>
 <header>
   <strong id="title">Meter registers</strong>
-  <span><select id="devsel"><option value="">Choose a logger...</option></select><a href="/live/">Live</a></span>
+  <span><select id="devsel" hidden></select><a id="liveLink" href="/live/">Live</a><a href="/live/">All sites</a></span>
 </header>
 <main>
-  <div id="pick" class="card" hidden>Choose a logger at the top right.</div>
+  <div id="pick" class="card" hidden></div>
   <div id="app" hidden>
 
     <div class="card">
@@ -132,8 +132,10 @@
 <script>
 const el = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const m = location.pathname.match(/^\/registers\/([A-Za-z0-9_-]+)\/?$/);
-const device = m ? m[1] : null;
+// /live/<site>/register, and ?device=LOG-0002 when the site has several loggers (default: the first one)
+const m = location.pathname.match(/^\/live\/([a-z0-9-]+)\/register\/?$/);
+const site = m ? m[1] : null;
+let device = new URLSearchParams(location.search).get('device');
 let view = null, TYPES = ['u16','s16','u32','s32','u32sw','s32sw','f32','f32sw'], AGGS = ['mean','last','minmax'];
 const BAUDS = ['1200','2400','4800','9600','19200','38400','57600','115200'], FORMATS = ['8N1','8E1','8O1','8N2'];
 const fmtTime = t => t ? String(t).replace('T', ' ').replace('Z', '') : '-';
@@ -322,7 +324,7 @@ const STATES = {
 };
 function render(fillEditor) {
   const v = view, rep = v.reported, p = v.platform;
-  el('title').textContent = `Meter registers: ${v.device} (${v.site})`;
+  el('title').textContent = `Meter registers: ${v.site}, ${v.device}`;
   const st = STATES[v.state] || STATES.none;
   el('state').innerHTML = `<span class="badge ${st[0]}">${esc(st[1])}</span>`;
   el('stateText').textContent = v.state === 'refused' ? `Reason: ${rep?.reg_error || '?'}` : st[2];
@@ -363,7 +365,11 @@ el('hist').addEventListener('click', e => {
 });
 async function load(fillEditor) {
   const j = await api('GET', `/api/v1/admin/registers/${device}`);
-  if (j._status !== 200) { el('app').hidden = true; el('pick').hidden = false; el('pick').textContent = j.error || 'Not found'; return; }
+  if (j._status !== 200 || j.site !== site) {
+    el('app').hidden = true; el('pick').hidden = false;
+    el('pick').textContent = j._status === 200 ? `${device} is not a logger of ${site}.` : (j.error || 'Not found');
+    return;
+  }
   view = j; TYPES = j.types || TYPES; AGGS = j.aggs || AGGS;
   el('app').hidden = false;
   render(fillEditor);
@@ -371,12 +377,17 @@ async function load(fillEditor) {
 el('reload').onclick = () => load(false);
 
 (async () => {
+  const pick = text => { el('pick').hidden = false; el('pick').textContent = text; };
+  if (!site) return pick('Open this page from a site: /live/<site>/register');
+  el('liveLink').href = `/live/${site}/`;
   const s = await api('GET', '/api/v1/status');
-  for (const [site, devs] of Object.entries(s.sites || {}))
-    for (const d of Object.keys(devs))
-      el('devsel').insertAdjacentHTML('beforeend', `<option value="${esc(d)}"${d === device ? ' selected' : ''}>${esc(d)} (${esc(site)})</option>`);
-  el('devsel').onchange = e => { if (e.target.value) location.href = `/registers/${e.target.value}/`; };
-  if (device) load(true); else el('pick').hidden = false;
+  const devs = Object.keys((s.sites || {})[site] || {});
+  if (!devs.length) return pick(`No logger registered for ${site}.`);
+  device = device || devs[0];
+  el('devsel').innerHTML = devs.map(d => `<option${d === device ? ' selected' : ''}>${esc(d)}</option>`).join('');
+  el('devsel').hidden = devs.length < 2;
+  el('devsel').onchange = e => { location.href = `/live/${site}/register?device=${encodeURIComponent(e.target.value)}`; };
+  load(true);
 })();
 </script>
 </body>

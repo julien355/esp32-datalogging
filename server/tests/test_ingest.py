@@ -330,9 +330,11 @@ class ToolsAndHttpTest(unittest.TestCase):
         good = "name,fc,addr,type,scale,ct,agg\nv1,3,0x0000,u16,0.1,0,minmax\ne,3,24,U32,0.01,0,last\n"
         code, _ = self.req("GET", "/api/v1/registers", token=self.token)
         self.assertEqual(code, 204)                                         # nothing sent yet
-        code, body = self.req("GET", "/registers/LOG-0001/")
+        code, body = self.req("GET", "/live/adab/register")
         self.assertEqual(code, 200)
         self.assertIn("<title>Meter registers</title>", body)
+        self.assertEqual(self.req("GET", "/live/adab/register/")[0], 200)
+        self.assertEqual(self.req("GET", "/registers/LOG-0001/")[0], 404)
         code, body = self.req("GET", "/api/v1/admin/registers/LOG-0001")
         self.assertEqual(json.loads(body)["state"], "none")
         # admin POSTs: JSON only, same origin only, known logger only

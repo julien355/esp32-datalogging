@@ -2,9 +2,9 @@
 # Variant of server/deploy/monitoring.caddy for when Open Energy Dashboard (OED) is installed.
 # It REPLACES /opt/edge/sites/monitoring.caddy on hermes-vps (native Caddy 2.6, imported by the main Caddyfile).
 #   /                 -> OED (127.0.0.1:8810), behind the Arkan login
-#   /live/, /registers/, /api/v1/*, /health -> our ingest service (127.0.0.1:8800), behind the Arkan login
+#   /live/ (and /live/<site>/register), /api/v1/*, /health -> our ingest service (127.0.0.1:8800), behind the Arkan login
 #   logger endpoints  -> our ingest service, NO web login (the device token is checked by the service)
-# OED uses only /api/<name> paths (users, meters, readings, csv, ...), never /api/v1, /live, /registers or /health
+# OED uses only /api/<name> paths (users, meters, readings, csv, ...), never /api/v1, /live or /health
 # (OED v1.0.0 src/server/app.js), so the two never collide.
 # After any change: caddy validate, then the owner approves the reload.
 
@@ -46,7 +46,7 @@ arkan-monitoring.duckdns.org {
 		}
 
 		@ingest {
-			path /live /live/* /registers /registers/* /api/v1/* /health
+			path /live /live/* /api/v1/* /health
 		}
 		handle @ingest {
 			reverse_proxy 127.0.0.1:8800 {

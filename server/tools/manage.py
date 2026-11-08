@@ -24,7 +24,7 @@ Commands:
                                         settings sent to the logger (value @default = back to default)
   show-config <device>                  settings asked for, and the settings the logger reported
   set-registers <device> <file.csv> [--comment TEXT] | --builtin
-                                        meter register table sent to the logger (same as the /registers/ page)
+                                        meter register table sent to the logger (same as the page /live/<site>/register)
   show-registers <device>               register table sent, table the logger reported, history
   alarms <site> [--rebuild]             open alarms and the last lines of the alarm log;
                                         --rebuild replays every record (after a backfill or a register change)

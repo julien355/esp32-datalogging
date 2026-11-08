@@ -15,7 +15,8 @@ People endpoints (behind the Caddy web login, never published without it):
   GET  /api/v1/live/<site>     live values, 60-minute history and open alarms of a site
   GET  /api/v1/alarms/<site>   open alarms and the last 200 lines of the alarm log
   GET  /live/  /live/<site>/   live page (refresh every 15 s)
-  GET  /registers/ /registers/<device>/   meter register table page: see, edit, import, send to the logger
+  GET  /live/<site>/register   meter register table page of the site's logger (?device=LOG-0002 if several):
+                               see, edit, import, send to the logger
   GET  /api/v1/admin/registers/<device>          table on the logger, table asked, history
   POST /api/v1/admin/registers/<device>/check    JSON {"csv"}: errors, warnings, normalised table
   POST /api/v1/admin/registers/<device>          JSON {"csv", "comment"} or {"builtin": true}: new version
@@ -196,7 +197,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, self.alarm_view(m.group(1)))
         if path in ("/live", "/live/") or re.match(r"^/live/[a-z0-9-]+/?$", path):
             return self.page("live")
-        if path in ("/registers", "/registers/") or re.match(r"^/registers/[A-Za-z0-9_-]+/?$", path):
+        if re.match(r"^/live/[a-z0-9-]+/register/?$", path):
             return self.page("registers")
         m = re.match(r"^/api/v1/admin/registers/([A-Za-z0-9_-]+)$", path)
         if m:
