@@ -1,4 +1,4 @@
-# DRAFT, NOT TESTED.
+# Tested on a test machine on 8 Nov 2026 (tutorial 3, Appendix C); not yet run on hermes-vps.
 # Variant of server/deploy/monitoring.caddy for when Open Energy Dashboard (OED) is installed.
 # It REPLACES /opt/edge/sites/monitoring.caddy on hermes-vps (native Caddy 2.6, imported by the main Caddyfile).
 #   /                 -> OED (127.0.0.1:8810), behind the Arkan login
@@ -52,6 +52,20 @@ arkan-monitoring.duckdns.org {
 			reverse_proxy 127.0.0.1:8800 {
 				header_up X-Auth-User {http.auth.user.id}
 			}
+		}
+
+		# OED v1.0.0 does not check its own login on these write routes (new or changed units and
+		# conversions, new meters, baselines, and the heavy rebuild of its unit table and views),
+		# so through Caddy anyone with an Arkan login could change them (tested 8 Nov 2026).
+		# Blocked from the internet; units, conversions and new meters are made with
+		# oed-setup.py on the VPS loopback (tutorial 3, Part B). Editing a meter, groups,
+		# users, maps and site settings still work in the browser (OED checks its admin login there).
+		@oedunguarded {
+			method POST PUT DELETE
+			path /api/units/addUnit /api/units/edit /api/conversions/* /api/conversion-array/* /api/meters/addMeter /api/baselines/*
+		}
+		handle @oedunguarded {
+			respond "Blocked by Caddy: use server/deploy/oed/oed-setup.py on the VPS (tutorial 3, Part B)" 403
 		}
 
 		# Optional, PLAN.md 5.4: hide OED's CSV upload API from the internet.

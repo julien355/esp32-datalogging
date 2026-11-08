@@ -1,4 +1,4 @@
-# DRAFT, NOT TESTED.
+# Tested on a test machine on 8 Nov 2026 (tutorial 3, Appendix C); not yet run on hermes-vps.
 # Open Energy Dashboard on hermes-vps: our lean image, tuned PostgreSQL, memory limits.
 # Not OED's default compose (that one runs npm ci and webpack at every start: 1 to 2 GB).
 #

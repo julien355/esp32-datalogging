@@ -1,4 +1,4 @@
-# DRAFT, NOT TESTED.
+# Tested on a test machine on 8 Nov 2026 (tutorial 3, Appendix C); not yet run on hermes-vps.
 # Lean Open Energy Dashboard (OED) image for hermes-vps (docs/VPS-MEMORY.md).
 # OED is used as it is: this file only builds it once, OFF the VPS, and runs it without build tools.
 #

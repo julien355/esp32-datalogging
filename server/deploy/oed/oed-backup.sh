@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DRAFT, NOT TESTED.
+# Tested on a test machine on 8 Nov 2026 (tutorial 3, Appendix C); not yet run on hermes-vps.
 # Nightly dump of OED's database (pg_dump), gzip, the last 14 kept. Beside backup.sh (the data folder).
 # Crontab of user ai (crontab -e), 02:40 server time:
 #   40 2 * * * /opt/arkan-monitoring/server/deploy/oed/oed-backup.sh >> /srv/arkan-monitoring/backups/backup.log 2>&1
