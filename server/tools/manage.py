@@ -23,6 +23,9 @@ Commands:
   set-config <device> key=value ... [--force]
                                         settings sent to the logger (value @default = back to default)
   show-config <device>                  settings asked for, and the settings the logger reported
+  set-registers <device> <file.csv> [--comment TEXT] | --builtin
+                                        meter register table sent to the logger (same as the /registers/ page)
+  show-registers <device>               register table sent, table the logger reported, history
   alarms <site> [--rebuild]             open alarms and the last lines of the alarm log;
                                         --rebuild replays every record (after a backfill or a register change)
 """
@@ -39,6 +42,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app"))
+import registers  # noqa: E402
 from alarms import AlarmEngine  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, atomic_write, iso_now, token_hash  # noqa: E402
 
@@ -442,6 +446,52 @@ def cmd_show_config(store, a):
         print("the logger has not reported its settings yet")
 
 
+def cmd_set_registers(store, a):
+    site = device_site(store, a.device)
+    if a.builtin == bool(a.file):
+        die("give a file, or --builtin (not both)")
+    if a.builtin:
+        ver = store.set_registers(site, a.device, builtin=True, by="manage.py", comment=a.comment)
+    else:
+        text = open(a.file, encoding="utf-8-sig").read()
+        rows, errors, warnings = registers.parse(text)
+        for w in warnings:
+            print("warning: " + w)
+        if errors:
+            die("table refused:\n  " + "\n  ".join(errors))
+        ver = store.set_registers(site, a.device, registers.to_csv(rows), by="manage.py", comment=a.comment)
+    print(f"register table version {ver} for {a.device}: the logger takes it at its next check "
+          "(15 min, or console 'config'), writes /config/registers.csv and restarts; check with show-registers")
+
+
+def cmd_show_registers(store, a):
+    site = device_site(store, a.device)
+    want = store.get_registers(site, a.device)
+    if want:
+        what = "back to the built-in table" if want.get("builtin") else "table below"
+        print(f"sent: version {want['version']} at {want.get('updated')} by {want.get('by') or '-'}: {what}")
+        if want.get("csv"):
+            print(want["csv"], end="")
+    else:
+        print("sent: nothing (the logger uses its own table)")
+    rep = store.get_report(site, a.device)
+    if rep and "reg_version" in rep:
+        print(f"\nreported by the logger at {rep.get('received')}: version {rep.get('reg_version')}, "
+              f"source {rep.get('reg_source')}" + (f", REFUSED version {rep.get('reg_refused')}: {rep.get('reg_error')}"
+                                                   if rep.get("reg_refused") else ""))
+        print(rep.get("registers", ""), end="")
+    elif rep:
+        print(f"\nthe logger (fw {rep.get('fw')}) does not report its register table: firmware 0.4.0 or later needed")
+    else:
+        print("\nthe logger has not reported yet")
+    hist = store.registers_history(site, a.device)
+    if hist:
+        print("\nhistory:")
+        for h in hist:
+            print(f"  v{h['version']} {h.get('updated')} {h.get('by') or '-'}: "
+                  f"{'built-in' if h.get('builtin') else 'table'} {h.get('comment') or ''}")
+
+
 def cmd_alarms(store, a):
     eng = AlarmEngine(store)
     if a.rebuild:
@@ -488,6 +538,10 @@ def main():
     p = sub.add_parser("set-config"); p.add_argument("device"); p.add_argument("pairs", nargs="+")
     p.add_argument("--force", action="store_true", help="accept keys before the logger has reported its settings")
     p = sub.add_parser("show-config"); p.add_argument("device")
+    p = sub.add_parser("set-registers"); p.add_argument("device"); p.add_argument("file", nargs="?")
+    p.add_argument("--builtin", action="store_true", help="the logger deletes its file and uses the firmware's table")
+    p.add_argument("--comment", default="")
+    p = sub.add_parser("show-registers"); p.add_argument("device")
     p = sub.add_parser("alarms"); p.add_argument("site"); p.add_argument("--rebuild", action="store_true")
     p.add_argument("--lines", type=int, default=20)
     a = ap.parse_args()
@@ -498,6 +552,7 @@ def main():
         "enable-device": lambda s, x: cmd_enable(s, x, False), "list": cmd_list, "daily": cmd_daily,
         "export-oed": cmd_export_oed, "backfill": cmd_backfill, "publish-fw": cmd_publish_fw,
         "set-config": cmd_set_config, "show-config": cmd_show_config, "alarms": cmd_alarms,
+        "set-registers": cmd_set_registers, "show-registers": cmd_show_registers,
     }[a.cmd](store, a)
 
 

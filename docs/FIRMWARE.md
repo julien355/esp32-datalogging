@@ -23,7 +23,7 @@ A task stuck for 60 s reboots the board (task watchdog with panic). Records are 
 | Function | Detail |
 |---|---|
 | Meter reading | Modbus RTU master, any number of meters up to 4 (`meters` = `EM01:1,EM02:2`). Registers grouped into few requests (2 for the FCN300). One retry per request |
-| Register table | Built in from `docs/meter/fcn300-3e4y-modbus-guide.md` (**not verified**). Replaced **without reflashing** by `/config/registers.csv` on the SD card: `name,fc,addr,type,scale,ct,agg` per line. Types: `u16 s16 u32 s32 u32sw s32sw f32 f32sw` (`sw` = low word first). `ct=1`: multiplied by `ct_mult`. `agg`: `mean`, `last` (counters), `minmax` (mean + `_min` + `_max` columns) |
+| Register table | Built in from `docs/meter/fcn300-3e4y-modbus-guide.md` (**not verified**). Replaced **without reflashing** by `/config/registers.csv` on the SD card, written by hand or sent from the platform's `/registers/` page (2.9.2): `name,fc,addr,type,scale,ct,agg` per line. Types: `u16 s16 u32 s32 u32sw s32sw f32 f32sw` (`sw` = low word first). `ct=1`: multiplied by `ct_mult`. `agg`: `mean`, `last` (counters), `minmax` (mean + `_min` + `_max` columns) |
 | TH1 (board sensor) | I2C, type found at boot: AHT1x/AHT2x (0x38), SHT3x (0x44/0x45), HTU21/SHT21/Si7021 (0x40). CRC checked where the chip has one |
 | TH2 (AM2301) | DHT21 protocol on `pin_dht`. One retry after 2.1 s on a bad read |
 | Calibration | Offset per sensor (`th1_off_t`, `th1_off_rh`, `th2_off_t`, `th2_off_rh`), set after the install-day comparison with a reference |
@@ -99,6 +99,14 @@ With `ota_on=1` (default), every `ota_check_h` hours the logger asks `GET /api/v
 - Every `rcfg_check_m` minutes (15) it asks `GET /api/v1/config`. When `manage.py set-config LOG-0001 th1_off_t=-1.2 ...` has made a newer version, it applies the keys, logs each change, and restarts if anything changed. `key=@default` puts a default back.
 - **Never changed remotely** (a wrong value would cut the logger off for good): `dev_id`, `dev_token`, `srv_url`, `tls_verify`, the four WiFi keys, `portal_pass`. These need the setup portal or the console, on site.
 - The version applied is kept, so a setting is applied once even if the logger asks again.
+
+### 2.9.2 Remote register table (since 0.4.0)
+- The meter register table can be sent from the platform's page **`/registers/<device>/`** (or `manage.py set-registers LOG-0001 table.csv`). The page shows the table the logger reports, lets you edit it line by line, import a CSV file, check it, and send it. `docs/meter/README.md`, "Changing the register table", explains the steps.
+- At the same check as the remote settings (every `rcfg_check_m` minutes, or the console command `config`), the logger asks `GET /api/v1/registers`. When the version is newer than the one it applied (counter `reg_ver`), it checks the whole table (every line valid, names `a-z0-9` of 1 to 7 characters and unique, at most 32 values). It then writes `/config/registers.csv` through `/config/registers.new`, keeps the previous file as `/config/registers.bak`, and restarts (`boot=sw:remote_regs`).
+- "Back to the built-in table" renames `/config/registers.csv` to `registers.bak`, so the firmware's table is used.
+- A table that fails the checks, or a logger with no working SD card, **refuses** the version: the reason goes to the event log and to the platform (`reg_refused`, `reg_error`), and the page shows "Refused". It is not tried again until the next boot. Send a corrected table (a new version).
+- After each boot the report also carries `reg_version`, `reg_source` (`sd` or `builtin`) and the table in use (`registers`, as printed by `regs`). The page compares that with what was sent: "Applied", "Waiting", "Differs" (the card was changed by hand or swapped) or "Refused".
+- `rcfg_on=0` also turns this off. Firmware before 0.4.0 does not ask for the table (the page says "Firmware too old").
 
 ### 2.10 Serial console (USB, 115200 baud)
 `help`, `status`, `show`, `set <key> <value>`, `unset <key>`, `reboot`, `factory`, `portal`, `time`, `time set 2026-11-07T03:15:00`, `i2c`, `wifi`, `mb [slave] [fc] [start] [count]`, `regs`, `header`, `ls [dir]`, `cat <file>`, `tail <file> [n]`, `upload`, `resend <YYYY-MM-DD>`, `ota`, `config`.

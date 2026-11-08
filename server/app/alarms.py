@@ -23,7 +23,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 GAP_S = 300                       # a gap longer than this resets a pending (not yet confirmed) alarm
-PLANNED_BOOTS = ("sw:daily", "sw:console", "sw:portal", "sw:remote_cfg", "sw:ota", "sw:import", "sw:ota_rollback")
+PLANNED_BOOTS = ("sw:daily", "sw:console", "sw:portal", "sw:remote_cfg", "sw:remote_regs", "sw:ota", "sw:import", "sw:ota_rollback")
 POWER_BOOTS = ("poweron", "brownout")
 CRASH_BOOTS = ("panic", "task_wdt", "int_wdt", "wdt")
 LOG_HEADER = "ts_utc,local_time,device,id,name,severity,state,value,threshold,unit,duration_min,message"

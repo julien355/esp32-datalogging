@@ -917,7 +917,7 @@ Full table: [`../install/README.md` Lab 7 Part C](../install/README.md#part-c-me
    - currents and powers about **1/20 or 1/100** of the LCD: the meter sends secondary values (before the CT ratio). The decision so far is `ct_mult` = 1, because the meter shows correct A and kW (Q26); change it only if the supervisor decides, after comparing with the CT ratio on the meter;
    - huge or random 32-bit values: wrong word order;
    - a negative kW on one phase at normal load: a CT reversed or on the wrong phase: tell the electrician (alarm **A30** after 5 minutes);
-   - in every case: **do not experiment on site**. Write down the raw values (`mb 1 3 0 64` on the console) and the LCD photos, and tell the supervisor. The register table is a file on the SD card (`/config/registers.csv`): fixing it means powering off, editing the file on the laptop and putting the card back. It cannot be changed remotely.
+   - in every case: **do not experiment on site**. Write down the raw values (`mb 1 3 0 64` on the console) and the LCD photos, and tell the supervisor. The register table is a file on the SD card (`/config/registers.csv`). The supervisor fixes it from the office with the platform's page `/registers/LOG-0001/` (firmware 0.4.0 or later), or you power off, edit the file on the laptop and put the card back.
 
 ### B11 Sensor calibration and offsets
 
@@ -1075,7 +1075,7 @@ The operator can change most settings from the VPS, without anybody on site.
    Expected: the logger's report shows the new settings version and values.
 4. To put a setting back to its default: `key=@default`, for example `th1_off_t=@default`.
 
-**Never changed remotely** (a wrong value would cut the logger off for good): `dev_id`, `dev_token`, `srv_url`, `tls_verify`, `wifi_ssid`, `wifi_pass`, `wifi_ssid2`, `wifi_pass2`, `portal_pass`. These are changed **on site**, with the setup portal (B8) or the console. The meter register table (`/config/registers.csv`) is a file on the card: it cannot be changed remotely either.
+**Never changed remotely** (a wrong value would cut the logger off for good): `dev_id`, `dev_token`, `srv_url`, `tls_verify`, `wifi_ssid`, `wifi_pass`, `wifi_ssid2`, `wifi_pass2`, `portal_pass`. These are changed **on site**, with the setup portal (B8) or the console. The meter register table (`/config/registers.csv`) **can** be sent remotely, from the page `/registers/LOG-0001/` (firmware 0.4.0 or later, see [`../meter/README.md`](../meter/README.md#changing-the-register-table)).
 
 Be careful with remote changes of `meters`, `mb_baud`, `mb_format` and the `pin_*` settings: they are allowed, but a wrong value stops the meter reading (A03) until someone fixes it.
 

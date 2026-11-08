@@ -73,42 +73,141 @@ static bool parseType(const String &s, Type &t) {
 }
 
 // Line format: name,fc,addr,type,scale,ct,agg   e.g.  p,3,0x000D,s16,0.001,1,minmax
+// Returns 1 for a register line, 0 for a blank, comment or header line, -1 for a bad line (why in err).
+static int parseLine(String line, Reg &r, String &err) {
+  line.trim();
+  String low = line;
+  low.toLowerCase();
+  if (!line.length() || line[0] == '#' || low.startsWith("name,")) return 0;
+  String p[7];
+  int k = 0, from = 0;
+  for (;;) {
+    int c = line.indexOf(',', from);
+    if (k == 7) {
+      err = "more than 7 fields";
+      return -1;
+    }
+    p[k++] = c < 0 ? line.substring(from) : line.substring(from, c);
+    if (c < 0) break;
+    from = c + 1;
+  }
+  if (k < 6) {
+    err = "fewer than 6 fields";
+    return -1;
+  }
+  for (int i = 0; i < k; i++) p[i].trim();
+  p[0].toLowerCase();
+  r = {};
+  if (!p[0].length() || p[0].length() > sizeof(r.name) - 1) {
+    err = "name must have 1 to 7 characters";
+    return -1;
+  }
+  for (size_t i = 0; i < p[0].length(); i++) {
+    char ch = p[0][i];
+    if (!((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9'))) {
+      err = "name: a-z and 0-9 only";
+      return -1;
+    }
+  }
+  strncpy(r.name, p[0].c_str(), sizeof(r.name) - 1);
+  if (p[1] != "3" && p[1] != "4") {
+    err = "fc must be 3 or 4";
+    return -1;
+  }
+  r.fc = p[1].toInt();
+  char *end = nullptr;
+  long a = strtol(p[2].c_str(), &end, 0);   // accepts 0x0018 or 24
+  if (!p[2].length() || *end || a < 0 || a > 0xFFFF) {
+    err = "bad addr";
+    return -1;
+  }
+  r.addr = a;
+  if (!parseType(p[3], r.type)) {
+    err = "bad type";
+    return -1;
+  }
+  r.scale = strtod(p[4].c_str(), &end);
+  if (!p[4].length() || *end || r.scale == 0 || !isfinite(r.scale)) {
+    err = "bad scale";
+    return -1;
+  }
+  if (p[5] != "0" && p[5] != "1") {
+    err = "ct must be 0 or 1";
+    return -1;
+  }
+  r.ct = p[5] == "1";
+  String agg = k > 6 ? p[6] : String("");
+  agg.toLowerCase();
+  if (agg == "last") r.agg = LAST;
+  else if (agg == "minmax" || agg == "meanmax") r.agg = MINMAX;
+  else if (agg == "mean" || agg == "") r.agg = MEAN;
+  else {
+    err = "agg must be mean, last or minmax";
+    return -1;
+  }
+  return 1;
+}
+
+// Parses a whole table into out[]. strict (remote table): any bad or duplicate line refuses the whole
+// table (returns -1). Not strict (file put on the card by hand): bad lines are logged and skipped.
+static int parseText(const String &text, Reg *out, bool strict, String &err) {
+  int n = 0, lineNo = 0, from = 0;
+  while (from < (int)text.length()) {
+    int nl = text.indexOf('\n', from);
+    String line = nl < 0 ? text.substring(from) : text.substring(from, nl);
+    from = nl < 0 ? text.length() : nl + 1;
+    lineNo++;
+    Reg r;
+    String why;
+    int res = parseLine(line, r, why);
+    if (res == 0) continue;
+    if (res > 0)
+      for (int i = 0; i < n; i++)
+        if (strcmp(out[i].name, r.name) == 0) {
+          res = -1;
+          why = String("name ") + r.name + " used twice";
+        }
+    if (res > 0 && n >= MAX_REGS) {
+      res = -1;
+      why = "more than " + String(MAX_REGS) + " values";
+    }
+    if (res < 0) {
+      if (strict) {
+        err = "line " + String(lineNo) + ": " + why;
+        return -1;
+      }
+      line.trim();
+      evlog("registers.csv: line %d skipped (%s): %s", lineNo, why.c_str(), line.c_str());
+      continue;
+    }
+    out[n++] = r;
+  }
+  if (n == 0) err = "no register line";
+  return n;
+}
+
+static fs::FS *sdFs = nullptr;
+static bool fromSd = false;
+#define FILE_REGISTERS_NEW "/config/registers.new"
+#define FILE_REGISTERS_BAK "/config/registers.bak"
+
 static bool loadOverride(fs::FS &fs) {
   File f = fs.open(FILE_REGISTERS, FILE_READ);
   if (!f) return false;
-  f.setTimeout(10);
-  int n = 0;
-  while (f.available() && n < MAX_REGS) {
-    String line = f.readStringUntil('\n');
-    line.trim();
-    if (!line.length() || line[0] == '#' || line.startsWith("name,")) continue;
-    String p[7];
-    int k = 0, from = 0;
-    while (k < 7) {
-      int c = line.indexOf(',', from);
-      p[k++] = c < 0 ? line.substring(from) : line.substring(from, c);
-      if (c < 0) break;
-      from = c + 1;
-    }
-    if (k < 6) continue;
-    Reg r = {};
-    p[0].trim();
-    strncpy(r.name, p[0].c_str(), sizeof(r.name) - 1);
-    r.fc = p[1].toInt();
-    r.addr = strtol(p[2].c_str(), nullptr, 0);   // accepts 0x0018 or 24
-    p[3].trim();
-    if (!parseType(p[3], r.type) || (r.fc != 3 && r.fc != 4)) {
-      evlog("registers.csv: bad line skipped: %s", line.c_str());
-      continue;
-    }
-    r.scale = p[4].toFloat();
-    r.ct = p[5].toInt() == 1;
-    p[6].trim();
-    r.agg = p[6] == "last" ? LAST : (p[6] == "minmax" || p[6] == "meanmax") ? MINMAX : MEAN;
-    table[n++] = r;
+  if (f.size() > 8192) {
+    f.close();
+    evlog("registers.csv: larger than 8 kB, ignored");
+    return false;
   }
+  f.setTimeout(10);
+  String text = f.readString();
   f.close();
-  if (n == 0) return false;
+  String err;
+  int n = parseText(text, table, false, err);
+  if (n <= 0) {
+    evlog("registers.csv: %s, ignored", err.c_str());
+    return false;
+  }
   nRegs = n;
   return true;
 }
@@ -158,9 +257,11 @@ static void parseMeters(const String &s) {
 }
 
 void begin(fs::FS *sd) {
+  sdFs = sd;
   ctMult = cfg::getFloat("ct_mult");
   if (ctMult <= 0) ctMult = 1;
-  if (!(sd && loadOverride(*sd))) {
+  fromSd = sd && loadOverride(*sd);
+  if (!fromSd) {
     nRegs = sizeof(DEFAULT_TABLE) / sizeof(DEFAULT_TABLE[0]);
     memcpy(table, DEFAULT_TABLE, sizeof(DEFAULT_TABLE));
     evlog("Meter: built-in FCN300 register table (%d values, not verified)", nRegs);
@@ -285,6 +386,63 @@ String describeTable() {
     s += b;
   }
   return s;
+}
+
+const char *source() { return fromSd ? "sd" : "builtin"; }
+
+bool installFile(const String &csv, String &err) {
+  static Reg check[MAX_REGS];   // static: 32 x 24 bytes kept off the net task's stack
+  if (csv.length() > 6144) {
+    err = "table larger than 6 kB";
+    return false;
+  }
+  if (parseText(csv, check, true, err) <= 0) return false;
+  if (!sdFs || !st.sdOk) {
+    err = "no working SD card";
+    return false;
+  }
+  xSemaphoreTake(sdMutex, portMAX_DELAY);
+  sdFs->mkdir("/config");
+  bool ok = false;
+  File f = sdFs->open(FILE_REGISTERS_NEW, FILE_WRITE);
+  if (f) {
+    ok = f.print(csv) == csv.length();
+    f.close();
+  }
+  if (ok) {   // read back the size: a full or failing card shows here
+    File r = sdFs->open(FILE_REGISTERS_NEW, FILE_READ);
+    ok = r && r.size() == csv.length();
+    if (r) r.close();
+  }
+  if (ok) {
+    sdFs->remove(FILE_REGISTERS_BAK);
+    if (sdFs->exists(FILE_REGISTERS)) ok = sdFs->rename(FILE_REGISTERS, FILE_REGISTERS_BAK);
+    if (ok) ok = sdFs->rename(FILE_REGISTERS_NEW, FILE_REGISTERS);
+    if (!ok && !sdFs->exists(FILE_REGISTERS) && sdFs->exists(FILE_REGISTERS_BAK))
+      sdFs->rename(FILE_REGISTERS_BAK, FILE_REGISTERS);   // put the old table back
+  }
+  if (!ok) {
+    sdFs->remove(FILE_REGISTERS_NEW);
+    err = "SD card write failed";
+  }
+  xSemaphoreGive(sdMutex);
+  return ok;
+}
+
+bool removeFile(String &err) {
+  if (!sdFs || !st.sdOk) {
+    err = "no working SD card";
+    return false;
+  }
+  xSemaphoreTake(sdMutex, portMAX_DELAY);
+  bool ok = true;
+  if (sdFs->exists(FILE_REGISTERS)) {
+    sdFs->remove(FILE_REGISTERS_BAK);
+    ok = sdFs->rename(FILE_REGISTERS, FILE_REGISTERS_BAK);
+  }
+  xSemaphoreGive(sdMutex);
+  if (!ok) err = "SD card rename failed";
+  return ok;
 }
 
 }  // namespace meter

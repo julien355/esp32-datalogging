@@ -39,3 +39,31 @@ Everything above sits in a **register table in the logger's config**: address, f
 2. Photograph the LCD pages at the same moment (V, A, kW, PF, Hz, kWh).
 3. Match each LCD value to a register and a scale; write the result in `fcn300-3e4y-verified.md`.
 4. **A spare meter is at the office** (owner, 7 November 2026): the check is done on the bench before the install (`docs/OFFICE-PREP.md` T4). **Check the ranges too:** with the guide's scales, a 16-bit current x 0.001 cannot exceed 65.5 A and a 16-bit power x 0.001 cannot exceed 32.8 kW, below what an 82.5 kVA hotel draws (up to 125 A per phase). If the meter really uses 16 bits, its values are secondary (before the CT ratio) or scaled differently; settle it with a load on the spare meter and the CT ratio in its menu.
+
+## Changing the register table
+
+A wrong register, a wrong scale, or a different meter: the table changes, the firmware does not.
+
+**Where the table lives**
+
+| Place | What |
+|---|---|
+| `firmware/src/meter.cpp` (`DEFAULT_TABLE`) | Built into the firmware. Used when the SD card has no `/config/registers.csv` |
+| SD card `/config/registers.csv` | Replaces the whole built-in table when present. `registers.bak` next to it is the previous one |
+| Platform, `sites/<site>/<device>/registers.json` | The table last sent from the page. `registers-history.jsonl`: every version sent |
+| Logger's report (`settings-reported.json`) | The table the logger actually reads, its source (`sd` or `builtin`) and the version applied |
+
+**From the page `https://arkan-monitoring.duckdns.org/registers/LOG-0001/`** (Arkan login, logger firmware 0.4.0 or later):
+
+1. The top box shows the table **on the logger** and what was **last sent**, with a state: *No table sent*, *Waiting*, *Applied*, *Differs*, *Refused*, *Firmware too old*.
+2. The editor opens with the logger's table. Change a line, add or delete lines, or load one: *Table on the logger*, *Last sent*, any version in the **History**, or **Import CSV file...** (for example the file written at the bench check). *Edit as text* takes a pasted table. *Download CSV* saves the table being edited. Yellow lines differ from the logger's, green lines are not on the logger.
+3. **Check** shows the errors (nothing can be sent until they are fixed) and the warnings (for example a standard name missing: the alarms that use it stop).
+4. Write why in the comment box, then **Send to the logger**. The logger takes it at its next check (every 15 min, or the console command `config`), checks it again, writes `/config/registers.csv` (the old file becomes `registers.bak`) and restarts. Click **Refresh**: the state goes to **Applied** once the logger has reported after its restart.
+5. **Back to the built-in table** makes the logger rename its file to `registers.bak` and use the firmware's table.
+6. **Meter link settings** (same page): `meters` (id and Modbus address), `mb_baud`, `mb_format`, `ct_mult`. They are sent as remote settings; the logger applies them and restarts. A new meter usually needs both the table and these settings.
+
+From the VPS command line, the same: `manage.py set-registers LOG-0001 table.csv --comment "..."`, `manage.py set-registers LOG-0001 --builtin`, `manage.py show-registers LOG-0001`.
+
+**Rules** (checked by the page and again by the logger): one line per value `name,fc,addr,type,scale,ct,agg`; `name` 1 to 7 characters `a-z 0-9`, unique; `fc` 3 or 4; `addr` 0-based (`0x0018` or `24`); `type` `u16 s16 u32 s32 u32sw s32sw f32 f32sw`; `scale` not 0; `ct` 0 or 1; `agg` `mean`, `last` or `minmax`; at most 32 lines. **Keep the standard names** (`v1 v2 v3 v12 v23 v31 i1 i2 i3 f p1 p2 p3 p q s pf e eq`) and units (V, A, Hz, kW, kvar, kVA, kWh, kvarh): the alarms, the daily report and the OED export use them. A changed table changes the record's columns: the platform starts a `_2` day file that day.
+
+**After any change**, check the values against the meter's LCD (within 1 %, tutorial 1 step B10), then commit the verified table to this folder (for example `registers-fcn300.csv`) through a pull request. Once a table is final, also put it in `DEFAULT_TABLE` and release a firmware, so that a new SD card does not bring back the wrong table.

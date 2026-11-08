@@ -19,6 +19,7 @@ from server import make_server  # noqa: E402
 
 server_mod.Handler.log_message = lambda *a: None   # quiet tests
 from alarms import AlarmEngine  # noqa: E402
+import registers  # noqa: E402
 from store import DataStore, IngestError, token_hash  # noqa: E402
 
 MANAGE = os.path.join(HERE, "..", "tools", "manage.py")
@@ -325,6 +326,98 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(json.loads(body), {"version": 1, "settings": {"th1_off_t": "-1.5"}})
         self.assertIn("th1_off_t = 0", self.manage("show-config", "LOG-0001"))
 
+    def test_register_table_page_to_logger(self):
+        good = "name,fc,addr,type,scale,ct,agg\nv1,3,0x0000,u16,0.1,0,minmax\ne,3,24,U32,0.01,0,last\n"
+        code, _ = self.req("GET", "/api/v1/registers", token=self.token)
+        self.assertEqual(code, 204)                                         # nothing sent yet
+        code, body = self.req("GET", "/registers/LOG-0001/")
+        self.assertEqual(code, 200)
+        self.assertIn("<title>Meter registers</title>", body)
+        code, body = self.req("GET", "/api/v1/admin/registers/LOG-0001")
+        self.assertEqual(json.loads(body)["state"], "none")
+        # admin POSTs: JSON only, same origin only, known logger only
+        code, _ = self.req("POST", "/api/v1/admin/registers/LOG-0001", json.dumps({"csv": good}), ctype="text/plain")
+        self.assertEqual(code, 415)
+        r = urllib.request.Request(f"http://127.0.0.1:{self.port}/api/v1/admin/registers/LOG-0001", method="POST",
+                                   data=json.dumps({"csv": good}).encode(),
+                                   headers={"Content-Type": "application/json", "Origin": "https://evil.example"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(r, timeout=5)
+        self.assertEqual(cm.exception.code, 403)
+        code, _ = self.req("POST", "/api/v1/admin/registers/LOG-9999", json.dumps({"csv": good}), ctype="application/json")
+        self.assertEqual(code, 404)
+        # check: errors refuse, nothing saved
+        bad = good + "v1,5,0x0001,u64,0,2,avg\n"
+        code, body = self.req("POST", "/api/v1/admin/registers/LOG-0001/check", json.dumps({"csv": bad}),
+                              ctype="application/json")
+        j = json.loads(body)
+        self.assertFalse(j["ok"])
+        self.assertIn("already on line", j["errors"][0])
+        code, body = self.req("POST", "/api/v1/admin/registers/LOG-0001", json.dumps({"csv": bad}), ctype="application/json")
+        self.assertEqual(code, 400)
+        code, _ = self.req("GET", "/api/v1/registers", token=self.token)
+        self.assertEqual(code, 204)
+        # send a good table: normalised, versioned, served to the logger only with its token
+        code, body = self.req("POST", "/api/v1/admin/registers/LOG-0001",
+                              json.dumps({"csv": good, "comment": "bench check"}), ctype="application/json")
+        self.assertEqual(code, 200, body)
+        self.assertEqual(json.loads(body)["version"], 1)
+        code, _ = self.req("GET", "/api/v1/registers")
+        self.assertEqual(code, 401)
+        code, body = self.req("GET", "/api/v1/registers", token=self.token)
+        dev = json.loads(body)
+        self.assertEqual((dev["version"], dev["builtin"]), (1, False))
+        self.assertTrue(dev["csv"].startswith("# register table version 1"))
+        self.assertIn("e,3,0x0018,u32,0.01,0,last", dev["csv"])
+        self.assertEqual(json.loads(self.req("GET", "/api/v1/admin/registers/LOG-0001")[1])["state"], "waiting")
+        # old firmware: reports without reg_version
+        self.req("POST", "/api/v1/config/report", json.dumps({"fw": "0.3.0", "settings": {}}), self.token,
+                 "application/json")
+        self.assertEqual(json.loads(self.req("GET", "/api/v1/admin/registers/LOG-0001")[1])["state"], "unsupported")
+        # the logger applies it and reports the table it reads (printed by meter::describeTable)
+        logger_table = "name,fc,addr,type,scale,ct,agg\nv1,3,0x0000,u16,0.1,0,minmax\ne,3,0x0018,u32,0.01,0,last\n"
+        rep = {"fw": "0.4.0", "cfg_version": 0, "reg_version": 1, "reg_source": "sd", "registers": logger_table,
+               "settings": {"meters": "EM01:1", "mb_baud": "9600", "mb_format": "8N1", "ct_mult": "1"}}
+        self.req("POST", "/api/v1/config/report", json.dumps(rep), self.token, "application/json")
+        view = json.loads(self.req("GET", "/api/v1/admin/registers/LOG-0001")[1])
+        self.assertEqual(view["state"], "applied")
+        self.assertEqual(view["reported"]["settings"]["mb_baud"], "9600")
+        # the SD card changed under it: the page says so
+        rep["registers"] = logger_table.replace("0.1,0", "1,0")
+        self.req("POST", "/api/v1/config/report", json.dumps(rep), self.token, "application/json")
+        self.assertEqual(json.loads(self.req("GET", "/api/v1/admin/registers/LOG-0001")[1])["state"], "differs")
+        # back to the built-in table, then a refused version
+        code, body = self.req("POST", "/api/v1/admin/registers/LOG-0001", json.dumps({"builtin": True}),
+                              ctype="application/json")
+        self.assertEqual(json.loads(body)["version"], 2)
+        dev = json.loads(self.req("GET", "/api/v1/registers", token=self.token)[1])
+        self.assertEqual((dev["version"], dev["builtin"], dev["csv"]), (2, True, None))
+        rep.update({"reg_refused": 2, "reg_error": "no working SD card"})
+        self.req("POST", "/api/v1/config/report", json.dumps(rep), self.token, "application/json")
+        view = json.loads(self.req("GET", "/api/v1/admin/registers/LOG-0001")[1])
+        self.assertEqual(view["state"], "refused")
+        self.assertEqual([h["version"] for h in view["history"]], [2, 1])
+        # meter link settings: checked, then the usual remote settings
+        code, body = self.req("POST", "/api/v1/admin/meter-settings/LOG-0001",
+                              json.dumps({"mb_baud": "9601", "meters": "EM01:300"}), ctype="application/json")
+        self.assertEqual(code, 400)
+        self.assertEqual(len(json.loads(body)["errors"]), 2)
+        code, _ = self.req("POST", "/api/v1/admin/meter-settings/LOG-0001",
+                           json.dumps({"mb_baud": "19200", "mb_format": "8e1", "wifi_ssid": "x"}), ctype="application/json")
+        self.assertEqual(code, 200)
+        code, body = self.req("GET", "/api/v1/config", token=self.token)
+        self.assertEqual(json.loads(body)["settings"], {"mb_baud": "19200", "mb_format": "8E1"})
+        # the command line does the same
+        f = os.path.join(self.data, "regs.csv")
+        with open(f, "w") as fh:
+            fh.write(good)
+        self.assertIn("version 3", self.manage("set-registers", "LOG-0001", f, "--comment", "cli"))
+        self.assertIn("REFUSED version 2", self.manage("show-registers", "LOG-0001"))
+        with open(f, "w") as fh:
+            fh.write(bad)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.manage("set-registers", "LOG-0001", f)
+
     def test_daily_backfill_export(self):
         base = datetime(2026, 11, 6, 15, 0, tzinfo=timezone.utc)   # 23:00 WITA
         rows = [row((base + timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ"), e=1000 + m * 0.5)
@@ -355,3 +448,47 @@ class ToolsAndHttpTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RegisterTableTest(unittest.TestCase):
+    def test_builtin_table_passes(self):
+        # the firmware's built-in table, as printed by the console command "regs"
+        text = """name,fc,addr,type,scale,ct,agg
+v1,3,0x0000,u16,0.1,0,minmax
+v2,3,0x0001,u16,0.1,0,minmax
+v3,3,0x0002,u16,0.1,0,minmax
+v12,3,0x0003,u16,0.1,0,minmax
+v23,3,0x0004,u16,0.1,0,minmax
+v31,3,0x0005,u16,0.1,0,minmax
+i1,3,0x0006,u16,0.001,1,minmax
+i2,3,0x0007,u16,0.001,1,minmax
+i3,3,0x0008,u16,0.001,1,minmax
+f,3,0x0009,u16,0.01,0,minmax
+p1,3,0x000A,s16,0.001,1,minmax
+p2,3,0x000B,s16,0.001,1,minmax
+p3,3,0x000C,s16,0.001,1,minmax
+p,3,0x000D,s16,0.001,1,minmax
+q,3,0x000E,s16,0.001,1,minmax
+s,3,0x000F,u16,0.001,1,minmax
+pf,3,0x0010,s16,0.001,0,minmax
+e,3,0x0018,u32,0.01,0,last
+eq,3,0x001A,u32,0.01,0,last
+"""
+        rows, errors, warnings = registers.parse(text)
+        self.assertEqual((len(rows), errors, warnings), (19, [], []))
+        again, _, _ = registers.parse(registers.to_csv(rows))
+        self.assertTrue(registers.same(rows, again))
+
+    def test_errors_and_warnings(self):
+        rows, errors, warnings = registers.parse("# comment\n\nTOOLONGNAME,3,0,u16,1,0,mean\np,3,40014,s16,1,0\n"
+                                                 "x,4,0xFFFF,u32,1,0,mean\ny,3,zz,f32,abc,yes,sum\n")
+        self.assertEqual(len(errors), 3)
+        self.assertIn("line 3: name", errors[0])
+        self.assertIn("past 0xFFFF", errors[1])
+        self.assertIn("addr 'zz'", errors[2])
+        self.assertTrue(any("PLC number" in w for w in warnings))
+        self.assertTrue(any("not in the table" in w for w in warnings))
+        self.assertEqual(rows[0]["agg"], "mean")                     # agg may be left out
+        many = "\n".join(f"r{i},3,{i},u16,1,0,mean" for i in range(33))
+        self.assertIn("at most 32", registers.parse(many)[1][-1])
+        self.assertEqual(registers.parse("")[1], ["no register line"])
