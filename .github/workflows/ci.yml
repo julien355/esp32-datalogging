@@ -47,3 +47,15 @@ jobs:
         run: python -m unittest discover -s server/tests -v
       - name: Docker image builds
         run: docker build -f server/Dockerfile -t arkan-monitoring-ingest:ci .
+
+  tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Modbus simulator tests
+        run: |
+          pip install pyserial
+          python -m unittest discover -s tools/modbus_sim -v

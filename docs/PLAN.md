@@ -331,7 +331,7 @@ The **meter register check** is the one uncertain step on that path: the spare m
 | P1 | Client name in the repository | **Settled**: `adab` is the site code and name, in both repositories |
 | P2 | The new platform repository | **Settled**: `arkan-monitoring`, private, created by Claude in S1 |
 | P3 | Alert channel | **Settled**: WhatsApp through Hermes. Open: which WhatsApp group or number receives them, and whether Hermes's webhook platform is on |
-| P4 | FCN300-3E4Y register map | Guide received, **not verified** (`docs/meter/README.md`). The spare meter at the office has **no Modbus port** (8 November): verified **on site** at the first visit, `docs/meter/README.md` section 4; proposed table `docs/meter/registers-proposed.csv`. CTs on hand, ratio to be read from their labels (likely 200/5) |
+| P4 | FCN300-3E4Y register map | Guide received, **not verified** (`docs/meter/README.md`). The spare meter at the office has **no Modbus port** (8 November): verified **on site** at the first visit, `docs/meter/README.md` section 4; proposed table `docs/meter/registers-proposed.csv`. CTs are 250/5 A (owner, 8 November), to be confirmed on their labels |
 | P5 | Platform | **Settled**: Open Energy Dashboard + our ingest service. Arkan design integration later |
 | P6 | Meter variant | Read the label: FCN300-**3E4Y** (guide received) or **3EH4Y** (link sent). If 3EH4Y, ask the seller for its register map |
 | P7 | RAM on hermes-vps | Plan in `docs/VPS-MEMORY.md` (about 300 to 450 MB). Check free memory and swap before S5 (`free -h`) |

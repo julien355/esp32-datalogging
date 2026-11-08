@@ -28,7 +28,7 @@
 | Q23 | Supply | **PLN 3-phase** | 230/400 V nominal (SNI), contracts at 220/380 V: `nominal_v` 230, `contract_v_ln` 220 |
 | Q24 | Contracted kVA | **82.5 kVA** | A08 at 74.25 kVA; new **A37** per-phase limit 3 x 125 A (warns at 112.5 A) |
 | Q25 | Main breaker | **200 A** | A29 at 180 A |
-| Q26 | CT ratio | **Set in the meter, which shows correct power and amps**; ratio to be noted. **Revised 8 November: CTs are on hand, ratio not known yet.** Likely 200/5 (200 A main), to be read from the CT labels (`docs/meter/README.md` section 2) | `ct_mult` stays 1 until the **site** test; if the registers turn out to be secondary values, `ct_mult` = CT ratio (40 for 200/5) |
+| Q26 | CT ratio | **Set in the meter, which shows correct power and amps**; ratio to be noted. **Decided 8 November (owner): CTs are 250/5 A, ratio 50**, to be confirmed on the CT labels (`docs/meter/README.md` section 2) | `ct_mult` stays 1 until the **site** test; if the registers turn out to be secondary values, `ct_mult` = CT ratio (50 for 250/5) |
 | Q27 | WhatsApp list | **OK** | as in `alarms.csv` |
 | Q28 | Daily count of dips and swells | **Yes** | `daily.csv`: `dips`, `swells`, `power_interruptions`, `alarms_started` |
 
@@ -45,4 +45,4 @@
 | Q20 | 2.4 GHz WiFi at the office for the bench | | |
 | Q22 | WhatsApp alerts through Hermes in session S6 | Not built | Yes |
 | **Q29** | **A37 (phase current near the PLN limit) to WhatsApp?** New since Q27; proposed yes, since a PLN limiter trip blacks out the hotel | yes | Yes |
-| **Q30** | CT ratio value, for the as-built record (Q26) | Not known. Likely 200/5 | **Read it on the label of each of the three CTs and photograph them**, then note it from the meter menu, on site |
+| **Q30** | CT ratio value, for the as-built record (Q26) | **250/5** (owner, 8 November) | **Confirm on the label of each of the three CTs and photograph them**, then note CT1/CT2 from the meter menu, on site |

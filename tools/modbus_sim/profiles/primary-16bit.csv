@@ -1,0 +1,24 @@
+# SIMULATED METER layout "primary-16bit" (tools/modbus_sim). This is what the fake meter DOES, not what the logger reads.
+# Same addresses as the proposed table, but this meter applies its own CT setting and sends PRIMARY values
+# with finer scales: current in 0.01 A, power in 0.01 kW. ct = 0 everywhere (nothing is secondary).
+# Exercise 2 of docs/tutorials/4-MODBUS-REGISTERS.md: find out what the logger must change.
+name,fc,addr,type,scale,ct,agg
+v1,3,0x0000,u16,0.1,0,minmax
+v2,3,0x0001,u16,0.1,0,minmax
+v3,3,0x0002,u16,0.1,0,minmax
+v12,3,0x0003,u16,0.1,0,minmax
+v23,3,0x0004,u16,0.1,0,minmax
+v31,3,0x0005,u16,0.1,0,minmax
+i1,3,0x0006,u16,0.01,0,minmax
+i2,3,0x0007,u16,0.01,0,minmax
+i3,3,0x0008,u16,0.01,0,minmax
+f,3,0x0009,u16,0.01,0,minmax
+p1,3,0x000A,s16,0.01,0,minmax
+p2,3,0x000B,s16,0.01,0,minmax
+p3,3,0x000C,s16,0.01,0,minmax
+p,3,0x000D,s16,0.01,0,minmax
+q,3,0x000E,s16,0.01,0,minmax
+s,3,0x000F,u16,0.01,0,minmax
+pf,3,0x0010,s16,0.001,0,minmax
+e,3,0x0018,u32,0.01,0,last
+eq,3,0x001A,u32,0.01,0,last

@@ -92,6 +92,7 @@ The spare FCN300 at the office has **no Modbus port** (owner, 8 November 2026), 
 2. With no meter answering, `mb 1 3 0 64` on the console prints a timeout with the hint "wiring, A/B, id, baud".
 3. **Meter not answering:** `status` shows `EM01: no answer`, the record has `EM01_n` = 0 and empty meter values, and after a minute the alarm log has **A03 Meter not answering**.
 4. Put the proposed table on the card as `/config/registers.csv`, boot, and read the boot log: `Meter: register table from SD /config/registers.csv (19 values)`. This proves the file is read; it does not verify any value.
+5. **Rehearse with the simulator** ([tutorial 4](tutorials/4-MODBUS-REGISTERS.md), Parts 3 and 4): the laptop plays a meter on the RS485 pair (`tools/modbus_sim/`, three different layouts). Expected: the logger reads the proposed table (2 requests, `EM01_n` = 4), the currents and powers are right once `ct_mult` = 50, and a layout that does not match gives no values and A03. This proves the wiring, the direction control, the SD file, the decoding and the path to the VPS. It proves nothing about the real meter. Remove the simulated data from the VPS before the site.
 
 ### T5. Records on the SD card
 1. Wait 6 minutes (the sensor values appear on the rows at :00, :05, ... only). `ls /data/2026/11` (this month), `tail /data/2026/11/2026-11-07.csv 3`.
@@ -175,6 +176,8 @@ docker compose exec ingest python tools/manage.py daily adab
 | T3 TH1 chip, TH2 reading, fault shown | | |
 | T4 meter not answering: A03 logged | | |
 | T4 `registers.csv` read at boot | | |
+| T4 simulator: logger reads 2 requests, values right with `ct_mult` 50 | | |
+| T4 simulator stopped: A03 logged | | |
 | On site: registers verified, within 1 % of the LCD | | |
 | On site: CT reversed: A30 logged | | |
 | T5 one row per minute on the card | | |

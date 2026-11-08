@@ -738,7 +738,7 @@ If the survey was already done on an earlier visit, re-check steps 3, 4 and 6 on
 2. **Photograph the MDP** from outside: the panel, its label, the wall around it, where cables enter.
 3. **The meter, with the electrician** (he opens the panel; you stand back): photograph the **label** (FCN300-3E4Y or 3EH4Y), the **back** (are there RS485 A/B terminals? which numbers?), the CT labels, and the **LCD settings pages** (Modbus address, baud rate, parity, CT ratio).
    Expected: the meter has RS485 terminals (A/B). The spare meter at the office has no Modbus port, so do not assume the site meter is like it.
-   If not: no RS485 terminals = no data. Stop and tell the supervisor and the owner. A different model = the proposed register table may not fit: you will check it in B10. Also photograph **each of the three CT labels** (ratio such as 200/5, class): Q30.
+   If not: no RS485 terminals = no data. Stop and tell the supervisor and the owner. A different model = the proposed register table may not fit: you will check it in B10. Also photograph **each of the three CT labels** (they should say 250/5, plus the class): Q30.
 4. **Choose the box position** (drawing (e)): beside the panel, 30 cm or more from the steel, box centre about 1.5 m high, reachable without a ladder, not in a walkway, not under a pipe or vent.
 5. **WiFi signal check at that position.** RSSI (received signal strength) is in dBm: -50 is strong, **-70 is the minimum we accept**, -80 is unreliable. Every 3 dB less is half the power.
    - **With the logger** (recommended): power the board from the laptop (USB-C), open the monitor, hold the board at the box position, antenna up, and type:
@@ -914,7 +914,7 @@ Full table: [`../install/README.md` Lab 7 Part C](../install/README.md#part-c-me
    Expected: **|error| at most 1 %** (allow one digit of the LCD's last decimal for small values). The energy counter (kWh) must be **the same** as the LCD to its resolution.
 3. If not:
    - a value **10, 100 or 1000 times** wrong: wrong scale in the register table;
-   - currents and powers about **1/20, 1/30, 1/40 or 1/100** of the LCD (the CT ratio, for example 40 for a 200/5 CT): the meter sends secondary values (before the CT ratio). `ct_mult` stays 1 until the supervisor decides; then it is set to the CT ratio read on the CT labels (`docs/meter/README.md` section 4, which also lists the checks to do on site);
+   - currents and powers about **1/50 or 1/100** of the LCD (the CT ratio is 50 for the 250/5 CTs): the meter sends secondary values (before the CT ratio). `ct_mult` stays 1 until the supervisor decides; then it is set to the CT ratio read on the CT labels (`docs/meter/README.md` section 4, which also lists the checks to do on site);
    - huge or random 32-bit values: wrong word order;
    - a negative kW on one phase at normal load: a CT reversed or on the wrong phase: tell the electrician (alarm **A30** after 5 minutes);
    - in every case: **do not experiment on site**. Write down the raw values (`mb 1 3 0 64` on the console) and the LCD photos, and tell the supervisor. The register table is a file on the SD card (`/config/registers.csv`): fixing it means powering off, editing the file on the laptop and putting the card back. It cannot be changed remotely.
@@ -1211,7 +1211,7 @@ cd /opt/arkan-monitoring/server
 | **Build (environment)** | One way of compiling the firmware: `logger` or `logger-uart` |
 | **CI (GitHub Actions)** | GitHub's robot that compiles the firmware at every push and keeps the files as "artifacts" |
 | **CT (current transformer)** | The ring around a cable that gives the meter a small copy of the current. Never open its secondary circuit |
-| **CT ratio** | For example 200/5: 200 A in the cable gives 5 A to the meter |
+| **CT ratio** | For example 250/5 (the site's CTs): 250 A in the cable gives 5 A to the meter |
 | **Day file** | One CSV file per UTC day, one row per minute |
 | **dBm** | Unit of radio signal strength; -50 strong, -70 our minimum, -80 unreliable |
 | **Download mode** | The ESP32 state in which it waits for a new firmware (BOOT held during RESET) |
