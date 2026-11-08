@@ -71,6 +71,7 @@ void setup() {
   if (cfg::getCounter("ota_try") == 1 && boots >= 3) {
     // The firmware installed by OTA does not stay up: go back to the previous one.
     const esp_partition_t *prev = esp_ota_get_next_update_partition(nullptr);
+    cfg::setCounter("ota_bad", fwHash(FW_VERSION));   // never install this version again
     cfg::setCounter("ota_try", 0);
     cfg::setCounter("bootcnt", 0);
     if (prev && esp_ota_set_boot_partition(prev) == ESP_OK) safeRestart("ota_rollback");

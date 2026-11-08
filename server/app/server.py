@@ -15,8 +15,19 @@ People endpoints (behind the Caddy web login, never published without it):
   GET  /api/v1/alarms/<site>   open alarms and the last 200 lines of the alarm log
   GET  /live/  /live/<site>/   live page (refresh every 15 s)
 
+Firmware update from the live page (people in ADMIN_USERS only, see docs/OTA.md):
+  GET  /api/v1/admin/me                     {"user", "admin", "github"}
+  GET  /api/v1/admin/fw/<device>            running firmware, what is offered, stored files, recent events
+  GET  /api/v1/admin/github/releases        logger-*.bin assets of the repository's releases
+  POST /api/v1/admin/fw/<device>/upload     body: the .bin (application/octet-stream), ?force=1
+  POST /api/v1/admin/fw/<device>/offer      {"file": "logger-0.3.1.bin", "force": false}
+  POST /api/v1/admin/fw/<device>/github     {"asset_id": 123, "force": false}
+  POST /api/v1/admin/fw/<device>/cancel     withdraw the offer made to that logger
+  POST requests need the header "X-Requested-With: arkan" (a page on another site cannot send it).
+
 Settings (environment): DATA_DIR (/data), PORT (8800), BIND (0.0.0.0 in the container),
-MAX_BODY (262144 bytes).
+MAX_BODY (262144 bytes), ADMIN_USERS (Caddy login names allowed to update firmware, comma separated,
+"*" = everyone who can log in, empty = nobody), FW_GITHUB_REPO (owner/name), FW_GITHUB_TOKEN.
 """
 
 import json
@@ -31,22 +42,14 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from alarms import AlarmEngine  # noqa: E402
-from store import CODE_RE, DataStore, IngestError, iso_now  # noqa: E402
+from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
+from store import CODE_RE, DEVICE_RE, DataStore, IngestError, iso_now  # noqa: E402
 
 VERSION = "0.2.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def version_key(v):
-    """0.3.10 > 0.3.9; anything that is not digits sorts as 0."""
-    out = []
-    for part in str(v or "").split("."):
-        digits = "".join(ch for ch in part if ch.isdigit())
-        out.append(int(digits) if digits else 0)
-    return tuple(out)
 
 
 class Live:
@@ -87,6 +90,9 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "arkan-ingest/" + VERSION
     store: DataStore = None
     live: Live = None
+    fw: Firmware = None
+    github: GitHub = None
+    admin_users = ""
 
     # ------------------------------------------------------------------ helpers
     def log_message(self, fmt, *args):   # one short line per request, no tokens
@@ -122,6 +128,8 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------ routes
     def do_POST(self):
         path = urlparse(self.path).path
+        if path.startswith("/api/v1/admin/"):
+            return self.admin_post(path)
         body = self.read_body()
         if body is None:
             return self.send_json(413, {"ok": False, "error": "body too large"})
@@ -149,6 +157,9 @@ class Handler(BaseHTTPRequestHandler):
             snap["device"] = device
             self.live.add(site, device, snap)
             self.store.alarms.check_clock(site, device, snap.get("ts"))
+            # A firmware is waiting for this logger: tell it to check now rather than in up to 6 h.
+            if self.fw.offer_for(device, self.headers.get("X-Fw")):
+                return self.send_json(200, {"ota": 1})
             return self.send_empty(204)
         if path == "/api/v1/config/report":
             try:
@@ -158,6 +169,8 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 return self.send_json(400, {"ok": False, "error": "bad JSON"})
             self.store.save_report(site, device, rep)
+            if str(rep.get("boot", "")).startswith("sw:ota_rollback"):
+                self.fw.note_rollback(site, device)
             return self.send_empty(204)
         return self.send_json(404, {"ok": False, "error": "not found"})
 
@@ -185,6 +198,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(page)))
             self.end_headers()
             return self.wfile.write(page)
+        if path.startswith("/api/v1/admin/"):
+            return self.admin_get(path)
         if path == "/api/v1/ota":
             return self.ota(parse_qs(u.query).get("fw", [""])[0])
         if path == "/api/v1/config":
@@ -238,18 +253,10 @@ class Handler(BaseHTTPRequestHandler):
         if not who:
             return self.send_json(401, {"ok": False, "error": "unknown or missing device token"})
         device, _ = who
-        p = os.path.join(self.store.root, "firmware", "manifest.json")
-        try:
-            with open(p, encoding="utf-8") as f:
-                man = json.load(f)
-        except (FileNotFoundError, ValueError):
-            return self.send_empty(204)
-        entry = man.get(device) or man.get("default")
-        if not entry or entry.get("version") == fw:
-            return self.send_empty(204)
-        # Never downgrade a logger flashed by hand with a newer version, unless the entry is marked force
-        # (manage.py publish-fw --force: a deliberate step back).
-        if not entry.get("force") and version_key(entry["version"]) <= version_key(fw):
+        # Never a downgrade of a logger flashed by hand with a newer version unless the entry is marked
+        # force (a deliberate step back), never a version this logger already rolled back.
+        entry = self.fw.offer_for(device, fw)
+        if not entry:
             return self.send_empty(204)
         return self.send_json(200, {"version": entry["version"], "md5": entry.get("md5", ""),
                                     "size": entry.get("size"), "url": "/api/v1/firmware/" + entry["file"]})
@@ -273,12 +280,109 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
 
 
+    # ------------------------------------------------------------------ firmware update (people)
+    def admin_user(self):
+        """The Caddy login name if it may update firmware, else None. Caddy sets X-Auth-User on every
+        request that passed its login; the service only listens on the loopback."""
+        user = self.headers.get("X-Auth-User", "").strip()
+        allowed = [u.strip() for u in (self.admin_users or "").split(",") if u.strip()]
+        if user and ("*" in allowed or user in allowed):
+            return user
+        return None
+
+    def admin_refused(self):
+        if not self.admin_users:
+            return self.send_json(403, {"ok": False, "error": "firmware updates from the web page are off: "
+                                        "set ADMIN_USERS on the server (docs/OTA.md)"})
+        return self.send_json(403, {"ok": False, "error": "your login may not update firmware (ADMIN_USERS)"})
+
+    def admin_get(self, path):
+        if path == "/api/v1/admin/me":
+            user = self.headers.get("X-Auth-User", "")
+            return self.send_json(200, {"user": user, "admin": bool(self.admin_user()),
+                                        "github": self.github.configured()})
+        if not self.admin_user():
+            return self.admin_refused()
+        m = re.match(r"^/api/v1/admin/fw/([A-Za-z0-9_-]+)$", path)
+        if m and DEVICE_RE.match(m.group(1)):
+            view = self.fw.view(m.group(1))
+            if view is None:
+                return self.send_json(404, {"ok": False, "error": "no such logger"})
+            view["files"] = self.fw.files()
+            view["github"] = self.github.configured()
+            return self.send_json(200, view)
+        if path == "/api/v1/admin/github/releases":
+            try:
+                return self.send_json(200, {"repo": self.github.repo, "releases": self.github.releases()})
+            except FirmwareError as e:
+                return self.send_json(502, {"ok": False, "error": str(e)})
+        return self.send_json(404, {"ok": False, "error": "not found"})
+
+    def admin_post(self, path):
+        u = urlparse(self.path)
+        m = re.match(r"^/api/v1/admin/fw/([A-Za-z0-9_-]+)/(upload|offer|github|cancel)$", path)
+        limit = MAX_IMAGE + 1024 if m and m.group(2) == "upload" else 8192
+        n = int(self.headers.get("Content-Length") or 0)
+        if n > limit:
+            self.close_connection = True
+            return self.send_json(413, {"ok": False, "error": "file too large"})
+        body = self.rfile.read(n) if n else b""
+        # Cross-site protection: a form or script on another site cannot add this header without
+        # a CORS preflight, which never gets through the login.
+        if self.headers.get("X-Requested-With") != "arkan":
+            return self.send_json(403, {"ok": False, "error": "missing X-Requested-With header"})
+        origin = self.headers.get("Origin")
+        if origin and urlparse(origin).netloc != self.headers.get("Host"):
+            return self.send_json(403, {"ok": False, "error": "request from another site"})
+        user = self.admin_user()
+        if not user:
+            return self.admin_refused()
+        if not m or not DEVICE_RE.match(m.group(1)):
+            return self.send_json(404, {"ok": False, "error": "not found"})
+        device, action = m.group(1), m.group(2)
+        if device not in self.store.load_devices().get("devices", {}):
+            return self.send_json(404, {"ok": False, "error": "no such logger"})
+        try:
+            if action == "cancel":
+                gone = self.fw.cancel(device, by=user)
+                return self.send_json(200, {"ok": True, "cancelled": bool(gone), "view": self.fw.view(device)})
+            if action == "upload":
+                force = parse_qs(u.query).get("force", ["0"])[0] == "1"
+                fname = re.sub(r"[^A-Za-z0-9._-]", "_", parse_qs(u.query).get("name", ["upload.bin"])[0])[:60]
+                _, name = self.fw.store_image(body)
+                source = "upload " + fname
+            else:
+                try:
+                    req = json.loads(body or b"{}")
+                    if not isinstance(req, dict):
+                        raise ValueError
+                except ValueError:
+                    return self.send_json(400, {"ok": False, "error": "bad JSON"})
+                force = bool(req.get("force"))
+                if action == "offer":
+                    name, source = str(req.get("file", "")), "stored file"
+                else:
+                    asset = int(req.get("asset_id") or 0)
+                    data = self.github.download(asset)
+                    _, name = self.fw.store_image(data)
+                    source = self.github.asset_label(asset)
+            entry = self.fw.offer(device, name, force=force, by=user, source=source)
+        except (FirmwareError, ValueError) as e:
+            return self.send_json(400, {"ok": False, "error": str(e)})
+        sys.stderr.write(f"{iso_now()} firmware {entry['version']} offered to {device} by {user} ({source})\n")
+        return self.send_json(200, {"ok": True, "offer": entry, "view": self.fw.view(device)})
+
+
 def make_server(data_dir, bind="127.0.0.1", port=8800):
     os.makedirs(os.path.join(data_dir, "sites"), exist_ok=True)
     store = DataStore(data_dir)
     store.alarms = AlarmEngine(store)
     Handler.store = store
     Handler.live = Live()
+    Handler.fw = Firmware(store)
+    store.on_rollback = Handler.fw.note_rollback
+    Handler.github = GitHub()
+    Handler.admin_users = os.environ.get("ADMIN_USERS", "")
     srv = ThreadingHTTPServer((bind, port), Handler)
     srv.daemon_threads = True
     return srv

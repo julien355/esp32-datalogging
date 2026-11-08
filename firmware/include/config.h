@@ -4,6 +4,12 @@
 #pragma once
 
 #define FW_VERSION "0.3.0"
+#ifndef FW_VARIANT
+#define FW_VARIANT "usb"        // set per build env in platformio.ini: "usb" (native USB) or "uart"
+#endif
+// Marker found in the .bin by the platform before it offers an update (server/app/firmware.py):
+// a file without it, or for another variant, is refused. Kept in the binary by net.cpp (report).
+#define FW_TAG "ARKAN-LOGGER-FW;ver=" FW_VERSION ";env=" FW_VARIANT ";"
 #define CSV_SCHEMA 3            // bump when the meaning of the CSV columns changes (3: sensors every 5 min, boot@fw)
 
 #define MAX_METERS 4            // meters per logger on the RS485 bus

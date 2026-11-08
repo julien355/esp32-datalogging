@@ -30,6 +30,13 @@ def ts(minutes_ago):
     return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def fake_image(version, env="usb", chip=9, size=70000):
+    """Bytes shaped like an ESP32-S3 app image with the logger's marker (firmware/include/config.h FW_TAG)."""
+    head = bytes([0xE9, 3, 2, 0x20]) + b"\0" * 8 + chip.to_bytes(2, "little") + b"\0" * 10
+    tag = f"ARKAN-LOGGER-FW;ver={version};env={env};".encode() + b"\0"
+    return (head + b"\x11" * 2000 + tag).ljust(size, b"\x22")
+
+
 def row(t, e=1000.0, boot=""):
     return f"{t},231.2,12.345,13.1,{e:.2f},4,31.20,62.0,4,-63,180,600,0,{boot}"
 
@@ -251,12 +258,13 @@ class ToolsAndHttpTest(unittest.TestCase):
         return subprocess.run([sys.executable, MANAGE, "--data", self.data, *args], check=True,
                               capture_output=True, text=True).stdout
 
-    def req(self, method, path, body=None, token=None, ctype="text/csv"):
-        headers = {"Content-Type": ctype}
+    def req(self, method, path, body=None, token=None, ctype="text/csv", headers=None):
+        headers = dict(headers or {}, **{"Content-Type": ctype})
         if token:
             headers["Authorization"] = "Bearer " + token
-        r = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", method=method,
-                                   data=body.encode() if body is not None else None, headers=headers)
+        if isinstance(body, str):
+            body = body.encode()
+        r = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", method=method, data=body, headers=headers)
         try:
             with urllib.request.urlopen(r, timeout=5) as resp:
                 return resp.status, resp.read().decode("latin-1")
@@ -286,16 +294,21 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn("<title>Live</title>", body)
 
+    def write_image(self, version, env="usb", **kw):
+        p = os.path.join(self.data, f"build-{env}-{version}.bin")
+        with open(p, "wb") as f:
+            f.write(fake_image(version, env, **kw))
+        return p
+
     def test_ota(self):
         code, _ = self.req("GET", "/api/v1/ota?fw=0.1.0", token=self.token)
         self.assertEqual(code, 204)
-        fw = os.path.join(self.data, "fw.bin")
-        with open(fw, "wb") as f:
-            f.write(b"\xe9" + b"x" * 1000)
+        fw = self.write_image("0.1.1")
         self.manage("publish-fw", fw, "--version", "0.1.1")
         code, body = self.req("GET", "/api/v1/ota?fw=0.1.0", token=self.token)
         self.assertEqual(code, 200)
         url = json.loads(body)["url"]
+        self.assertEqual(url, "/api/v1/firmware/logger-0.1.1.bin")
         code, body = self.req("GET", url, token=self.token)
         self.assertEqual(code, 200)
         code, _ = self.req("GET", "/api/v1/ota?fw=0.1.1", token=self.token)
@@ -303,10 +316,116 @@ class ToolsAndHttpTest(unittest.TestCase):
         code, _ = self.req("GET", "/api/v1/ota?fw=0.2.0", token=self.token)   # newer, flashed by hand
         self.assertEqual(code, 204)                                           # never downgraded
         with self.assertRaises(subprocess.CalledProcessError):
-            self.manage("publish-fw", fw, "--version", "0.1.1")               # no silent overwrite
-        self.manage("publish-fw", fw, "--version", "0.1.1", "--force")        # deliberate step back
+            self.manage("publish-fw", fw, "--version", "0.1.2")               # not the version in the file
+        with open(fw, "r+b") as f:                                            # same number, other bytes
+            f.seek(5000)
+            f.write(b"changed")
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.manage("publish-fw", fw)
+        self.manage("publish-fw", self.write_image("0.1.1"), "--force")      # deliberate step back
         code, _ = self.req("GET", "/api/v1/ota?fw=0.2.0", token=self.token)
         self.assertEqual(code, 200)
+
+    def test_image_check(self):
+        from firmware import FirmwareError, check_image
+        self.assertEqual(check_image(fake_image("0.3.1", "uart")), {"version": "0.3.1", "env": "uart"})
+        for bad in (fake_image("0.3.1", chip=0),                      # ESP32, not S3
+                    b"\x00" + fake_image("0.3.1")[1:],                 # not an app image
+                    fake_image("0.3.1").replace(b"ARKAN-LOGGER-FW", b"OTHER-SKETCH-FW"),
+                    fake_image("0.3.1", size=1000),                   # truncated
+                    fake_image("0.3.1", size=0x1E0001)):              # larger than the flash slot
+            with self.assertRaises(FirmwareError):
+                check_image(bad)
+
+    def test_firmware_from_the_live_page(self):
+        admin = {"X-Auth-User": "julien", "X-Requested-With": "arkan"}
+        server_mod.Handler.admin_users = ""
+        code, body = self.req("GET", "/api/v1/admin/me", headers=admin)
+        self.assertFalse(json.loads(body)["admin"])
+        code, body = self.req("GET", "/api/v1/admin/fw/LOG-0001", headers=admin)
+        self.assertEqual(code, 403)                                           # off until ADMIN_USERS is set
+        server_mod.Handler.admin_users = "julien, ops"
+        self.addCleanup(setattr, server_mod.Handler, "admin_users", "")
+        code, _ = self.req("GET", "/api/v1/admin/fw/LOG-0001", headers={"X-Auth-User": "guest"})
+        self.assertEqual(code, 403)
+        img = fake_image("0.4.0")
+        up = "/api/v1/admin/fw/LOG-0001/upload?name=firmware.bin"
+        code, _ = self.req("POST", up, img, ctype="application/octet-stream", headers={"X-Auth-User": "julien"})
+        self.assertEqual(code, 403)                                           # no X-Requested-With: cross-site
+        code, _ = self.req("POST", up, img, ctype="application/octet-stream",
+                           headers=dict(admin, Origin="https://evil.example"))
+        self.assertEqual(code, 403)
+        code, body = self.req("POST", up, fake_image("0.4.0", chip=0), ctype="application/octet-stream", headers=admin)
+        self.assertEqual(code, 400)
+        self.assertIn("another chip", json.loads(body)["error"])
+
+        # The logger reports its build (usb) and version, then an image is uploaded for it.
+        rep = {"fw": "0.3.1", "env": "usb", "cfg_version": 0, "boot": "poweron", "settings": {"ota_on": "1"}}
+        self.req("POST", "/api/v1/config/report", json.dumps(rep), self.token, "application/json",
+                 headers={"X-Fw": "0.3.1"})
+        snap = json.dumps({"ts": ts(0), "values": {"EM01_p": 1}})
+        code, _ = self.req("POST", "/api/v1/live", snap, self.token, "application/json", headers={"X-Fw": "0.3.1"})
+        self.assertEqual(code, 204)                                           # nothing waiting
+        code, body = self.req("POST", up, fake_image("0.4.0", env="uart"), ctype="application/octet-stream",
+                              headers=admin)
+        self.assertEqual(code, 400)                                           # wrong build variant
+        self.assertIn("'usb' build", json.loads(body)["error"])
+        code, body = self.req("POST", up, img, ctype="application/octet-stream", headers=admin)
+        self.assertEqual(code, 200, body)
+        view = json.loads(body)["view"]
+        self.assertEqual((view["state"], view["offer"]["by"], view["scope"]), ("waiting", "julien", "device"))
+        code, body = self.req("POST", "/api/v1/live", snap, self.token, "application/json", headers={"X-Fw": "0.3.1"})
+        self.assertEqual((code, json.loads(body)), (200, {"ota": 1}))         # "check now" hint
+        code, body = self.req("GET", "/api/v1/ota?fw=0.3.1", token=self.token)
+        self.assertEqual(json.loads(body)["version"], "0.4.0")
+
+        # The new firmware keeps restarting: the logger goes back, the platform stops offering it.
+        rep.update(boot="sw:ota_rollback")
+        self.req("POST", "/api/v1/config/report", json.dumps(rep), self.token, "application/json")
+        code, _ = self.req("GET", "/api/v1/ota?fw=0.3.1", token=self.token)
+        self.assertEqual(code, 204)
+        code, body = self.req("GET", "/api/v1/admin/fw/LOG-0001", headers=admin)
+        view = json.loads(body)
+        self.assertEqual((view["state"], view["failed"]), ("rolled_back", ["0.4.0"]))
+        self.assertEqual([f["file"] for f in view["files"]], ["logger-0.4.0.bin", "logger-uart-0.4.0.bin"])
+        self.assertIn("ota_failed", [e["kind"] for e in view["events"]])
+
+        # Offered again on purpose from the stored files, then withdrawn.
+        code, body = self.req("POST", "/api/v1/admin/fw/LOG-0001/offer", json.dumps({"file": "logger-0.4.0.bin"}),
+                              ctype="application/json", headers=admin)
+        self.assertEqual(json.loads(body)["view"]["state"], "waiting")
+        code, body = self.req("POST", "/api/v1/admin/fw/LOG-0001/offer", json.dumps({"file": "../devices.json"}),
+                              ctype="application/json", headers=admin)
+        self.assertEqual(code, 400)
+        code, body = self.req("POST", "/api/v1/admin/fw/LOG-0001/cancel", "{}", ctype="application/json",
+                              headers=admin)
+        self.assertTrue(json.loads(body)["cancelled"])
+        code, _ = self.req("GET", "/api/v1/ota?fw=0.3.1", token=self.token)
+        self.assertEqual(code, 204)
+        # An older version is refused without force.
+        self.req("POST", "/api/v1/config/report", json.dumps(dict(rep, boot="sw:ota", fw="0.4.0")), self.token,
+                 "application/json", headers={"X-Fw": "0.4.0"})
+        code, body = self.req("POST", up, fake_image("0.3.9"), ctype="application/octet-stream", headers=admin)
+        self.assertEqual(code, 400)
+        self.assertIn("not newer", json.loads(body)["error"])
+        code, body = self.req("POST", up + "&force=1", fake_image("0.3.9"), ctype="application/octet-stream",
+                              headers=admin)
+        self.assertEqual(code, 200)
+
+    def test_github_releases(self):
+        from firmware import GitHub
+        gh = GitHub("julien355/esp32-datalogging", "")
+        listing = [{"tag_name": "fw-v0.4.0", "draft": False, "prerelease": False, "published_at": "2026-11-08T00:00:00Z",
+                    "assets": [{"id": 7, "name": "logger-0.4.0.bin", "size": 70000},
+                               {"id": 8, "name": "logger-uart-0.4.0.bin", "size": 70000},
+                               {"id": 9, "name": "bootloader.bin", "size": 100}]},
+                   {"tag_name": "notes", "draft": False, "assets": []}]
+        gh._get = lambda url, accept, limit: json.dumps(listing).encode()
+        rel = gh.releases()
+        self.assertEqual([a["name"] for a in rel[0]["assets"]], ["logger-0.4.0.bin", "logger-uart-0.4.0.bin"])
+        self.assertEqual(len(rel), 1)
+        self.assertEqual(gh.asset_label(8), "GitHub fw-v0.4.0 logger-uart-0.4.0.bin")
+        self.assertFalse(GitHub("", "").configured())
 
     def test_remote_config(self):
         code, _ = self.req("GET", "/api/v1/config", token=self.token)

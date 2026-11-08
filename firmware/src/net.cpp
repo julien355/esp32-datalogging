@@ -27,7 +27,7 @@ static uint32_t rcfgPeriodMs = 15UL * 60000UL, lastRcfg = 0;
 static bool rcfgReported = false;
 static volatile bool forceRcfg = false;
 
-static volatile bool forceUpload = false, forceOta = false;
+static volatile bool forceUpload = false, forceOta = false, hintOta = false;
 static uint32_t lastUploadTry = 0, lastOta = 0, authBlockedUntil = 0, liveBlockedUntil = 0;
 static uint32_t nextWifiAttempt = 0, lastStackReset = 0;
 static int wifiAttempts = 0, uploadFailRun = 0, rejectRun = 0, liveFailRun = 0;
@@ -198,6 +198,9 @@ static void doLive() {
   if (code == 200 || code == 204) {
     st.liveOk++;
     liveFailRun = 0;
+    // 200 {"ota":1}: someone offered this logger a firmware on the platform: check at once
+    // instead of waiting for the next periodic check (doOta limits it to once per 5 min).
+    if (code == 200 && resp.indexOf("\"ota\"") >= 0) hintOta = true;   // body {"ota": 1}
   } else {
     st.liveFail++;
     if (++liveFailRun >= 3) liveBlockedUntil = millis() + 120000UL;   // do not hold up the uploads
@@ -209,8 +212,10 @@ static void doLive() {
 static void doOta() {
   if (!otaOn && !forceOta) return;
   if (st.safeMode) return;
-  if (!forceOta && (millis() < 120000UL || (lastOta && millis() - lastOta < otaPeriodMs))) return;
-  forceOta = false;
+  bool hinted = hintOta && otaOn && millis() > 120000UL && (!lastOta || millis() - lastOta >= 300000UL);
+  if (!forceOta && !hinted && (millis() < 120000UL || (lastOta && millis() - lastOta < otaPeriodMs))) return;
+  bool byHand = forceOta;
+  forceOta = hintOta = false;
   lastOta = millis();
   String resp;
   int code = request("GET", String("/api/v1/ota?fw=") + FW_VERSION, "", "", resp, HTTP_TIMEOUT_MS);
@@ -223,6 +228,16 @@ static void doOta() {
   if (deserializeJson(doc, resp)) return;
   String ver = doc["version"] | "", url = doc["url"] | "", md5 = doc["md5"] | "";
   if (!ver.length() || ver == FW_VERSION || !url.length()) return;
+  long bad = cfg::getCounter("ota_bad");
+  if (bad && bad == fwHash(ver.c_str())) {
+    if (!byHand) {
+      static long told = 0;   // log it once, not at every check
+      if (told != bad) evlog("OTA: %s skipped, it was rolled back before (console 'ota' to try it again)", ver.c_str());
+      told = bad;
+      return;
+    }
+    cfg::setCounter("ota_bad", 0);
+  }
   evlog("OTA: updating %s -> %s", FW_VERSION, ver.c_str());
 
   HTTPClient http;
@@ -290,6 +305,8 @@ static bool remoteAllowed(const char *key) {
 static void reportSettings() {
   JsonDocument doc;
   doc["fw"] = FW_VERSION;
+  doc["env"] = FW_VARIANT;
+  doc["fw_tag"] = FW_TAG;   // also keeps the marker in the binary for the platform's check
   doc["schema"] = CSV_SCHEMA;
   doc["cfg_version"] = cfg::getCounter("cfg_ver");
   doc["boot"] = st.bootReason;

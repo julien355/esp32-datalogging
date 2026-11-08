@@ -183,7 +183,7 @@ And, if wanted, the daily summary at 00:20 WITA (16:20 UTC on a UTC server):
 | Change a logger setting remotely | `manage.py set-config LOG-0001 th1_off_t=-1.2 reboot_hr=19` (taken within 15 min, the logger restarts); `manage.py show-config LOG-0001` to check. Network settings are refused: on site only |
 | OED files | `docker compose exec ingest python tools/manage.py export-oed adab --from 2026-11-01` |
 | SD card backfill | copy the card's `/data` to `/srv/arkan-monitoring/data/export/sd-LOG-0001/`, then with the service stopped (`docker compose stop ingest`): `docker compose run --rm ingest python tools/manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001`, the same with `alarms adab --rebuild`, then `docker compose start ingest` |
-| Firmware update (OTA) | copy `firmware.bin` to the data folder, `manage.py publish-fw /data/firmware.bin --version 0.3.1`; loggers take it within 6 h (`ota_on` is on by default) |
+| Firmware update (OTA) | the **Firmware update** panel of the logger on its live page (GitHub release, file upload or stored file; needs `ADMIN_USERS` in `server/.env`): [`OTA.md`](OTA.md). By command: copy `firmware.bin` to the data folder, `manage.py publish-fw /data/firmware.bin --device LOG-0001`. An online logger takes it within a minute, else within 6 h (`ota_on` is on by default) |
 | Read the data from the laptop | `scp -r hermes-vps:/srv/arkan-monitoring/data/sites/adab ./adab` |
 
 ## 11. Security notes

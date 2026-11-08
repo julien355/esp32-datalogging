@@ -37,6 +37,14 @@ void evlog(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 // Logs the reason, waits for any SD write in progress, then restarts.
 void safeRestart(const char *why);
 
+// Small hash of a firmware version, kept in NVS when that version had to be rolled back,
+// so the logger never installs it again (a counter is a number, not a string).
+inline long fwHash(const char *v) {
+  uint32_t h = 5381;
+  while (*v) h = h * 33 + (uint8_t)*v++;
+  return (long)(h & 0x7fffffff);
+}
+
 // Time helpers (UTC everywhere)
 bool timeValid();
 String isoTime(time_t t);                 // 2026-11-07T03:15:00Z
