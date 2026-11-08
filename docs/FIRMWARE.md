@@ -22,8 +22,8 @@ A task stuck for 60 s reboots the board (task watchdog with panic). Records are 
 ### 2.1 Measurement
 | Function | Detail |
 |---|---|
-| Meter reading | Modbus RTU master, any number of meters up to 4 (`meters` = `EM01:1,EM02:2`). Registers grouped into few requests (2 for the FCN300). One retry per request |
-| Register table | Built in from `docs/meter/fcn300-3e4y-modbus-guide.md` (**not verified**). Replaced **without reflashing** by `/config/registers.csv` on the SD card: `name,fc,addr,type,scale,ct,agg` per line. Types: `u16 s16 u32 s32 u32sw s32sw f32 f32sw` (`sw` = low word first). `ct=1`: multiplied by `ct_mult`. `agg`: `mean`, `last` (counters), `minmax` (mean + `_min` + `_max` columns) |
+| Meter reading | Modbus RTU master, any number of meters up to 4 (`meters` = `EM01:1,EM02:2`). Registers that touch each other are read in one request (2 for the FCN300: a meter may refuse a request that spans registers it does not have). One retry per request |
+| Register table | Built in from `docs/meter/fcn300-3e4y-modbus-guide.md` (**not verified**). Replaced **without reflashing** by `/config/registers.csv` on the SD card: `name,fc,addr,type,scale,ct,agg` per line. Types: `u16 s16 u32 s32 u32sw s32sw f32 f32sw` (`sw` = low word first). `ct=1`: multiplied by `ct_mult`. `agg`: `mean`, `last` (counters), `minmax` (mean + `_min` + `_max` columns). Decimals written follow the scale (0.001 gives 3; floats at least 3). Practice and tests: [`tutorials/4-MODBUS-REGISTERS.md`](tutorials/4-MODBUS-REGISTERS.md), `tools/modbus_sim/` |
 | TH1 (board sensor) | I2C, type found at boot: AHT1x/AHT2x (0x38), SHT3x (0x44/0x45), HTU21/SHT21/Si7021 (0x40). CRC checked where the chip has one |
 | TH2 (AM2301) | DHT21 protocol on `pin_dht`. One retry after 2.1 s on a bad read |
 | Calibration | Offset per sensor (`th1_off_t`, `th1_off_rh`, `th2_off_t`, `th2_off_rh`), set after the install-day comparison with a reference |

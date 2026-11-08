@@ -129,7 +129,9 @@ static void buildBlocks() {
     uint16_t end = r.addr + words(r.type);
     if (nBlocks) {
       Block &b = blocks[nBlocks - 1];
-      if (b.fc == r.fc && r.addr <= b.start + b.count + 8 && end - b.start <= 60) {
+      // Merge only registers that touch: a meter may answer "illegal data address" to a request that
+      // spans registers it does not have, and the whole block would be lost (tools/modbus_sim shows it).
+      if (b.fc == r.fc && r.addr <= b.start + b.count && end - b.start <= 60) {
         if (end > b.start + b.count) b.count = end - b.start;
         continue;
       }

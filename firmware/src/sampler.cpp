@@ -42,7 +42,11 @@ static SemaphoreHandle_t snapMtx;
 static String snapJson, lastText;
 static uint32_t snapSeq = 0;
 
-static int decimalsFor(double scale, bool mean) {
+// Decimals written for a value: from the scale (0.001 gives 3), one more for a mean. A float register
+// usually has scale 1, which would round every value to a whole number: floats get at least 3.
+static int decimalsFor(const meter::Reg &r, bool mean) {
+  double scale = r.scale;
+  if ((r.type == meter::F32 || r.type == meter::F32SW) && scale > 0.001) scale = 0.001;
   int d = 0;
   while (d < 4 && scale < 0.999) {
     scale *= 10;
@@ -94,10 +98,10 @@ static void flushMinute(time_t minute) {
     for (int j = 0; j < meter::regCount(); j++) {
       const meter::Reg &r = meter::reg(j);
       bool mean = r.agg != meter::LAST;
-      int dec = decimalsFor(r.scale, mean);
+      int dec = decimalsFor(r, mean);
       num(row, accM[m][j], mean, dec);
       if (r.agg == meter::MINMAX) {   // min and max of the 15 s samples (power quality)
-        int d = decimalsFor(r.scale, false);
+        int d = decimalsFor(r, false);
         row += ',';
         if (accM[m][j].n) row += String(accM[m][j].min, d);
         row += ',';
@@ -178,8 +182,8 @@ static void tick() {
       if (!ok[j]) continue;
       accM[m][j].add(v[j]);
       const meter::Reg &r = meter::reg(j);
-      vals[id + "_" + r.name] = serialized(String(v[j], decimalsFor(r.scale, false)));
-      text += id + "_" + r.name + "=" + String(v[j], decimalsFor(r.scale, false)) + " ";
+      vals[id + "_" + r.name] = serialized(String(v[j], decimalsFor(r, false)));
+      text += id + "_" + r.name + "=" + String(v[j], decimalsFor(r, false)) + " ";
     }
     if (!any) text += id + ": no answer (" + String((int)st.meterFailRun[m]) + " in a row) ";
   }

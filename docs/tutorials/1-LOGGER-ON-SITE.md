@@ -3,7 +3,7 @@
 For: technicians and students, working under a supervising engineer, with a licensed electrician for the panel work.
 Site: Adab hotel, site code `adab`. Logger: `LOG-0001`. Platform: `https://arkan-monitoring.duckdns.org` on the VPS `hermes-vps`.
 
-> **Status (7 November 2026).** The logger firmware (version **0.3.0**, folder [`firmware/`](../../firmware/)) is written and compiled by CI, but it has **not yet run on the real board**. The pin map is provisional (the RS485 pins are **not known yet**) and the meter register map is **not verified**. Part A of this tutorial is where you verify them, on the bench, with the spare meter at the office. Expect small surprises on the first bench day and write down everything you find.
+> **Status (7 November 2026).** The logger firmware (version **0.3.0**, folder [`firmware/`](../../firmware/)) is written and compiled by CI, but it has **not yet run on the real board**. The pin map is provisional (the RS485 pins are **not known yet**) and the meter register map is **not verified**. Part A of this tutorial verifies the pins on the bench. The meter register map can only be verified on site: the spare meter at the office has no Modbus port (8 November 2026), so B10 is where it is checked. Expect small surprises on the first bench day and write down everything you find.
 
 This tutorial takes you through the common path from start to end. For the full details it links to the reference documents:
 - what the logger does, all its settings and console commands: [`../FIRMWARE.md`](../FIRMWARE.md)
@@ -661,7 +661,7 @@ The full procedure, with every step and expected result, is in [`../OFFICE-PREP.
 | **T1** Clock | `time`; unplug 1 min; `time` again | Time correct after the power-off (RTC on its coin cell) | `time set` is in **UTC**, never WITA |
 | **T2** Pins and I2C | `i2c`; `status` SD line; RS485 pins from the back silkscreen | 0x68 (RTC), TH1 chip (0x38, 0x40 or 0x44), 0x48 found; `SD: ok`; RS485 pins set | **The most important test.** Write the verified pins in the record sheet: `pin_rs_tx`, `pin_rs_rx`, `pin_rs_de`, `pin_sd_cs`, and SDA/SCL if swapped. Until the RS485 pins are set, the meter is not read at all |
 | **T3** Sensors | `status` "Last sample"; breathe on them; pull the TH2 data wire | Values rise within 30 s; `TH2=fault`, `err` rows, then **A14** in the alarm log, cleared when plugged back | Note the differences with the reference instrument, but the real offsets are set **on site** (B11) |
-| **T4** RS485 and the spare meter | `mb 1 3 0 64`, `mb 1 4 0 64`; LCD photos at the same moment; `modbus_dump.py` | Every LCD value matched to a register, type, word order and scale; `status` values within 1 % of the LCD; **A30** with a reversed CT; **A03** with the meter unplugged | Mains wiring of the spare meter: **electrician only**. Result in `docs/meter/fcn300-3e4y-verified.md` and in **`/config/registers.csv`** on the card. Note the meter's CT ratio (Q30) |
+| **T4** RS485 wiring and meter-off test | `mb 1 3 0 64` with no meter answering | A timeout with the hint "wiring, A/B, id, baud"; `status` shows `EM01: no answer`, `EM01_n` = 0; **A03** after a minute; the boot log says the table was read from the SD card | The spare meter has **no Modbus port** (8 November): it cannot be read, so the registers are checked on site (B10). Mains wiring of any meter: **electrician only** |
 | **T5** Records on the card | `ls /data/<YYYY>/<MM>`, `tail ... 3`, `header` | One row per minute, `EM01_n` = 4, `TH1_t` on every 5th row, `boot` = `poweron@0.3.0` on the first row | |
 | **T6** WiFi and upload | `status`; the day file on the VPS; the live page | `Uploads: ok n`; the VPS day file grows every minute; live page "Live, updated n s ago" | |
 | **T7** Lost connection | WiFi off 1 h (and once 12 h+) | Backlog grows, then back to 0; every minute of the outage on the VPS, each once; after 6 h offline a reboot `sw:offline` | |
@@ -674,7 +674,7 @@ The full procedure, with every step and expected result, is in [`../OFFICE-PREP.
 | **T12c** Alarm log | `manage.py alarms adab` | The lines of T3, T4, T7, T8, T9 are there | Before the site: office data removed, log rebuilt |
 | **T13** 48 h soak | 48 h with 1 h WiFi off in the middle; `manage.py daily adab` | `coverage_pct` 100 (except first and last day), `heap_kb` stable | A falling heap = a memory leak: report it |
 
-**Why T4 at the office matters:** the register map of the meter is not verified. The spare FCN300 at the office lets you find the right registers and scales on the bench. Corrections go into `/config/registers.csv` on the SD card (start from the output of the `regs` command). **No reflashing is needed.** The site meter must be the same model (check its label on site, B1).
+**Why the register check is on site:** the register map of the meter is not verified, and the spare FCN300 at the office has no Modbus port, so it cannot be read on the bench. The proposed table `docs/meter/registers-proposed.csv` goes on the card as `/config/registers.csv`; the supervisor checks and corrects it at the hotel (B10, `docs/meter/README.md` section 4). Corrections are edits of that file on the SD card (start from the output of the `regs` command). **No reflashing is needed.** The site meter must be the same model (check its label on site, B1).
 
 ### A9 Assembling the box
 
@@ -691,7 +691,7 @@ Drawings (e) and (d): [`../install/schematics/e-enclosure-layout.svg`](../instal
 4. **TS1 terminal strip for `TH2`:** fit it with the **4.7 kohm pull-up resistor between 3V3 and DATA**. Short leads from TS1 to the board header: TS1 3V3 to the **3V3** pin, TS1 DATA to **GPIO 4** (**to verify**, from T2/Lab 1), TS1 GND to a **GND** pin. Sleeved leads, in ferrules.
    Expected: with the power off, DATA to 3V3 on TS1 reads 4.47 to 4.94 kohm.
 5. **RS485 terminal:** set the board's **`120` jumper ON**.
-6. **The microSD card:** formatted FAT32, labelled `LOG-0001`, with the verified `/config/registers.csv` from T4. Insert it.
+6. **The microSD card:** formatted FAT32, labelled `LOG-0001`, with `/config/registers.csv` = `docs/meter/registers-proposed.csv` (a proposal, not verified: the supervisor checks it on site, B10). Insert it.
 7. **Labels:**
    - on the lid: `ADAB LOGGER LOG-0001, 5 V USB-C ONLY, DO NOT USE DC JACK`, the supervisor's phone number, and `WiFi ARKAN-LOG-0001`;
    - beside the lid hole: `Setup: hold 3 s`;
@@ -737,8 +737,8 @@ If the survey was already done on an earlier visit, re-check steps 3, 4 and 6 on
 1. **Induction and permit.** Sign in with the hotel's engineering staff. Agree which rooms you may enter and when the electrician can isolate the panel.
 2. **Photograph the MDP** from outside: the panel, its label, the wall around it, where cables enter.
 3. **The meter, with the electrician** (he opens the panel; you stand back): photograph the **label** (FCN300-3E4Y or 3EH4Y), the **back** (are there RS485 A/B terminals? which numbers?), the CT labels, and the **LCD settings pages** (Modbus address, baud rate, parity, CT ratio).
-   Expected: the meter has RS485 terminals, and it is the same model as the spare meter of T4.
-   If not: no RS485 terminals = no data. Stop and tell the supervisor and the owner. A different model = the register table of T4 may not fit: you will check it in B10.
+   Expected: the meter has RS485 terminals (A/B). The spare meter at the office has no Modbus port, so do not assume the site meter is like it.
+   If not: no RS485 terminals = no data. Stop and tell the supervisor and the owner. A different model = the proposed register table may not fit: you will check it in B10. Also photograph **each of the three CT labels** (they should say 250/5, plus the class): Q30.
 4. **Choose the box position** (drawing (e)): beside the panel, 30 cm or more from the steel, box centre about 1.5 m high, reachable without a ladder, not in a walkway, not under a pipe or vent.
 5. **WiFi signal check at that position.** RSSI (received signal strength) is in dBm: -50 is strong, **-70 is the minimum we accept**, -80 is unreliable. Every 3 dB less is half the power.
    - **With the logger** (recommended): power the board from the laptop (USB-C), open the monitor, hold the board at the box position, antenna up, and type:
@@ -782,7 +782,7 @@ Drawing (c): [`../install/schematics/c-rs485-wiring.svg`](../install/schematics/
    - **signal ground core to G**;
    - **shield drain wire to G** too (the logger end is the only bonded end; confirm with the supervisor);
    - the board's **`120` jumper ON**.
-   Which board terminal is A, B and G is **to verify** (it should be known from T4 on the bench).
+   Which board terminal is A, B and G is **to verify** against the meter's A/B on site; swapped wires only give timeouts on the console (`mb 1 3 0 64`): swap and retry.
 3. Tighten G2. Label both ends `LOG0001-EM01-RS485`.
 4. **Read the meter's Modbus settings** (if not done in B1 step 3): the electrician or the supervisor reads, **without changing anything**, the meter's Modbus **address**, **baud rate** and **parity** from its menu, and photographs the pages. The menu names are **to verify** (no manual in the repository). Write them down: you need them in B7.
 
@@ -914,7 +914,7 @@ Full table: [`../install/README.md` Lab 7 Part C](../install/README.md#part-c-me
    Expected: **|error| at most 1 %** (allow one digit of the LCD's last decimal for small values). The energy counter (kWh) must be **the same** as the LCD to its resolution.
 3. If not:
    - a value **10, 100 or 1000 times** wrong: wrong scale in the register table;
-   - currents and powers about **1/20 or 1/100** of the LCD: the meter sends secondary values (before the CT ratio). The decision so far is `ct_mult` = 1, because the meter shows correct A and kW (Q26); change it only if the supervisor decides, after comparing with the CT ratio on the meter;
+   - currents and powers about **1/50 or 1/100** of the LCD (the CT ratio is 50 for the 250/5 CTs): the meter sends secondary values (before the CT ratio). `ct_mult` stays 1 until the supervisor decides; then it is set to the CT ratio read on the CT labels (`docs/meter/README.md` section 4, which also lists the checks to do on site);
    - huge or random 32-bit values: wrong word order;
    - a negative kW on one phase at normal load: a CT reversed or on the wrong phase: tell the electrician (alarm **A30** after 5 minutes);
    - in every case: **do not experiment on site**. Write down the raw values (`mb 1 3 0 64` on the console) and the LCD photos, and tell the supervisor. The register table is a file on the SD card (`/config/registers.csv`): fixing it means powering off, editing the file on the laptop and putting the card back. It cannot be changed remotely.
@@ -1211,7 +1211,7 @@ cd /opt/arkan-monitoring/server
 | **Build (environment)** | One way of compiling the firmware: `logger` or `logger-uart` |
 | **CI (GitHub Actions)** | GitHub's robot that compiles the firmware at every push and keeps the files as "artifacts" |
 | **CT (current transformer)** | The ring around a cable that gives the meter a small copy of the current. Never open its secondary circuit |
-| **CT ratio** | For example 200/5: 200 A in the cable gives 5 A to the meter |
+| **CT ratio** | For example 250/5 (the site's CTs): 250 A in the cable gives 5 A to the meter |
 | **Day file** | One CSV file per UTC day, one row per minute |
 | **dBm** | Unit of radio signal strength; -50 strong, -70 our minimum, -80 unreliable |
 | **Download mode** | The ESP32 state in which it waits for a new firmware (BOOT held during RESET) |

@@ -127,12 +127,12 @@ Also kept in `events.jsonl` (not in the alarm log): settings sent and applied, l
 | Contracted power | **82.5 kVA** | A08 (74.25 kVA), A37 | `contracted_kva` 82.5 |
 | PLN limit per phase | 82.5 kVA / (3 x 220 V) = **125 A** (the limiter PLN fits for this contract) | A37 (112.5 A) | `contract_v_ln` 220 |
 | Main breaker | **200 A** | A29 (180 A) | `rated_a` 200 |
-| CT ratio | set in the meter, which already shows correct A and kW | register scale (`ct_mult` stays 1 unless T4 shows otherwise) | |
+| CT ratio | set in the meter, which already shows correct A and kW. **CTs 250/5 A, ratio 50 (owner, 8 November 2026), to be confirmed on their labels** | register scale (`ct_mult` stays 1 unless the site register check shows otherwise: `docs/meter/README.md`) | |
 
 - **A37 before A29:** at 82.5 kVA the PLN limiter (3 x 125 A) trips long before the 200 A breaker is loaded, and it trips on **one** overloaded phase even when the total kVA is under the contract. A37 is the one that warns before a PLN trip; A29 stays as the breaker's own check.
 - **Voltage limits** (A05 207 V, A06 242 V, A26 207 V, A27 253 V): SNI tolerance +5 % / -10 % around 230 V. A supply that runs near 220 V is still inside them.
 - **A11, A12, A13** (electrical room), **A22 to A25** (outdoor): as proposed on 5 November.
-- **A04 to A10, A26 to A31, A37** depend on the meter register check on the spare meter (`docs/OFFICE-PREP.md` T4).
+- **A04 to A10, A26 to A31, A37** depend on the meter register check, done on site (`docs/meter/README.md` section 4). Until then their values and thresholds are not trusted: a scale error equal to the CT ratio (50 for a 250/5 CT) would fire or silence A29 and A37.
 - Review the log after the first week and tune: a line that fires every day is noise; raise its threshold or delay, or set WhatsApp to `no`.
 
 ## 7. What the WhatsApp group will receive (S6)

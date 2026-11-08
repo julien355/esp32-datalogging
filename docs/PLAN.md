@@ -311,7 +311,7 @@ Rule: **one session = one deliverable that ends in a PR.** Agents run in paralle
 | **S10+** Platform phase 2 | | S8 | Planned separately | |
 
 **Critical path:** S0, S1, then S2 and S3 in parallel, then S4 and S5 in parallel, then S6, S7, S8.
-The **meter register check** is the one uncertain step on that path: on a spare meter it is done in S4; without one it moves to the hotel and the install day gets longer.
+The **meter register check** is the one uncertain step on that path: the spare meter has no Modbus port (8 November), so it is done at the hotel at the first visit and the install day gets longer (`docs/meter/README.md` section 4).
 
 **Who does what**
 - **You (Arkan):**
@@ -331,7 +331,7 @@ The **meter register check** is the one uncertain step on that path: on a spare 
 | P1 | Client name in the repository | **Settled**: `adab` is the site code and name, in both repositories |
 | P2 | The new platform repository | **Settled**: `arkan-monitoring`, private, created by Claude in S1 |
 | P3 | Alert channel | **Settled**: WhatsApp through Hermes. Open: which WhatsApp group or number receives them, and whether Hermes's webhook platform is on |
-| P4 | FCN300-3E4Y register map | Guide received, **not verified** (`docs/meter/README.md`). **Spare meter at the office (7 November)**: verified on the bench, `docs/OFFICE-PREP.md` T4 |
+| P4 | FCN300-3E4Y register map | Guide received, **not verified** (`docs/meter/README.md`). The spare meter at the office has **no Modbus port** (8 November): verified **on site** at the first visit, `docs/meter/README.md` section 4; proposed table `docs/meter/registers-proposed.csv`. CTs are 250/5 A (owner, 8 November), to be confirmed on their labels |
 | P5 | Platform | **Settled**: Open Energy Dashboard + our ingest service. Arkan design integration later |
 | P6 | Meter variant | Read the label: FCN300-**3E4Y** (guide received) or **3EH4Y** (link sent). If 3EH4Y, ask the seller for its register map |
 | P7 | RAM on hermes-vps | Plan in `docs/VPS-MEMORY.md` (about 300 to 450 MB). Check free memory and swap before S5 (`free -h`) |
@@ -350,7 +350,7 @@ The **meter register check** is the one uncertain step on that path: on a spare 
 ## 10. Risks
 | Risk | Mitigation |
 |---|---|
-| Register guide wrong or incomplete | Configurable register table; register dump compared with the LCD; a spare meter for the bench |
+| Register guide wrong or incomplete | Configurable register table; register dump compared with the LCD; the proposed table and the on-site check (`docs/meter/README.md`); the spare meter cannot be read (no Modbus port) |
 | The meter has no RS485 port | Check the back of the meter before buying anything else; if absent, a meter with Modbus is needed |
 | Weak WiFi at the back of house | Box outside the panel; RSSI check before mounting; 4G router as a fallback |
 | Power cuts (no UPS) | RTC keeps time; the SD queue keeps unsent data; the gap is shown as "logger offline" |

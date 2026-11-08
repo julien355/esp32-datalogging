@@ -1,0 +1,44 @@
+# FORT FCN300-3E4Y: PROPOSED register table for the first site visit (8 November 2026).
+# NOT VERIFIED on a meter. The spare meter has no Modbus port, so this is checked on site (docs/meter/README.md).
+#
+# Use: copy this file to the SD card as /config/registers.csv (power the logger off first).
+# It holds the same values as the table built into the firmware, so it changes nothing by itself:
+# it is the file to EDIT on site. A bad line is skipped and logged ("registers.csv: bad line skipped").
+#
+# Columns: name,fc,addr,type,scale,ct,agg
+#   name  column suffix: EM01_<name>        fc    3 = holding registers, 4 = input registers (try both on site)
+#   addr  0-based (0x0006 = PLC 40007)      type  u16 s16 u32 s32 u32sw s32sw f32 f32sw  (sw = low word first)
+#   scale raw x scale = value in the unit of the column (V, A, Hz, kW, kvar, kVA, PF, kWh, kvarh)
+#   ct    1 = also multiplied by the ct_mult setting (use it only for values the meter sends as SECONDARY)
+#   agg   mean | last (counters) | minmax (mean + _min + _max columns)
+#
+# Starting hypothesis (the only one under which the guide's own numbers fit in 16 bits):
+#   the meter sends currents and powers as SECONDARY values: current in mA, power in W (before the CT ratio).
+#   So ct=1 on i*, p*, q, s, and ct_mult = CT primary / CT secondary (250/5 -> 50) IF the site test shows it.
+#   ct_mult stays 1 until then. The energy counters are ct=0 (meters usually count energy in primary units): check them too.
+#
+# On-site correction rule, per value:   new scale = old scale x (LCD value / value the logger shows)
+#   - ratio 1 (within 2 %)               : keep
+#   - ratio = the CT ratio (50 for 250/5): the meter sends secondary values -> set ct_mult (remote setting) and keep ct=1
+#   - ratio 10, 100, 1000 (or 0.1, ...)  : wrong decimal point -> change the scale in this file
+#   - no ratio fits / 0 / 65535 / noise  : wrong address, function code or word order -> docs/meter/README.md section 4
+name,fc,addr,type,scale,ct,agg
+v1,3,0x0000,u16,0.1,0,minmax
+v2,3,0x0001,u16,0.1,0,minmax
+v3,3,0x0002,u16,0.1,0,minmax
+v12,3,0x0003,u16,0.1,0,minmax
+v23,3,0x0004,u16,0.1,0,minmax
+v31,3,0x0005,u16,0.1,0,minmax
+i1,3,0x0006,u16,0.001,1,minmax
+i2,3,0x0007,u16,0.001,1,minmax
+i3,3,0x0008,u16,0.001,1,minmax
+f,3,0x0009,u16,0.01,0,minmax
+p1,3,0x000A,s16,0.001,1,minmax
+p2,3,0x000B,s16,0.001,1,minmax
+p3,3,0x000C,s16,0.001,1,minmax
+p,3,0x000D,s16,0.001,1,minmax
+q,3,0x000E,s16,0.001,1,minmax
+s,3,0x000F,u16,0.001,1,minmax
+pf,3,0x0010,s16,0.001,0,minmax
+e,3,0x0018,u32,0.01,0,last
+eq,3,0x001A,u32,0.01,0,last
