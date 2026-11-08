@@ -6,108 +6,307 @@
 <meta name="robots" content="noindex">
 <title>Live</title>
 <style>
-  body{font-family:system-ui,sans-serif;margin:0;background:#f5f6f8;color:#1f2933}
-  header{background:#0f2747;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
-  header a{color:#cfe0ff}
-  main{padding:12px;max-width:1100px;margin:auto}
-  .status{margin:8px 0;font-weight:600}
-  .ok{color:#127a3a}.bad{color:#b42318}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
-  .tile{background:#fff;border-radius:8px;padding:10px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
-  .tile .k{font-size:.8em;color:#52606d}.tile .v{font-size:1.6em;font-weight:700}
-  svg{width:100%;height:34px}
-  table{border-collapse:collapse;background:#fff;width:100%}
-  td,th{padding:6px 10px;border-bottom:1px solid #e4e7eb;text-align:left}
-  h2{font-size:1.05em;margin:18px 0 6px}
-  .al{padding:6px 10px;border-radius:6px;margin:4px 0;background:#fff}
-  .critical{border-left:6px solid #b42318}.warning{border-left:6px solid #d97706}.info{border-left:6px solid #2563eb}
-  .log td{font-size:.85em}
+  :root{color-scheme:light;--ink:#1f2933;--ink2:#52606d;--muted:#7b8794;--line:#e4e7eb;--bg:#eef1f5;--card:#fff;
+    --navy:#0f2747;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--good:#127a3a;--warn:#b45309;--bad:#b42318;--info:#2563eb}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
+  a{color:inherit}
+  .top{background:var(--navy);color:#fff;padding:14px 20px}
+  .top .row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;max-width:1200px;margin:auto}
+  .top h1{margin:0;font-size:1.3rem}
+  .top nav a{color:#cfe0ff;text-decoration:none;margin-left:16px;font-size:.9rem;white-space:nowrap}
+  .top nav a:hover{text-decoration:underline}
+  .sub{display:flex;gap:10px;flex-wrap:wrap;align-items:center;max-width:1200px;margin:8px auto 0;font-size:.85rem;color:#cfe0ff}
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-weight:600;background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.25);color:#fff}
+  .pill i{width:8px;height:8px;border-radius:50%;background:#9aa5b1}
+  .pill.live i{background:#3ddc84}.top .pill.bad{color:#fff}.pill.bad{background:#b42318;border-color:#b42318}.pill.bad i{background:#fff}
+  main{max-width:1200px;margin:auto;padding:16px 20px 30px}
+  h2{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 2px 8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .grid.wide{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
+  .card{background:var(--card);border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,39,71,.10);position:relative}
+  .k{font-size:.8rem;color:var(--ink2)}
+  .v{font-size:1.75rem;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+  .v small{font-size:.9rem;font-weight:500;color:var(--ink2);margin-left:3px}
+  .range{font-size:.72rem;color:var(--muted);font-variant-numeric:tabular-nums}
+  .meter{height:6px;border-radius:3px;background:#e4e7eb;margin:6px 0 2px;overflow:hidden}
+  .meter b{display:block;height:100%;border-radius:3px;background:var(--s1)}
+  .meter b.warn{background:#d97706}.meter b.bad{background:var(--bad)}
+  .spark{display:block;width:100%;height:40px;margin-top:6px;overflow:visible}
+  .spark.tall{height:64px}
+  .phase{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:2px 12px;align-items:baseline;margin-top:4px;font-variant-numeric:tabular-nums}
+  .phase .h{font-size:.72rem;color:var(--muted);text-align:right}
+  .phase .n{font-size:1.25rem;font-weight:700;text-align:right}
+  .phase .l{font-size:.8rem;color:var(--ink2)}
+  .phase .sw{display:inline-block;width:10px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+  .alarm{display:flex;gap:10px;align-items:flex-start;background:var(--card);border-radius:10px;padding:10px 14px;margin:8px 0;
+    box-shadow:0 1px 3px rgba(15,39,71,.10);border-left:6px solid var(--info)}
+  .alarm.critical{border-left-color:var(--bad)}.alarm.warning{border-left-color:#d97706}
+  .alarm .ic{font-weight:700;width:20px;text-align:center}
+  .alarm.critical .ic{color:var(--bad)}.alarm.warning .ic{color:var(--warn)}.alarm.info .ic{color:var(--info)}
+  .alarm .t{font-weight:600}.alarm .d{font-size:.85rem;color:var(--ink2)}
+  .okline{display:inline-flex;align-items:center;gap:6px;background:var(--card);border-radius:999px;padding:5px 12px;font-size:.88rem;
+    color:var(--good);font-weight:600;box-shadow:0 1px 3px rgba(15,39,71,.10)}
+  .facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 16px}
+  .facts div{font-size:.8rem;color:var(--ink2)}.facts b{display:block;font-size:1rem;color:var(--ink);font-variant-numeric:tabular-nums}
+  table{border-collapse:collapse;width:100%;background:var(--card);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(15,39,71,.10)}
+  td,th{padding:7px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:.85rem;vertical-align:top}
+  th{font-size:.75rem;color:var(--muted);font-weight:600;background:#f8f9fb}
+  tr:last-child td{border-bottom:0}
+  .sev{display:inline-block;border-radius:4px;padding:1px 6px;font-size:.72rem;font-weight:600;background:#e4e7eb;color:var(--ink2)}
+  .sev.critical{background:#fde8e7;color:var(--bad)}.sev.warning{background:#fef3c7;color:var(--warn)}.sev.info{background:#e0ecff;color:var(--info)}
+  .tip{position:fixed;pointer-events:none;background:#fff;border:1px solid #d5dae0;border-radius:6px;padding:5px 8px;font-size:.78rem;
+    box-shadow:0 2px 6px rgba(0,0,0,.12);display:none;white-space:nowrap;z-index:5}
+  .empty{background:var(--card);border-radius:10px;padding:18px;color:var(--bad);font-weight:600}
+  .ok{color:var(--good)}.bad{color:var(--bad)}
+  .foot{font-size:.75rem;color:var(--muted);margin-top:18px}
+  @media (max-width:520px){.top nav a{margin:0 12px 0 0}.v{font-size:1.5rem}.grid{grid-template-columns:1fr 1fr}.grid.wide{grid-template-columns:1fr}
+    td,th{padding:6px 8px}.hide-s{display:none}}
 </style>
 </head>
 <body>
-<header><strong id="title">Live</strong><a href="/live/">All sites</a></header>
-<main>
-  <div id="status" class="status">Loading...</div>
-  <div id="content"></div>
-</main>
+<div class="top">
+  <div class="row"><h1 id="title">Live</h1>
+    <nav><a href="/">History (OED) →</a><a href="/live/">All sites</a></nav></div>
+  <div class="sub" id="status"><span class="pill"><i></i>Loading…</span></div>
+</div>
+<main id="content"></main>
+<div class="tip" id="tip"></div>
 <script>
 const m = location.pathname.match(/^\/live\/([a-z0-9-]+)\/?$/);
 const site = m ? m[1] : null;
 const el = id => document.getElementById(id);
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const C = ['#2a78d6', '#eb6834', '#1baf7a'];   // L1, L2, L3 / series order, never cycled
+const num = x => { const v = parseFloat(x); return isFinite(v) ? v : null; };
 
-function spark(points) {
-  const v = points.filter(x => x !== null && x !== undefined && !isNaN(x));
-  if (v.length < 2) return '';
-  const lo = Math.min(...v), hi = Math.max(...v), span = (hi - lo) || 1;
-  const d = v.map((y, i) => `${(i / (v.length - 1) * 100).toFixed(1)},${(30 - (y - lo) / span * 28).toFixed(1)}`).join(' ');
-  return `<svg viewBox="0 0 100 32" preserveAspectRatio="none"><polyline fill="none" stroke="#2563eb" stroke-width="1.5" points="${d}"/></svg>`;
+// Decimals and unit by value name (the part after the device or sensor id)
+const FMT = {p: [1, 'kW'], s: [1, 'kVA'], q: [1, 'kVAr'], pf: [2, ''], f: [2, 'Hz'], v1: [1, 'V'], v2: [1, 'V'], v3: [1, 'V'],
+  v12: [0, 'V'], v23: [0, 'V'], v31: [0, 'V'], i1: [1, 'A'], i2: [1, 'A'], i3: [1, 'A'], p1: [1, 'kW'], p2: [1, 'kW'], p3: [1, 'kW'],
+  e: [0, 'kWh'], eq: [0, 'kVArh'], t: [1, '°C'], rh: [0, '%']};
+const part = k => k.slice(k.indexOf('_') + 1).replace(/_(min|max)$/, '');
+const fmt = (k, v) => { if (v === null || v === undefined) return '–'; const f = FMT[part(k)]; return f ? v.toFixed(f[0]) : String(+v.toFixed(3)); };
+const unitOf = k => (FMT[part(k)] || [0, ''])[1];
+const cleanLabel = lab => lab.replace(/\s*\(C\)\s*$/, ' temperature').replace(/\s*\(%RH\)\s*$/, ' humidity')
+  .replace(/\s*\((kW|kVA|Hz|A|V)\)\s*$/, '');
+
+function dewPoint(t, rh) {   // same formula as the alarms (server/app/alarms.py)
+  if (t === null || rh === null || rh <= 0) return null;
+  const a = 17.62, b = 243.12, g = Math.log(rh / 100) + a * t / (b + t);
+  return b * g / (a - g);
 }
 
-function localTime(iso, offH) {
-  if (!iso) return '-';
-  const t = new Date(Date.parse(iso) + (offH || 0) * 3600e3);
-  return t.toISOString().slice(0, 19).replace('T', ' ');
+function localTime(iso, offH, withDate = true) {
+  if (!iso) return '–';
+  const s = new Date(Date.parse(iso) + (offH || 0) * 3600e3).toISOString();
+  return withDate ? s.slice(0, 16).replace('T', ' ') : s.slice(11, 19);
+}
+
+// Sparkline: one or more series over the last 60 minutes, hover shows the values at that time
+const SPARKS = {};
+let sparkId = 0;
+function spark(series, times, {tall = false, unitKey} = {}) {
+  const all = series.flatMap(s => s.pts).filter(v => v !== null);
+  if (all.length < 2) return '<div class="range">History builds up over the next minutes</div>';
+  let lo = Math.min(...all), hi = Math.max(...all);
+  if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+  const n = times.length, H = tall ? 60 : 36, X = i => (n > 1 ? i / (n - 1) * 100 : 50), Y = v => (H - 2) - (v - lo) / (hi - lo) * (H - 4);
+  const paths = series.map(s => {
+    let d = '';
+    s.pts.forEach((v, i) => { if (v !== null) d += `${d && s.pts[i - 1] !== null ? 'L' : 'M'}${X(i).toFixed(2)},${Y(v).toFixed(2)}`; });
+    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+  }).join('');
+  const id = 'sp' + (++sparkId);
+  SPARKS[id] = {series, times, unitKey};
+  return `<svg class="spark${tall ? ' tall' : ''}" id="${id}" viewBox="0 0 100 ${H}" preserveAspectRatio="none" role="img" aria-label="last 60 minutes">
+    ${paths}<line class="xh" y1="0" y2="${H}" stroke="#7b8794" stroke-dasharray="2 2" vector-effect="non-scaling-stroke" visibility="hidden"/></svg>`;
+}
+document.addEventListener('mousemove', ev => {
+  const svg = ev.target.closest && ev.target.closest('svg.spark'), tip = el('tip');
+  document.querySelectorAll('svg.spark .xh').forEach(l => { if (!svg || l.parentNode !== svg) l.setAttribute('visibility', 'hidden'); });
+  if (!svg || !SPARKS[svg.id]) { tip.style.display = 'none'; return; }
+  const sp = SPARKS[svg.id], r = svg.getBoundingClientRect(), n = sp.times.length;
+  const i = Math.max(0, Math.min(n - 1, Math.round((ev.clientX - r.left) / r.width * (n - 1))));
+  const xh = svg.querySelector('.xh'), x = n > 1 ? i / (n - 1) * 100 : 50;
+  xh.setAttribute('x1', x); xh.setAttribute('x2', x); xh.setAttribute('visibility', 'visible');
+  tip.innerHTML = `<b>${esc(sp.times[i])}</b>` + sp.series.map(s => `<div>${sp.series.length > 1 ? `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:5px"></span>${esc(s.name)}: ` : ''}<b>${fmt(sp.unitKey || s.key, s.pts[i])}</b> ${esc(unitOf(sp.unitKey || s.key))}</div>`).join('');
+  tip.style.display = 'block';
+  tip.style.left = Math.min(ev.clientX + 12, innerWidth - tip.offsetWidth - 8) + 'px';
+  tip.style.top = (ev.clientY + 14) + 'px';
+});
+
+function card(label, key, v, pts, times, extra = '') {
+  const vals = pts.filter(x => x !== null);
+  const range = vals.length > 1 ? `<div class="range">60 min: ${fmt(key, Math.min(...vals))} – ${fmt(key, Math.max(...vals))} ${esc(unitOf(key))}</div>` : '';
+  return `<div class="card"><div class="k">${esc(label)}</div><div class="v">${fmt(key, v)}<small>${esc(unitOf(key))}</small></div>${extra}${range}
+    ${spark([{key, name: label, color: C[0], pts}], times)}</div>`;
+}
+
+function meter(frac, text) {
+  if (frac === null || !isFinite(frac)) return '';
+  const pct = Math.max(0, frac * 100), cls = pct >= 90 ? 'bad' : pct >= 75 ? 'warn' : '';
+  return `<div class="meter"><b class="${cls}" style="width:${Math.min(100, pct).toFixed(1)}%"></b></div><div class="range">${pct.toFixed(0)} % ${esc(text)}</div>`;
 }
 
 async function loadSite() {
-  const r = await fetch(`/api/v1/live/${site}`, {cache: 'no-store'});
-  const j = await r.json();
-  const prof = j.profile || {}, labels = prof.labels || {}, off = prof.utc_offset_h ?? 8;
+  for (const k in SPARKS) delete SPARKS[k];
+  const j = await (await fetch(`/api/v1/live/${site}`, {cache: 'no-store'})).json();
+  const prof = j.profile || {}, labels = prof.labels || {}, off = prof.utc_offset_h ?? 8, sensors = prof.sensors || {};
   const wanted = (prof.live && prof.live.values) || null;
-  el('title').textContent = `Live: ${prof.name || site}`;
-  let html = '', worst = 0;
-  const devs = Object.keys(j.devices);
-  if (!devs.length) html = '<p class="bad">No live data for this site (logger offline or not installed yet).</p>';
-  for (const dev of devs) {
-    const d = j.devices[dev], vals = d.last.values || {};
-    worst = Math.max(worst, d.age_s);
-    const keys = (wanted || Object.keys(vals)).filter(k => k in vals);
-    html += `<h2>${esc(dev)}: ${localTime(d.last.ts, off)} (UTC+${off}), RSSI ${esc(d.last.sys?.rssi ?? '-')} dBm, backlog ${esc(d.last.sys?.backlog_min ?? '-')} min, fw ${esc(d.last.sys?.fw ?? '-')}</h2><div class="grid">`;
-    for (const k of keys) {
-      const hist = d.history.map(h => parseFloat(h.values[k]));
-      html += `<div class="tile"><div class="k">${esc(labels[k] || k)}</div><div class="v">${esc(vals[k])}</div>${spark(hist)}</div>`;
-    }
-    html += '</div>';
-  }
-  // Open alarms first, the alarm log last
+  const name = prof.name || site;
+  document.title = `Live: ${name}`;
+  el('title').textContent = `${name} · Live`;
+  let html = '', worst = null;
+
+  // Open alarms first
   const al = j.alarms || [];
-  let top = al.length ? '<h2>Open alarms</h2>' : '<h2>No open alarm</h2>';
-  for (const a of al) top += `<div class="al ${esc(a.severity)}"><b>${esc(a.id)} ${esc(a.name)}</b> (${esc(a.severity)}) since ${localTime(a.since, off)}, worst ${esc(a.worst ?? '-')} ${esc(a.unit)}</div>`;
-  let log = '';
+  const icon = {critical: '!', warning: '▲', info: 'i'};
+  if (al.length) {
+    html += '<h2>Open alarms</h2>';
+    for (const a of al) html += `<div class="alarm ${esc(a.severity)}"><div class="ic">${icon[a.severity] || 'i'}</div><div>
+      <div class="t">${esc(a.id)} ${esc(a.name)} <span class="sev ${esc(a.severity)}">${esc(a.severity)}</span></div>
+      <div class="d">since ${localTime(a.since, off)} · worst ${esc(a.worst ?? '–')} ${esc(a.unit)}</div></div></div>`;
+  } else html += '<div style="margin-top:4px"><span class="okline">✓ No open alarm</span></div>';
+
+  const devs = Object.keys(j.devices || {});
+  if (!devs.length) html += '<h2>Now</h2><div class="empty">No live data for this site (logger offline or not installed yet).</div>';
+
+  for (const dev of devs) {
+    const d = j.devices[dev], vals = d.last.values || {}, sys = d.last.sys || {};
+    worst = Math.max(worst ?? 0, d.age_s);
+    const times = d.history.map(h => localTime(h.ts, off, false));
+    const H = k => d.history.map(h => num(h.values[k]));
+    const V = k => num(vals[k]);
+    const keys = (wanted || Object.keys(vals)).filter(k => k in vals);
+    const used = new Set();
+    const has = k => keys.includes(k);
+    const L = (k, dflt) => cleanLabel(labels[k] || dflt || k);
+    const meters = [...new Set(keys.map(k => k.split('_')[0]).filter(p => /^EM\d+$/.test(p)))];
+    if (devs.length > 1) html += `<h2 style="font-size:.9rem;color:var(--ink)">${esc(dev)}</h2>`;
+
+    for (const M of meters) {
+      // Power: the headline values
+      let g = '';
+      if (has(`${M}_p`)) { used.add(`${M}_p`); g += card(L(`${M}_p`, 'Total power'), `${M}_p`, V(`${M}_p`), H(`${M}_p`), times); }
+      if (has(`${M}_s`)) { used.add(`${M}_s`);
+        g += card(L(`${M}_s`, 'Apparent power'), `${M}_s`, V(`${M}_s`), H(`${M}_s`), times,
+          prof.contracted_kva ? meter(V(`${M}_s`) / prof.contracted_kva, `of the ${prof.contracted_kva} kVA PLN contract`) : ''); }
+      for (const [k, dl] of [['pf', 'Power factor'], ['f', 'Frequency']])
+        if (has(`${M}_${k}`)) { used.add(`${M}_${k}`); g += card(L(`${M}_${k}`, dl), `${M}_${k}`, V(`${M}_${k}`), H(`${M}_${k}`), times); }
+      if (g) html += `<h2>Power${meters.length > 1 ? ' · ' + esc(M) : ''}</h2><div class="grid">${g}</div>`;
+
+      // Per phase: voltage and current, three lines in one card each
+      let ph = '';
+      for (const [q, title] of [['v', 'Voltage L-N'], ['i', 'Current']]) {
+        const ks = [1, 2, 3].map(n => `${M}_${q}${n}`);
+        if (!ks.some(has)) continue;
+        ks.forEach(k => used.add(k));
+        const cur = ks.map(V);
+        let rows = `<div></div><div class="h">L1</div><div class="h">L2</div><div class="h">L3</div><div class="l">now</div>` +
+          cur.map((v, n) => `<div class="n"><span class="sw" style="background:${C[n]}"></span>${fmt(ks[n], v)}</div>`).join('');
+        const hist = ks.map(H);
+        rows += `<div class="l">60 min</div>` + hist.map((h, n) => { const x = h.filter(v => v !== null);
+          return `<div class="h">${x.length ? fmt(ks[n], Math.min(...x)) + '–' + fmt(ks[n], Math.max(...x)) : '–'}</div>`; }).join('');
+        let extra = '';
+        if (q === 'i') {   // against the PLN per-phase limit (contract kVA / 3 / contract voltage), else the breaker
+          const mx = Math.max(...cur.filter(v => v !== null));
+          const pln = prof.contracted_kva && prof.contract_v_ln ? prof.contracted_kva * 1000 / 3 / prof.contract_v_ln : null;
+          if (pln) extra = meter(mx / pln, `of the ${pln.toFixed(0)} A PLN phase limit (highest phase)`);
+          else if (prof.rated_a) extra = meter(mx / prof.rated_a, `of the ${prof.rated_a} A main breaker (highest phase)`);
+        }
+        if (q === 'v' && prof.nominal_v) extra = `<div class="range">nominal ${prof.nominal_v} V</div>`;
+        ph += `<div class="card"><div class="k">${title} (${unitOf(ks[0])})</div><div class="phase">${rows}</div>${extra}
+          ${spark(ks.map((k, n) => ({key: k, name: 'L' + (n + 1), color: C[n], pts: hist[n]})), times, {tall: true})}</div>`;
+      }
+      if (ph) html += `<h2>Per phase${meters.length > 1 ? ' · ' + esc(M) : ''}</h2><div class="grid wide">${ph}</div>`;
+    }
+
+    // Environment: each sensor, then the room-minus-outdoor difference and the outdoor dew point
+    const ths = [...new Set(keys.map(k => k.split('_')[0]).filter(p => /^TH\d+$/.test(p)))];
+    let env = '';
+    for (const S of ths) for (const q of ['t', 'rh']) {
+      const k = `${S}_${q}`; if (!has(k)) continue; used.add(k);
+      env += card(L(k, `${S} ${q}`), k, V(k), H(k), times);
+    }
+    if (has('TH1_t') && has('TH2_t')) {
+      const diff = d.history.map(h => { const a = num(h.values.TH1_t), b = num(h.values.TH2_t); return a !== null && b !== null ? a - b : null; });
+      const now = V('TH1_t') !== null && V('TH2_t') !== null ? V('TH1_t') - V('TH2_t') : null;
+      env += card('Room minus outdoor', 'TH_t', now, diff, times);
+    }
+    if (has('TH2_t') && has('TH2_rh')) {
+      const dp = d.history.map(h => dewPoint(num(h.values.TH2_t), num(h.values.TH2_rh)));
+      env += card('Outdoor dew point', 'TH_t', dewPoint(V('TH2_t'), V('TH2_rh')), dp, times,
+        V('TH1_t') !== null ? `<div class="range">electrical room is ${(V('TH1_t') - dewPoint(V('TH2_t'), V('TH2_rh'))).toFixed(1)} °C above it</div>` : '');
+    }
+    if (env) html += `<h2>Environment${Object.keys(sensors).length ? ` <span style="text-transform:none;letter-spacing:0">· ${Object.entries(sensors).map(([k, v]) => `${esc(k)} ${esc(v)}`).join(' · ')}</span>` : ''}</h2><div class="grid">${env}</div>`;
+
+    // Any other value listed in site.json
+    const rest = keys.filter(k => !used.has(k));
+    if (rest.length) html += `<h2>Other values</h2><div class="grid">${rest.map(k => card(L(k), k, V(k), H(k), times)).join('')}</div>`;
+
+    // The logger itself
+    const rssi = num(sys.rssi), q = rssi === null ? '' : rssi >= -60 ? 'good' : rssi >= -70 ? 'fair' : 'weak';
+    const up = num(sys.up_s);
+    html += `<h2>Logger</h2><div class="card"><div class="facts">
+      <div>Logger<b>${esc(dev)}</b></div>
+      <div>Last reading (hotel time)<b>${localTime(d.last.ts, off).slice(0, 10)} ${localTime(d.last.ts, off, false)}</b></div>
+      <div>WiFi signal<b>${rssi === null ? '–' : `${rssi} dBm <span class="${q === 'weak' ? 'bad' : ''}" style="font-weight:400">${q}</span>`}</b></div>
+      <div>Upload backlog<b class="${(num(sys.backlog_min) || 0) > 60 ? 'bad' : ''}">${esc(sys.backlog_min ?? '–')} min</b></div>
+      <div>SD card<b>${sys.sd === undefined ? '–' : sys.sd ? 'OK' : '<span class="bad">missing</span>'}</b></div>
+      <div>Firmware<b>${esc(sys.fw ?? '–')}</b></div>
+      ${up !== null ? `<div>Running for<b>${up >= 86400 ? Math.floor(up / 86400) + ' d ' : ''}${Math.floor(up % 86400 / 3600)} h ${Math.floor(up % 3600 / 60)} min</b></div>` : ''}
+    </div></div>`;
+  }
+
+  // The alarm log last
   try {
     const lj = await (await fetch(`/api/v1/alarms/${site}`, {cache: 'no-store'})).json();
     const rows = lj.log.slice(-20).reverse();
-    log = '<h2>Alarm log (last 20, local time)</h2><table class="log"><tr><th>Time</th><th>Alarm</th><th>State</th><th>Value</th><th>Message</th></tr>';
-    for (const r of rows) {
-      const c = r.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(x => x.replace(/,$/, '').replace(/^"|"$/g, '').replace(/""/g, '"'));
-      log += `<tr><td>${esc(c[1])}</td><td>${esc(c[3])} ${esc(c[4])}</td><td>${esc(c[6])}</td><td>${esc(c[7])} ${esc(c[9])}</td><td>${esc(c[11])}</td></tr>`;
+    html += `<h2>Alarm log · last 20, hotel time</h2>`;
+    if (!rows.length) html += '<div class="card k">Nothing logged yet.</div>';
+    else {
+      html += '<table><tr><th>Time</th><th>Alarm</th><th>State</th><th>Value</th><th class="hide-s">Message</th></tr>';
+      for (const r of rows) {
+        const c = r.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(x => x.replace(/,$/, '').replace(/^"|"$/g, '').replace(/""/g, '"'));
+        html += `<tr><td>${esc(c[1])}</td><td>${esc(c[3])} ${esc(c[4])} <span class="sev ${esc(c[5])}">${esc(c[5])}</span></td><td>${esc(c[6])}</td>
+          <td>${esc(c[7])} ${c[9] === 'event' ? '' : esc(c[9])}</td><td class="hide-s">${esc(c[11])}</td></tr>`;
+      }
+      html += '</table>';
     }
-    log += '</table>';
   } catch (e) {}
-  el('content').innerHTML = top + html + log;
-  if (!devs.length) { el('status').innerHTML = '<span class="bad">No live data</span>'; return; }
-  el('status').innerHTML = worst < 60 ? `<span class="ok">Live, updated ${worst} s ago</span>`
-                                      : `<span class="bad">No data for ${Math.round(worst / 60)} min</span>`;
+  html += `<div class="foot">Refreshed every ${(prof.live && prof.live.refresh_s) || 15} s. The last 60 minutes are kept in memory only: a restart of the service empties them. History: <a href="/">Open Energy Dashboard</a>.</div>`;
+  el('content').innerHTML = html;
+
+  const clock = `Hotel time ${localTime(new Date(Date.now()).toISOString(), off, false).slice(0, 5)}`;
+  el('status').innerHTML = (!devs.length ? '<span class="pill bad"><i></i>No live data</span>'
+    : worst < 60 ? `<span class="pill live"><i></i>Live · updated ${worst} s ago</span>`
+    : `<span class="pill bad"><i></i>No data for ${Math.round(worst / 60)} min</span>`) + `<span>${clock}</span>`;
 }
 
 async function loadAll() {
   const j = await (await fetch('/api/v1/status', {cache: 'no-store'})).json();
-  let html = '<table><tr><th>Site</th><th>Logger</th><th>Last record (UTC)</th><th>Live</th><th>Firmware</th></tr>';
+  document.title = 'Live: all sites';
+  el('title').textContent = 'All sites · Live';
+  let html = '<h2>Sites and loggers</h2><table><tr><th>Site</th><th>Logger</th><th>Power now</th><th>Live</th><th class="hide-s">Last record (UTC)</th><th class="hide-s">Firmware</th></tr>';
   for (const [s, devs] of Object.entries(j.sites)) {
+    let live = {};
+    try { live = (await (await fetch(`/api/v1/live/${s}`, {cache: 'no-store'})).json()).devices || {}; } catch (e) {}
     for (const [dev, d] of Object.entries(devs)) {
-      const live = d.live_age_s === null ? '<span class="bad">none</span>'
-                 : d.live_age_s < 60 ? `<span class="ok">${d.live_age_s} s ago</span>` : `<span class="bad">${Math.round(d.live_age_s / 60)} min ago</span>`;
-      html += `<tr><td><a href="/live/${esc(s)}/">${esc(s)}</a></td><td>${esc(dev)}</td><td>${esc(d.last_record || '-')}</td><td>${live}</td><td>${esc(d.fw || '-')}</td></tr>`;
+      const p = num(live[dev]?.last?.values?.EM01_p);
+      const st = d.live_age_s === null ? '<span class="bad">none</span>'
+        : d.live_age_s < 60 ? `<span class="ok">● ${d.live_age_s} s ago</span>` : `<span class="bad">● ${Math.round(d.live_age_s / 60)} min ago</span>`;
+      html += `<tr><td><a href="/live/${esc(s)}/"><b>${esc(s)}</b></a></td><td>${esc(dev)}</td><td>${p === null ? '–' : p.toFixed(1) + ' kW'}</td>
+        <td>${st}</td><td class="hide-s">${esc(d.last_record || '–')}</td><td class="hide-s">${esc(d.fw || '–')}</td></tr>`;
     }
   }
-  el('content').innerHTML = html + '</table>';
-  el('status').textContent = `All sites, ${j.time}`;
+  el('content').innerHTML = html + '</table><div class="foot">Click a site for its live page. History: <a href="/">Open Energy Dashboard</a>.</div>';
+  el('status').innerHTML = `<span class="pill"><i></i>${esc(j.time.replace('T', ' ').replace('Z', ' UTC'))}</span>`;
 }
 
 async function tick() {
   try { await (site ? loadSite() : loadAll()); }
-  catch (e) { el('status').innerHTML = '<span class="bad">Server not reachable</span>'; }
+  catch (e) { el('status').innerHTML = '<span class="pill bad"><i></i>Server not reachable</span>'; }
 }
 tick();
 setInterval(tick, 15000);

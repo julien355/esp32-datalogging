@@ -203,7 +203,9 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------ pieces
     def public_profile(self, site):
         p = self.store.site_profile(site)
-        return {k: p.get(k) for k in ("name", "timezone", "utc_offset_h", "labels", "live") if k in p}
+        keys = ("name", "timezone", "utc_offset_h", "labels", "live", "sensors", "contracted_kva", "contract_v_ln", "rated_a",
+                "nominal_v")
+        return {k: p.get(k) for k in keys if k in p}
 
     def status(self):
         out = {"time": iso_now(), "sites": {}}

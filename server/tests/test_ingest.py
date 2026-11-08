@@ -280,6 +280,10 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(code, 204)
         code, body = self.req("GET", "/api/v1/live/adab")
         self.assertEqual(json.loads(body)["devices"]["LOG-0001"]["last"]["values"]["EM01_p"], 12.3)
+        prof = json.loads(body)["profile"]   # what the live page needs, and nothing private
+        self.assertIn("sensors", prof)
+        self.assertEqual(prof["nominal_v"], 230)
+        self.assertNotIn("devices", prof)
         code, body = self.req("GET", "/api/v1/status")
         self.assertEqual(json.loads(body)["sites"]["adab"]["LOG-0001"]["last_record"], ts(1))
         code, body = self.req("GET", "/live/adab/")

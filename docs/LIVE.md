@@ -47,11 +47,16 @@ Default for Adab:
 - A restart empties the 60 minutes; they refill as snapshots arrive.
 - The live alarms (A04 phase lost, A07 frequency) are checked on the snapshots, so they react within 15 to 30 s.
 
-**Live page `/live/<site>/`:**
-- Big tiles for the chosen values, each with a 60-minute sparkline.
-- A status line: "Live, updated 4 s ago", or "No data for 2 min" in red.
-- The open alarms.
-- Links to the site's OED graphs.
+**Live page `/live/<site>/`** (layout of the dashboard mockup, `docs/mockup/`, approved 8 November 2026):
+- A navy header: site name, a status pill ("Live · updated 4 s ago", or "No data for 2 min" in red), the hotel time, and links to **History (OED)** and **All sites**.
+- The open alarms first (severity icon, label and colour), or "No open alarm".
+- **Power:** total kW, kVA with a bar against the PLN contract (`contracted_kva`), power factor, frequency.
+- **Per phase:** one card for the three voltages and one for the three currents, each with a 3-line sparkline (L1 blue, L2 orange, L3 green); the current card has a bar against the PLN per-phase limit (`contracted_kva` / 3 / `contract_v_ln`, 125 A at Adab).
+- **Environment:** each sensor's temperature and humidity, the room-minus-outdoor difference and the outdoor dew point (same formula as the alarms).
+- Every value card: the value rounded for reading, its 60-minute range and sparkline; hover a sparkline for the values at that time.
+- **Logger:** last reading, WiFi signal, backlog, SD card, firmware, running time. Then the alarm log (last 20, hotel time).
+- Values listed in `site.json` that the page does not group are shown under "Other values", so adding one needs no code.
+- Not yet: the time of the last push to OED (the push service is not written yet).
 - Plain HTML and a few lines of JavaScript that fetch the JSON every 15 s; no chart library.
 - Behind the same login as OED (`hub-users.caddy`).
 - Readable on a phone.

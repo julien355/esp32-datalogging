@@ -218,13 +218,14 @@ const S = [
      Click the site to open its live page.`,
    html: () => `<img class="shot" src="img/live-all.png" alt="Live start page with the list of sites">`},
   {grp: 'Live pages (ingest service)', id: 'live-adab', name: 'Adab: live now', url: '/live/adab/',
-   note: `<b>What is happening now, refreshed every 15 s.</b> Open alarms first, then the logger's status line (time, WiFi signal, backlog,
-     firmware), one tile per live value with its last 60 minutes, and the alarm log in hotel time. The values come from
+   note: `<b>What is happening now, refreshed every 15 s.</b> Open alarms first, then power (with the load against the PLN contract), the three phases,
+     temperature and humidity with the room-minus-outdoor difference and the dew point, the logger's health, and the alarm log in hotel time.
+     Each value has its last 60 minutes; hover a sparkline for the values. The values come from
      <code>site.json</code> and can change without code. Readable on a phone (right).
      <ul><li>The log here shows the simulated test events: a voltage dip on L2 (A26) with 6 minutes of undervoltage (A05) and the backlog warning while 14 days of records were uploaded (A16).</li>
      <li>Screenshot of the real page <code>server/app/live.html</code> served by the local ingest service, fed by the simulated logger.</li>
-     <li><b>Still missing against <code>docs/LIVE.md</code>:</b> values rounded for reading (229.5 V, not 229.497), the room-minus-outdoor
-       difference and outdoor dew point, the time of the last push to OED, and the links to the site's OED graphs.</li></ul>`,
+     <li><b>Approved 8 November 2026 as the design of <code>/live/adab/</code></b>; the page now in <code>server/app/live.html</code> is shown here.
+       Only the time of the last push to OED is still missing (the push service is not written yet).</li></ul>`,
    html: () => `<div class="pair"><div><img class="shot" src="img/live-adab.png" alt="Live page of Adab hotel"></div>
      <div><div class="phone"><img src="img/live-adab-phone.png" alt="Live page on a phone"></div><div class="cap">Same page on a phone (390 px wide)</div></div></div>`},
   {grp: 'Open Energy Dashboard (history)', id: 'oed-kw', name: 'Power over two weeks', url: '/',
