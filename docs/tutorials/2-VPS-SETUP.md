@@ -853,7 +853,7 @@ The Adab values (owner, 7 November 2026): PLN 3-phase, 82.5 kVA contract, 200 A 
 **Where:** VPS, user ai, in `/opt/arkan-monitoring/server`.
 
 ```bash
-docker compose exec ingest python tools/manage.py add-site adab --name "Adab hotel" --contracted-kva 82.5 --rated-a 200
+docker compose exec ingest python tools/manage.py add-site adab --name "Adab hotel" --contracted-kva 82.5 --rated-a 200 --lat -8.4766 --lon 115.4319
 ```
 
 **Expected:** `site adab created: /data/sites/adab/site.json`.
@@ -1971,7 +1971,7 @@ VPS commands with `docker compose` run in `/opt/arkan-monitoring/server`. `manag
 | Restart, stop, start (owner approves) | VPS | `docker compose restart ingest`, `docker compose stop ingest`, `docker compose start ingest` |
 | Current tag | VPS | `git -C /opt/arkan-monitoring describe --tags` |
 | Prepare data folder and register | VPS | `manage.py init` |
-| Add a site | VPS | `manage.py add-site adab --name "Adab hotel" --contracted-kva 82.5 --rated-a 200` |
+| Add a site | VPS | `manage.py add-site adab --name "Adab hotel" --contracted-kva 82.5 --rated-a 200 --lat -8.4766 --lon 115.4319` |
 | Add a logger (owner) | VPS | `manage.py add-device adab LOG-0001 [--sd-settings /data/export/settings-LOG-0001.txt] [--server <url>]` |
 | New token (owner) | VPS | `manage.py rotate-token LOG-0001` |
 | Disable or enable a logger | VPS | `manage.py disable-device LOG-0001`, `manage.py enable-device LOG-0001` |

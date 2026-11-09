@@ -50,17 +50,23 @@ The log CSV from the page adds `fc_temp_c`, `fc_precip_mm`, `fc_precip_prob_pct`
 
 ## Turning it on for a site
 
-Weather is off until the site has a position. On the VPS (decimal degrees, south and west negative; take them from Google Maps, right click on the building):
+Weather is off until the site has a position. On the VPS (decimal degrees, south and west negative; take them from Google Maps, right click on the building).
+
+**Adab** (Adab Sidemen Resort, Sidemen, Karangasem; Google Maps pin -8.4766088, 115.4318855):
 
 ```bash
 cd /opt/arkan-monitoring/server
-docker compose exec ingest python tools/manage.py weather adab --lat -8.xxxx --lon 115.xxxx
+docker compose exec ingest python tools/manage.py weather adab --lat -8.4766 --lon 115.4319
 ```
+
+Open-Meteo uses its nearest grid point (-8.4710, 115.4381, about 600 m away) and corrects the temperature to 480 m
+elevation, the valley's height: expect about 2 °C cooler than Ubud or the coast. Checked on 9 November 2026: 21.6 to
+29.6 °C, thunderstorm, 8.5 mm of rain.
 
 This writes the position in `sites/adab/site.json`, fetches once and prints today, tomorrow and the log count. The service then fetches every hour by itself; the page has the Weather menu at once.
 
 ```json
-"weather": {"lat": -8.xxxx, "lon": 115.xxxx, "dayahead_hour": 18, "model": "best_match", "enabled": true}
+"weather": {"lat": -8.4766, "lon": 115.4319, "dayahead_hour": 18, "model": "best_match", "enabled": true}
 ```
 
 Other options of `manage.py weather <site>`:
@@ -68,6 +74,9 @@ Other options of `manage.py weather <site>`:
 - `--model ecmwf_ifs025`: one model instead of Open-Meteo's best blend (names on open-meteo.com);
 - `--off`: stop fetching (the logs are kept); give `--lat/--lon` again to turn it back on;
 - `--no-fetch`: only show the forecast and the log.
+
+Changing the position later does not clear the logs: rows before the change are for the old position. Move or rename
+`sites/<site>/weather/actual-*.csv` and `dayahead-*.csv` first if the old position was wrong.
 
 New sites: `manage.py add-site <code> ... --lat .. --lon ..` sets it at once.
 

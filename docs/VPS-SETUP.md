@@ -102,7 +102,7 @@ docker compose exec ingest python tools/manage.py init
 ## 6. Site and logger
 
 ```bash
-cd /opt/arkan-monitoring/server && docker compose exec ingest python tools/manage.py add-site adab --name "Adab hotel" --contracted-kva 82.5 --rated-a 200
+cd /opt/arkan-monitoring/server && docker compose exec ingest python tools/manage.py add-site adab --name "Adab hotel" --contracted-kva 82.5 --rated-a 200 --lat -8.4766 --lon 115.4319
 ```
 
 ```bash
