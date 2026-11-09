@@ -133,7 +133,7 @@ Positions below are for the top photo above, with the USB-C connector on the lef
 | **I2C (OLED)** header (4 pins) | Bottom edge, under the blue module | Optional small display, not used | |
 | **ADS1115** | Top right corner (silkscreen `ADS1115`) | 4-channel analog input, spare | I2C 0x48 expected |
 | **GPIO header** (two rows) | Right side, beside the green terminals | Pins of the ESP32-S3: numbers, `GND`, `3V3`, `5V` | `TH2` data on **GPIO 1** (confirmed) |
-| **Green screw terminals** | Right edge: a long block and a 3-way block | Field wiring. The 3-way block near the `120` jumper is probably the **RS485 A, B, G** terminal | Which terminal is A, B and G: **to verify** on the board (drawing (c) note 5) |
+| **Green screw terminals** | Right edge: a 3-way block and a long block | Field wiring. The **3-way block**, beside the RS485 chip and the `120` jumper, is the RS485 terminal, printed **A+, B-, GND**. The **long block** is printed **5V, 3V3, IO2, IO1, A1, A0** (IO = ESP32 GPIO; A0, A1 = ADS1115 inputs) | Labels seen on the board 9 November 2026. On the bench the AM2301 is on `3V3`, `IO1` and the `GND` of the 3-way block |
 | **RS485 transceiver** (8-pin chip) | Bottom right, beside the `120` jumper | Turns the ESP32's serial signals into the RS485 pair | TX/RX/DE GPIOs **unknown, to verify** (T2) |
 | **`120` jumper** | Bottom right, silkscreen `120` | Connects a 120 ohm termination resistor across A and B | **ON** at the logger (the logger is one end of the bus) |
 | **TX / RX LEDs** | Bottom right corner | Blink when RS485 data goes out / comes in (PLAN section 2) | **to verify** |

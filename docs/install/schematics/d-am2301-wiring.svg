@@ -7,13 +7,13 @@
 
   <!-- Board -->
   <rect x="20" y="80" width="420" height="330" fill="#f7f7f7" stroke="#000" stroke-width="2"/>
-  <text x="32" y="102" font-weight="bold">Bluino board header (logger box)</text>
+  <text x="32" y="102" font-weight="bold">Bluino board terminals (logger box)</text>
   <rect x="40" y="130" width="140" height="200" fill="#fff" stroke="#000" stroke-width="2"/>
   <text x="50" y="152" font-weight="bold">ESP32-S3</text>
-  <text x="50" y="186" font-size="12">3V3 pin</text>
-  <text x="50" y="246" font-size="12">GPIO 1 (DATA)</text>
-  <text x="50" y="262" font-size="11" font-style="italic">proposed, to verify</text>
-  <text x="50" y="306" font-size="12">GND pin</text>
+  <text x="50" y="186" font-size="12">3V3 terminal</text>
+  <text x="50" y="246" font-size="12">IO1 = GPIO 1 (DATA)</text>
+  <text x="50" y="262" font-size="11" font-style="italic">confirmed 9 Nov 2026</text>
+  <text x="50" y="306" font-size="12">GND terminal or pin</text>
 
   <!-- rails -->
   <line x1="180" y1="182" x2="440" y2="182" stroke="#000" stroke-width="3"/>
