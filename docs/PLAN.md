@@ -69,7 +69,7 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 |---|---|
 | I2C SDA / SCL | 8 / 9 |
 | SD SCK / MISO / MOSI / CS | 12 / 13 / 11 / 10 or 21 |
-| RS485 TX / RX / DE-RE | top 3 rows of the back table, to verify |
+| RS485 TX / RX / DE-RE | **17 / 18 / none** from the board's pin table (9 Nov 2026); to confirm with a Modbus answer |
 | AM2301 data | **GPIO 1** (free on the header, not a strapping pin); confirmed on the board 8 Nov 2026 |
 
 **The AM2301 (`TH2`)**

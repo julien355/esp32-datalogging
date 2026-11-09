@@ -182,7 +182,7 @@ From `docs/PLAN.md` section 2, read from photos of the board (`docs/img/board-to
 | I2C SDA / SCL | 8 / 9 | to verify in Lab 1 |
 | SD SCK / MISO / MOSI | 12 / 13 / 11 | to verify in Lab 1 (the "SPI INTERFACE" header reads GND 3V3 12 13 11 21) |
 | SD CS | 10 or 21 | to verify in Lab 1 |
-| RS485 TX / RX / DE-RE | top 3 rows of the back table | to verify in Lab 1, by reading the back silkscreen and by the Lab 3 echo test |
+| RS485 TX / RX / DE-RE | TX 17, RX 18, no DE (board's pin table, 9 Nov 2026) | to confirm by the Lab 3 test (a Modbus answer) |
 | AM2301 data (`TH2`) | 4 (proposed: free on the header, not a strapping pin) | to verify in Lab 1 and Lab 2 |
 
 ---

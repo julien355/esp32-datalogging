@@ -11,11 +11,11 @@
 
   <rect x="40" y="120" width="160" height="210" fill="#f2f2f2" stroke="#000" stroke-width="2"/>
   <text x="50" y="142" font-weight="bold">ESP32-S3</text>
-  <text x="50" y="186" font-size="12">TX    GPIO ____</text>
-  <text x="50" y="216" font-size="12">RX    GPIO ____</text>
-  <text x="50" y="246" font-size="12">DE/RE GPIO ____</text>
+  <text x="50" y="186" font-size="12">TX    GPIO 17</text>
+  <text x="50" y="216" font-size="12">RX    GPIO 18</text>
+  <text x="50" y="246" font-size="12">DE/RE none (auto)</text>
   <text x="50" y="276" font-size="12">GND</text>
-  <text x="50" y="304" font-size="11" font-style="italic">GPIOs: TO VERIFY</text>
+  <text x="50" y="304" font-size="11" font-style="italic">GPIOs: board table, to confirm</text>
   <text x="50" y="318" font-size="11" font-style="italic">(back silkscreen, Lab 1)</text>
 
   <rect x="240" y="150" width="100" height="150" fill="#fff" stroke="#000" stroke-width="2"/>
@@ -137,6 +137,6 @@
   <text x="40" y="612" font-size="12">2. Termination only at the two physical ends of the bus. A device in the middle never has a 120 ohm resistor.</text>
   <text x="40" y="630" font-size="12">3. A and B names differ between makers. If the meter does not answer and everything else is right, swap A and B once (this does no damage).</text>
   <text x="40" y="648" font-size="12">4. Shield bonded at one end only, so no ground loop current flows in it. Never use the shield as the signal ground.</text>
-  <text x="40" y="666" font-size="12">5. RS485 GPIO numbers and the meter's terminal numbers are TO VERIFY (Lab 1 and Lab 3). Board terminals A+, B-, GND: seen 9 Nov 2026.</text>
+  <text x="40" y="666" font-size="12">5. RS485 GPIOs 17/18 from the board's table and the meter's terminal numbers: TO CONFIRM (Lab 3). Board terminals A+, B-, GND: seen 9 Nov 2026.</text>
   <text x="40" y="684" font-size="12">6. Drawn for clarity, not to scale. The transceiver's internal pins (DI, RO, DE, /RE) are shown to explain the circuit; they are not wired by students.</text>
 </svg>
