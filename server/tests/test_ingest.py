@@ -299,6 +299,36 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn("<title>Live</title>", body)
 
+    def test_live_saved_and_restored(self):
+        # every snapshot is saved in the data folder: another dashboard reads the same data, a restart keeps it
+        for i in range(3):
+            snap = {"ts": ts(0), "values": {"EM01_p": 10.0 + i}, "sys": {"rssi": -60}}
+            self.assertEqual(self.req("POST", "/api/v1/live", json.dumps(snap), self.token, "application/json")[0], 204)
+        dev_dir = os.path.join(self.data, "sites", "adab", "LOG-0001")
+        with open(os.path.join(dev_dir, "live.json")) as f:
+            last = json.load(f)
+        self.assertEqual((last["values"]["EM01_p"], last["device"]), (12.0, "LOG-0001"))
+        self.assertTrue(last["recv"].endswith("Z"))
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        code, body = self.req("GET", f"/api/v1/live/adab/day/{day}")
+        self.assertEqual(code, 200, body)
+        self.assertEqual([x["values"]["EM01_p"] for x in json.loads(body)["snapshots"]], [10.0, 11.0, 12.0])
+        self.assertEqual(self.req("GET", f"/api/v1/live/adab/day/{day}?device=LOG-9")[0], 404)
+        # a new service on the same folder (restart, update) has the last 60 minutes at once
+        live2 = server_mod.Live(DataStore(self.data))
+        hist = live2.site("adab")["LOG-0001"]["history"]
+        self.assertEqual([h["values"]["EM01_p"] for h in hist], [10.0, 11.0, 12.0])
+        # old day files go, today's stays
+        old = os.path.join(dev_dir, "live", "2020-01-01.jsonl")
+        open(old, "w").close()
+        live2.prune()
+        self.assertFalse(os.path.exists(old))
+        self.assertTrue(os.path.exists(os.path.join(dev_dir, "live", day + ".jsonl")))
+        # LIVE_KEEP_DAYS=0: memory only, nothing written
+        mem = server_mod.Live(DataStore(self.data), keep_days=0)
+        mem.add("adab", "LOG-0002", {"ts": ts(0), "values": {}})
+        self.assertFalse(os.path.exists(os.path.join(self.data, "sites", "adab", "LOG-0002")))
+
     def test_history(self):
         # 6 minutes, the counter going up 0.5 kWh a minute: 2.5 kWh between the first and the last record
         rows = [row(ts(m), e=1000 + (5 - m) * 0.5) for m in range(5, -1, -1)]

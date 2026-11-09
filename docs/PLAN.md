@@ -246,7 +246,7 @@ POST /api/v1/ingest   Authorization: Bearer <device-token>
   - **OED stores times without a timezone**: the push sends WITA local time (UTC+8, no daylight saving). Our files stay in UTC.
   - **OED is not a live view.** Readings appear after each push (5 minutes) and daily graphs after its view refresh. The "now" values and the logger's health are on the live page of the ingest service, refreshed every 15 s.
   - The push is idempotent: it keeps, per site and meter, the last time sent, and can resend a whole day from the files.
-- **Live page** (`/live/` for all sites, `/live/<site>/` per site): the values listed in `site.json`, refreshed every 15 s, with a 60-minute sparkline, the logger's status (online, backlog, last push to OED), the open alarms and links to OED. Snapshots are kept in memory only (`docs/LIVE.md`).
+- **Live page** (`/live/` for all sites, `/live/<site>/` per site): the values listed in `site.json`, refreshed every 15 s, with a 60-minute sparkline, the logger's status (online, backlog, last push to OED), the open alarms and links to OED. Snapshots: the last 60 minutes in memory, every snapshot also saved for 7 days (`docs/LIVE.md`, `docs/DATA-ACCESS.md`).
 - **History pages** on the same site page (side menu): power, one day, energy per day, this week vs last, temperature and humidity, from the day files through `/api/v1/history/<site>` (`docs/LIVE.md`).
 - **Device API:** config and OTA for the loggers.
 - **Alerts:** checked against the **alarm register** `alarms.csv` (`docs/alarms/`): 20 alarms to start, each with its threshold, delay, severity and a **`whatsapp` yes/no** column. A per-site copy in the site folder can override a line.

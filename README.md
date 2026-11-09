@@ -11,6 +11,7 @@ reading a FORT FCN300 (3E4Y or 3EH4Y, same registers) meter over Modbus RTU. Pil
 - **Updating the VPS and the loggers** (and what the 8 November 2026 release needs): [`docs/UPDATING.md`](docs/UPDATING.md)
 - Site page `/live/<site>/`: live data every 15 s, history pages, meter register page, firmware update: [`docs/LIVE.md`](docs/LIVE.md). Design mockup: [`docs/mockup/`](docs/mockup/)
 - **Weather** on the site page: today's forecast hour by hour, tomorrow's forecast, and a log of the actual weather against the forecast and the outdoor sensor (Open-Meteo, no key): [`docs/WEATHER.md`](docs/WEATHER.md)
+- **One server, one data folder:** where every piece of data is (live, records, alarms, weather) and how a second dashboard reads it at the same time: [`docs/DATA-ACCESS.md`](docs/DATA-ACCESS.md)
 - Keeping RAM low on the VPS: [`docs/VPS-MEMORY.md`](docs/VPS-MEMORY.md)
 - Hardware photos and original sketch: [`docs/img/`](docs/img/)
 - **Logger firmware** (PlatformIO, ESP32-S3): [`firmware/`](firmware/). Functions and every setting: [`docs/FIRMWARE.md`](docs/FIRMWARE.md)

@@ -323,15 +323,16 @@ class Weather:
             st = os.stat(path)
         except FileNotFoundError:
             return []
-        hit = self._cache.get(path)
-        if hit and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
-            return hit[2]
-        with self.lock, open(path, encoding="utf-8", newline="") as f:
-            rows = [r for r in csv.DictReader(f) if r.get("t") and len(r["t"]) == 16]
-        self._cache[path] = (st.st_mtime_ns, st.st_size, rows)
-        if len(self._cache) > 64:
-            self._cache.pop(next(iter(self._cache)))
-        return rows
+        with self.lock:   # several dashboards and pages read at the same time
+            hit = self._cache.get(path)
+            if hit and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
+                return hit[2]
+            with open(path, encoding="utf-8", newline="") as f:
+                rows = [r for r in csv.DictReader(f) if r.get("t") and len(r["t"]) == 16]
+            self._cache[path] = (st.st_mtime_ns, st.st_size, rows)
+            if len(self._cache) > 64:
+                self._cache.pop(next(iter(self._cache)))
+            return rows
 
     def local_now(self, site):
         fc = self.forecast(site)

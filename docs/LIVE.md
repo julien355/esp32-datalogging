@@ -42,9 +42,10 @@ Default for Adab:
 - Data use: about 2 MB a day on the hotel WiFi.
 
 **Ingest service:**
-- Keeps the last snapshot and the **last 60 minutes** (240 points) per site **in memory only**: a few kB per site.
+- Keeps the last snapshot and the **last 60 minutes** (240 points) per site in memory for the page: a few kB per site.
+- **Since 0.5.0 every snapshot is also saved** in the data folder, so a second dashboard reads the same live data ([`DATA-ACCESS.md`](DATA-ACCESS.md)): `sites/<site>/<device>/live.json` (the last snapshot) and `live/YYYY-MM-DD.jsonl` (every snapshot of the UTC day, kept 7 days, `LIVE_KEEP_DAYS`). About 3 MB a day per logger (22 MB for 7 days); `LIVE_KEEP_DAYS=0` goes back to memory only.
 - Serves `/api/v1/live/<site>` (JSON) and the page `/live/<site>/`.
-- A restart empties the 60 minutes; they refill as snapshots arrive.
+- After a restart or an update the 60 minutes are read back from the saved snapshots: the page is full at once.
 - The live alarms (A04 phase lost, A07 frequency) are checked on the snapshots, so they react within 15 to 30 s.
 
 **Live page `/live/<site>/`** (layout of the dashboard mockup, `docs/mockup/`, approved 8 November 2026):

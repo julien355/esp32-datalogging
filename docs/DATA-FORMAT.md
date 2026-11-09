@@ -35,6 +35,8 @@ sites/adab/LOG-0001/raw/2026/11/2026-11-07.csv same file as on the SD card (same
 sites/adab/LOG-0001/events.jsonl               boots and their reason, firmware changes, settings sent/applied, column changes, backfills
 sites/adab/LOG-0001/config.json                settings sent to the logger (manage.py set-config)
 sites/adab/LOG-0001/settings-reported.json     settings the logger reported after its last boot
+sites/adab/LOG-0001/live.json                  the last 15 s live snapshot (docs/LIVE.md)
+sites/adab/LOG-0001/live/2026-11-09.jsonl      every 15 s live snapshot of that UTC day, kept 7 days
 sites/adab/alarms/2026.csv                     alarm and warning log of the site (docs/alarms/README.md)
 alarm-register.csv                             the alarm register in use (Excel)
 sites/adab/daily.csv                           one row per WITA day (manage.py daily)

@@ -154,7 +154,7 @@ cd /opt/arkan-monitoring/server && docker compose stop ingest
 ```
 
 ```bash
-sudo rm -r /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw /srv/arkan-monitoring/data/sites/adab/LOG-0001/alarm-state.json /srv/arkan-monitoring/data/sites/adab/alarms
+sudo rm -rf /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw /srv/arkan-monitoring/data/sites/adab/LOG-0001/alarm-state.json /srv/arkan-monitoring/data/sites/adab/alarms /srv/arkan-monitoring/data/sites/adab/LOG-0001/live /srv/arkan-monitoring/data/sites/adab/LOG-0001/live.json
 ```
 
 ```bash

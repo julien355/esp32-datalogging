@@ -318,7 +318,7 @@ async function loadSite() {
       html += '</table>';
     }
   } catch (e) {}
-  html += `<div class="foot">Refreshed every ${(prof.live && prof.live.refresh_s) || 15} s. The last 60 minutes are kept in memory only: a restart of the service empties them. Longer periods: the History pages in the menu.</div>`;
+  html += `<div class="foot">Refreshed every ${(prof.live && prof.live.refresh_s) || 15} s. Every snapshot is also saved on the server (7 days). Longer periods: the History pages in the menu.</div>`;
   if (view === 'now') el('content').innerHTML = html;
 
   const clock = `Hotel time ${localTime(new Date(Date.now()).toISOString(), off, false).slice(0, 5)}`;

@@ -24,6 +24,8 @@ services:
       # Weather forecast and log for the sites with lat/lon (docs/WEATHER.md): needs outbound HTTPS to api.open-meteo.com.
       WEATHER: ${WEATHER:-on}
       WEATHER_EVERY_MIN: ${WEATHER_EVERY_MIN:-60}
+      # 15 s live snapshots saved in the data folder for a second dashboard (docs/DATA-ACCESS.md), 0 = memory only.
+      LIVE_KEEP_DAYS: ${LIVE_KEEP_DAYS:-7}
     user: "1000:1000"
     read_only: true                    # the only writable place is /data
     tmpfs:
@@ -35,3 +37,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+# Fixed network name: a second dashboard's container joins it and reads http://arkan-monitoring-ingest:8800
+# (docs/DATA-ACCESS.md). Caddy on the host keeps using 127.0.0.1:8800.
+networks:
+  default:
+    name: arkan-monitoring

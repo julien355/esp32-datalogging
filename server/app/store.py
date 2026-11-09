@@ -11,6 +11,7 @@
       sites/<site>/<device>/registers.json meter register table asked (register page, manage.py set-registers)
       sites/<site>/<device>/registers-history.jsonl   every register table version sent
       sites/<site>/<device>/settings-reported.json    what the logger reported after its last boot
+      sites/<site>/<device>/live.json, live/YYYY-MM-DD.jsonl   15 s live snapshots (server.Live, LIVE_KEEP_DAYS)
       sites/<site>/daily.csv               one row per local day (tools/manage.py daily)
       sites/<site>/weather/                forecast.json, actual-YYYY.csv, dayahead-YYYY.csv (app/weather.py)
 

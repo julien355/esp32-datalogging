@@ -121,7 +121,7 @@ What happens when the logger sends a record:
 2. Caddy sees an `/api/v1/ingest` path, does not ask for a login (a logger cannot type one), limits the size, and passes the request to `127.0.0.1:8800`.
 3. The service checks the token, checks every row, appends the new rows to the day file in `/srv/arkan-monitoring/data/sites/adab/LOG-0001/raw/`, runs the alarm checks, writes any alarm line to `sites/adab/alarms/2026.csv`, and answers `{"ok": true, "stored": ...}`.
 4. If the answer does not come (no WiFi, VPS down), the logger keeps the rows on its SD card and sends them later. Nothing is lost.
-5. Every 15 s the logger also posts a small "live" snapshot. It is kept **in memory only** and shown on the live page.
+5. Every 15 s the logger also posts a small "live" snapshot. It is shown on the live page and saved in the data folder for 7 days (`live.json`, `live/<day>.jsonl`), so another dashboard can read it too.
 
 Where the next parts will plug in:
 - **Open Energy Dashboard** (tutorial 3) will run in its own containers on another loopback port; Caddy's `/` will then go to OED instead of the live page. Until then `/` redirects to `/live/`. The files for OED are made by `manage.py export-oed` (section C12).
@@ -1253,7 +1253,7 @@ ls -l /srv/arkan-monitoring/data/sites/adab /srv/arkan-monitoring/data/sites/ada
 Delete the simulated records, the alarm state and the alarm log ([../VPS-SETUP.md](../VPS-SETUP.md) step 8):
 
 ```bash
-sudo rm -r /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw /srv/arkan-monitoring/data/sites/adab/LOG-0001/alarm-state.json /srv/arkan-monitoring/data/sites/adab/alarms
+sudo rm -rf /srv/arkan-monitoring/data/sites/adab/LOG-0001/raw /srv/arkan-monitoring/data/sites/adab/LOG-0001/alarm-state.json /srv/arkan-monitoring/data/sites/adab/alarms /srv/arkan-monitoring/data/sites/adab/LOG-0001/live /srv/arkan-monitoring/data/sites/adab/LOG-0001/live.json
 ```
 
 Only if they exist (you ran `daily`, `export-oed` or `set-config` during the test), also:
@@ -1916,7 +1916,7 @@ Run the diagnosis commands on the **VPS, user ai, in `/opt/arkan-monitoring/serv
 | **Disk full** | Errors `No space left on device`; `df -h` above 95 % | `df -h /`; `du -sh /srv/arkan-monitoring/*`; `ls -la /srv/arkan-monitoring/data/export/`; `docker system df` | Leftovers in `export/` (SD copies, OED files): remove them. Backups keep 14 automatically. **Never delete day files in `raw/`.** Anything else: the owner (other services share the disk) |
 | **Memory** | VPS slow; container restarted; `docker stats` near 96 MiB | `free -h`; `docker stats --no-stream`; `docker inspect -f '{{.State.OOMKilled}} {{.RestartCount}}' arkan-monitoring-ingest` | `true` = the container hit its 96 MB limit and was stopped (Docker restarts it, the logger resends, nothing is lost). Note the time and the log, tell the owner. Plan and limits: [../VPS-MEMORY.md](../VPS-MEMORY.md) |
 | **Alarm log empty** | `manage.py alarms adab` prints nothing, or no `alarms/` folder | `ls -l /srv/arkan-monitoring/data/sites/adab/alarms/`; `head -n 2 /srv/arkan-monitoring/data/alarm-register.csv` | No records yet (normal before the logger). Register saved by Excel with `;`: every alarm disappears (C6 step 2); put back the copy from `export/`. Rows added by a backfill are not evaluated until `alarms adab --rebuild` (C6) |
-| **Live page shows no data** | `No live data for this site (logger offline or not installed yet).`, or the red pill `No data for N min` | `curl -s http://127.0.0.1:8800/api/v1/live/adab` (look for `"devices": {}`); `docker compose logs --since 5m ingest \| grep live` | Snapshots are kept **in memory only**: after a restart the page is empty until the next snapshot (15 s). No `POST /api/v1/live` lines: the logger does not send live data (tutorial 1). Wrong site code in the address. Note: while there is no live data, the page also hides the open alarms and the log: use `manage.py alarms adab` |
+| **Live page shows no data** | `No live data for this site (logger offline or not installed yet).`, or the red pill `No data for N min` | `curl -s http://127.0.0.1:8800/api/v1/live/adab` (look for `"devices": {}`); `docker compose logs --since 5m ingest \| grep live` | After a restart the page shows the saved snapshots of the last 60 minutes (`sites/adab/LOG-0001/live.json` = the last one; if it is old, the logger stopped sending). No `POST /api/v1/live` lines: the logger does not send live data (tutorial 1). Wrong site code in the address. Note: while there is no live data, the page also hides the open alarms and the log: use `manage.py alarms adab` |
 | **Clock alarm (A18)** | **A18 Clock wrong** in the alarm log; or rows rejected as "in the future" | VPS: `timedatectl` (`System clock synchronized: yes`?); the logger's time in `curl -s http://127.0.0.1:8800/api/v1/live/adab` (`"ts"` of `last`) compared with `date -u` | VPS clock not synchronized: owner. Logger clock wrong: NTP or the RTC on the logger ([../FIRMWARE.md](../FIRMWARE.md), tutorial 1). A18 clears by itself when the clocks agree within 1 minute |
 | **git refuses in /opt/arkan-monitoring** | `detected dubious ownership` or `Permission denied` | `ls -ld /opt/arkan-monitoring` | Owned by root: owner runs `sudo chown -R ai:ai /opt/arkan-monitoring` (B11) |
 | **Docker refuses** | `permission denied while trying to connect to the Docker daemon socket` | `id` | `ai` is not in the `docker` group (B1): owner |
@@ -2036,7 +2036,7 @@ VPS commands with `docker compose` run in `/opt/arkan-monitoring/server`. `manag
 | **HTTP status code** | The 3-digit answer: 200 OK, 204 OK with nothing to say, 308 redirect, 400 bad request, 401 login or token needed, 403 refused, 404 not found, 413 too big, 502 Caddy cannot reach the service |
 | **HTTPS, certificate** | Encrypted web; the certificate proves the server's name. Caddy gets it from Let's Encrypt |
 | **Ingest** | Receiving and storing the logger's records (`/api/v1/ingest`) |
-| **Live snapshot** | The small set of current values the logger posts every 15 s; memory only |
+| **Live snapshot** | The small set of current values the logger posts every 15 s; shown live and saved 7 days |
 | **Loopback (127.0.0.1)** | "This same machine": a port there cannot be reached from the internet |
 | **manage.py** | The admin tool of the service (Part C) |
 | **OED** | Open Energy Dashboard, the history dashboard, installed in tutorial 3 |
