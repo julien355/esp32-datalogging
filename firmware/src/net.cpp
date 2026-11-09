@@ -34,6 +34,12 @@ static volatile bool forceUpload = false, forceOta = false, hintOta = false;
 static uint32_t lastUploadTry = 0, lastOta = 0, authBlockedUntil = 0, liveBlockedUntil = 0;
 static uint32_t nextWifiAttempt = 0, lastStackReset = 0;
 static int wifiAttempts = 0, uploadFailRun = 0, rejectRun = 0, liveFailRun = 0;
+// Backup network: onBackup while connected to wifi_ssid2. Every wifi_main_m minutes the logger
+// looks for the main network and goes back to it when it is seen. The interval doubles after each
+// failed return (up to 16 x wifi_main_m), in case the main network is seen but refuses the logger.
+static bool onBackup = false;
+static uint32_t mainBackMs = 15UL * 60000UL, lastMainCheck = 0;
+static int mainBackFails = 0;
 static uint32_t lastLiveSeq = 0;
 static String lastUploadError = "none yet";
 
@@ -59,6 +65,49 @@ static bool tryConnect(const String &ssid, const String &pass) {
     wdtDelay(250);
   }
   return false;
+}
+
+static bool connectMain(const String &ssid) {
+  if (!ssid.length() || !tryConnect(ssid, cfg::get("wifi_pass"))) return false;
+  onBackup = false;
+  mainBackFails = 0;
+  return true;
+}
+
+static bool connectBackup(const String &ssid) {
+  if (!ssid.length() || !tryConnect(ssid, cfg::get("wifi_pass2"))) return false;
+  onBackup = true;
+  lastMainCheck = millis();   // first look for the main network wifi_main_m minutes from now
+  return true;
+}
+
+// While on the backup network: when the main network is seen again, move back to it. If that fails,
+// straight back to the backup; if the backup fails too, the task loop sees the link down and
+// handleOffline() takes over (main first, then backup).
+static void checkMainBack() {
+  if (!onBackup || !mainBackMs || st.portalOn) return;   // a scan would move the portal's channel
+  uint32_t wait = mainBackMs << min(mainBackFails, 4);
+  if (millis() - lastMainCheck < wait) return;
+  lastMainCheck = millis();
+  String s1 = cfg::get("wifi_ssid"), s2 = cfg::get("wifi_ssid2");
+  if (!s1.length()) return;
+  // Active scan for that name only (also finds a hidden network). Takes about 2 s; the link
+  // to the backup network stays up meanwhile.
+  int n = WiFi.scanNetworks(false, true, false, 150, 0, s1.c_str());
+  int best = -127;
+  for (int i = 0; i < n; i++) best = max(best, (int)WiFi.RSSI(i));
+  WiFi.scanDelete();
+  if (n <= 0 || best < WIFI_MAIN_MIN_RSSI) return;
+  evlog("WiFi: main network \"%s\" seen again (rssi %d): leaving the backup network", s1.c_str(), best);
+  client().stop();          // the open connection belongs to the backup network
+  st.wifiUp = false;        // the task loop logs the new connection, restarts NTP and uploads
+  st.wifiDownSince = millis();
+  st.ip[0] = 0;
+  if (connectMain(s1)) return;
+  mainBackFails++;
+  evlog("WiFi: main network failed (status %d), back to the backup network; next look in %lu min",
+        WiFi.status(), (unsigned long)((mainBackMs << min(mainBackFails, 4)) / 60000));
+  if (!connectBackup(s2)) nextWifiAttempt = millis() + 10000;   // both failed: handleOffline() goes on
 }
 
 static void handleOffline() {
@@ -88,10 +137,8 @@ static void handleOffline() {
     wdtDelay(500);
     return;
   }
-  // Alternate between the main and the backup network.
-  bool useBackup = s2.length() && (!s1.length() || (wifiAttempts % 2 == 1));
-  bool ok = useBackup ? tryConnect(s2, cfg::get("wifi_pass2")) : tryConnect(s1, cfg::get("wifi_pass"));
-  if (ok) {
+  // One round: the main network first, then at once the backup network if the main one failed.
+  if (connectMain(s1) || connectBackup(s2)) {
     wifiAttempts = 0;
     return;
   }
@@ -424,8 +471,8 @@ static void task(void *) {
       st.wifiDownSince = 0;
       strncpy(st.ip, WiFi.localIP().toString().c_str(), sizeof(st.ip) - 1);
       st.rssi = WiFi.RSSI();
-      evlog("WiFi connected to \"%s\" ip=%s rssi=%d ch=%d (after %lu s offline)", WiFi.SSID().c_str(), st.ip,
-            (int)st.rssi, WiFi.channel(), (unsigned long)downS);
+      evlog("WiFi connected to \"%s\"%s ip=%s rssi=%d ch=%d (after %lu s offline)", WiFi.SSID().c_str(),
+            onBackup ? " (BACKUP network)" : "", st.ip, (int)st.rssi, WiFi.channel(), (unsigned long)downS);
       rtclock::startNtp();
       forceUpload = true;
     } else if (!up && st.wifiUp) {
@@ -445,6 +492,7 @@ static void task(void *) {
     doUpload();
     doRemoteConfig();
     doOta();
+    checkMainBack();
     wdtDelay(200);
   }
 }
@@ -462,9 +510,17 @@ void begin() {
   otaPeriodMs = max(1L, cfg::getInt("ota_check_h")) * 3600000UL;
   rcfgOn = cfg::getInt("rcfg_on") == 1;
   rcfgPeriodMs = max(1L, cfg::getInt("rcfg_check_m")) * 60000UL;
+  mainBackMs = constrain(cfg::getInt("wifi_main_m"), 0L, 1440L) * 60000UL;   // 1 day at most (no overflow below)
   if (https) {
     if (cfg::getInt("tls_verify") == 1) tls.setCACert(CA_BUNDLE);
     else tls.setInsecure();
+  }
+  if (cfg::get("wifi_ssid2").length()) {
+    String back = mainBackMs ? "back to the main network when it is seen again (looked for every " +
+                                   String((unsigned long)(mainBackMs / 60000)) + " min)"
+                             : String("stays on the backup until it drops (wifi_main_m = 0)");
+    evlog("WiFi: backup network \"%s\" used when \"%s\" fails, %s", cfg::get("wifi_ssid2").c_str(),
+          cfg::get("wifi_ssid").c_str(), back.c_str());
   }
   evlog("Server %s (%s), upload every %lu s, live %s, OTA %s, remote settings %s", baseUrl.c_str(),
         https ? (cfg::getInt("tls_verify") == 1 ? "TLS verified" : "TLS NOT verified") : "plain HTTP",
@@ -479,7 +535,8 @@ void configCheckNow() { forceRcfg = true; }
 String statusText() {
   String s;
   s += "WiFi: ";
-  s += st.wifiUp ? String("up, ") + WiFi.SSID() + " " + st.ip + " rssi " + String((int)st.rssi) + " dBm"
+  s += st.wifiUp ? String("up, ") + WiFi.SSID() + (onBackup ? " (BACKUP network)" : "") + " " + st.ip + " rssi " +
+                       String((int)st.rssi) + " dBm"
                  : String("down for ") + String(st.wifiDownSince ? (millis() - st.wifiDownSince) / 1000 : 0) + " s";
   s += "\nServer: " + baseUrl + (token.length() ? "" : " (NO TOKEN)");
   s += "\nUploads: ok " + String((unsigned long)st.uploadsOk) + ", failed " + String((unsigned long)st.uploadsFail) +

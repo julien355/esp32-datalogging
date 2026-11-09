@@ -52,7 +52,8 @@ One CSV file per UTC day, same columns as the server's files. **The day files ar
 | Situation | What the logger does |
 |---|---|
 | WiFi drops | Records go on to the SD card. Reconnects with back-off: 10, 20, 40, 80, 160 s, then every 5 min |
-| Backup network | If `wifi_ssid2` is set (for example a 4G router), attempts alternate between the two networks |
+| Backup network | If `wifi_ssid2` is set (for example a 4G router or a second hotel network), each reconnection round tries the **main** network first, then **at once** the backup if the main one fails. The back-off above applies between rounds. Status, portal and event log show `(BACKUP network)` while on it |
+| Main network back | While on the backup, every `wifi_main_m` minutes (15) the logger scans for the main network (about 2 s, the backup link stays up). Seen at -80 dBm or better: it moves back to it; if that fails it returns to the backup at once and waits twice as long before the next try (up to 16 x `wifi_main_m`). `wifi_main_m` = 0: stays on the backup until it drops. The daily reboot also starts again from the main network |
 | Offline 30 min | Restarts the WiFi driver (fixes most stuck radios), then every 30 min |
 | Offline `offline_rbt_h` hours (6) | Full reboot. Harmless: the data is on the SD card |
 | Link back | Uploads at once, then **catch-up**: up to 20 batches of 60 records back to back per minute (1,200 records a minute, so a 3-day outage is cleared in about 4 minutes) |
@@ -124,13 +125,21 @@ A file `/config/settings.txt` with `key=value` lines is applied at boot, **then 
 
 Stored in NVS (survive power cuts and reflashing; erased only by `factory`). Change with the console (`set`), the portal, `/config/settings.txt`, or from the VPS (`manage.py set-config`, applied and rebooted by itself), then **reboot**.
 
+**Setting the backup WiFi network** (by hand, on site or at the office: never from the VPS). Any one of:
+- console: `set wifi_ssid2 <network name>`, `set wifi_pass2 <password>`, then `reboot` (a name with spaces is typed as it is: everything after the key is the value);
+- setup portal: fields `wifi_ssid2` and `wifi_pass2` in the WiFi group, then "Save and restart";
+- SD card `/config/settings.txt`: lines `wifi_ssid2=<network name>` and `wifi_pass2=<password>`.
+
+The name must match exactly (capitals and spaces count), 2.4 GHz, WPA2, no login page. After the reboot the event log shows `WiFi: backup network "<name>" used when "<main>" fails`. To test it: switch the main network off (or `set wifi_pass wrong` on the bench), reboot, and check `status` shows `(BACKUP network)`. To remove it: `unset wifi_ssid2` and `unset wifi_pass2`.
+
 | Group | Key | Default | Meaning |
 |---|---|---|---|
 | Identity | `dev_id` | `LOG-0001` | Logger code, as registered on the platform Not changeable remotely. |
 | WiFi | `wifi_ssid` | (empty) | Main WiFi network (2.4 GHz) Not changeable remotely. |
 |  | `wifi_pass` | (empty) | Main WiFi password **Secret**: never shown. Not changeable remotely. |
-|  | `wifi_ssid2` | (empty) | Backup WiFi network (for example a 4G router), empty = none Not changeable remotely. |
+|  | `wifi_ssid2` | (empty) | Backup WiFi network, used when the main one fails (for example a 4G router), empty = none Not changeable remotely. |
 |  | `wifi_pass2` | (empty) | Backup WiFi password **Secret**: never shown. Not changeable remotely. |
+|  | `wifi_main_m` | `15` | On the backup network: minutes between looks for the main network (goes back to it when seen), 0 = stay on the backup |
 | Server | `srv_url` | `https://arkan-monitoring.duckdns.org` | Platform base URL (http://IP:8800 for an office test) Not changeable remotely. |
 |  | `dev_token` | (empty) | Device token given by tools/manage.py add-device **Secret**: never shown. Not changeable remotely. |
 |  | `tls_verify` | `1` | 1 = check the server certificate, 0 = do not (bench only) Not changeable remotely. |
