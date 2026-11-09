@@ -126,7 +126,10 @@ static int request(const char *method, const String &path, const char *contentTy
     http.addHeader("Content-Type", contentType);
     code = http.POST((uint8_t *)body.c_str(), body.length());
   }
-  if (code > 0) resp = http.getString();
+  // 1xx, 204 and 304 have no body. Do not call getString() on them: with no Content-Length and a
+  // kept-alive connection, HTTPClient reads until the server closes (no timeout), and the task
+  // watchdog reboots the board.
+  if (code >= 200 && code != 204 && code != 304) resp = http.getString();
   http.end();
   return code;
 }

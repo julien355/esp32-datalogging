@@ -192,6 +192,7 @@ static bool fromSd = false;
 #define FILE_REGISTERS_BAK "/config/registers.bak"
 
 static bool loadOverride(fs::FS &fs) {
+  if (!fs.exists(FILE_REGISTERS)) return false;   // optional file: open() would log an error
   File f = fs.open(FILE_REGISTERS, FILE_READ);
   if (!f) return false;
   if (f.size() > 8192) {

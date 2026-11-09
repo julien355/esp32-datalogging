@@ -162,7 +162,7 @@ Stored in NVS (survive power cuts and reflashing; erased only by `factory`). Cha
 |  | `pin_rs_tx` | `-1` | RS485 TX (to verify, -1 = not set) |
 |  | `pin_rs_rx` | `-1` | RS485 RX (to verify, -1 = not set) |
 |  | `pin_rs_de` | `-1` | RS485 DE/RE, -1 if the board switches by itself |
-|  | `pin_dht` | `4` | AM2301 data |
+|  | `pin_dht` | `1` | AM2301 data |
 |  | `pin_led` | `-1` | Status LED, -1 = none |
 |  | `pin_btn` | `0` | Setup button (BOOT = 0): hold 3 s to open the setup portal |
 | Robustness | `reboot_hr` | `19` | Daily reboot at this UTC hour, minute 05 (19 = 03:05 WITA), -1 = never |

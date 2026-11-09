@@ -50,7 +50,7 @@ const Def DEFS[] = {
     {"pin_rs_tx", "-1", "Pins", "RS485 TX (to verify, -1 = not set)", 0},
     {"pin_rs_rx", "-1", "Pins", "RS485 RX (to verify, -1 = not set)", 0},
     {"pin_rs_de", "-1", "Pins", "RS485 DE/RE, -1 if the board switches by itself", 0},
-    {"pin_dht", "4", "Pins", "AM2301 data", 0},
+    {"pin_dht", "1", "Pins", "AM2301 data", 0},
     {"pin_led", "-1", "Pins", "Status LED, -1 = none", 0},
     {"pin_btn", "0", "Pins", "Setup button (BOOT = 0): hold 3 s to open the setup portal", 0},
     // Robustness
@@ -130,6 +130,7 @@ void factoryReset() {
 }
 
 int importFile(fs::FS &fs, const char *path) {
+  if (!fs.exists(path)) return 0;   // optional file: open() would log an error
   File f = fs.open(path, FILE_READ);
   if (!f) return 0;
   f.setTimeout(10);

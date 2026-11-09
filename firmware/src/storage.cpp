@@ -52,7 +52,8 @@ static bool mount() {
 
 static void loadPointer() {
   pYmd = 0;
-  File f = SD.open(FILE_UPLOAD_PTR, FILE_READ);
+  File f;
+  if (SD.exists(FILE_UPLOAD_PTR)) f = SD.open(FILE_UPLOAD_PTR, FILE_READ);   // absent on a new card
   if (f) {
     f.setTimeout(10);
     String s = f.readStringUntil('\n');
