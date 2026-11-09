@@ -21,6 +21,9 @@ services:
       ADMIN_USERS: ${ADMIN_USERS:-}
       FW_GITHUB_REPO: ${FW_GITHUB_REPO:-}
       FW_GITHUB_TOKEN: ${FW_GITHUB_TOKEN:-}
+      # Weather forecast and log for the sites with lat/lon (docs/WEATHER.md): needs outbound HTTPS to api.open-meteo.com.
+      WEATHER: ${WEATHER:-on}
+      WEATHER_EVERY_MIN: ${WEATHER_EVERY_MIN:-60}
     user: "1000:1000"
     read_only: true                    # the only writable place is /data
     tmpfs:

@@ -38,6 +38,9 @@ sites/adab/LOG-0001/settings-reported.json     settings the logger reported afte
 sites/adab/alarms/2026.csv                     alarm and warning log of the site (docs/alarms/README.md)
 alarm-register.csv                             the alarm register in use (Excel)
 sites/adab/daily.csv                           one row per WITA day (manage.py daily)
+sites/adab/weather/actual-2026.csv             actual weather, one row per WITA hour (Open-Meteo, docs/WEATHER.md)
+sites/adab/weather/dayahead-2026.csv           tomorrow's forecast, saved every day at 18:00 WITA
+sites/adab/weather/forecast.json               the last forecast fetched (every hour)
 export/oed/adab/*.csv                          OED upload files (manage.py export-oed)
 ```
 Backups: `/srv/arkan-monitoring/backups/data-<date>.tar.gz`, nightly, 14 kept (`server/deploy/backup.sh`).

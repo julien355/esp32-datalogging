@@ -77,6 +77,8 @@ Default for Adab:
 - Each day file is summarised once and kept in memory until it changes: the first 14-day request reads the files (under a second for 14 days), later ones take a few milliseconds.
 - These pages overlap with OED's line, bar and compare graphs. OED stays for what they do not do: groups of sites, export, maps, the comparison of any period.
 
+**Weather pages of `/live/<site>/`** (side menu, group *Weather*, added 9 November 2026): **Today** (`#wtoday`, the forecast hour by hour with the outdoor sensor beside the past hours), **Tomorrow** (`#wtomorrow`, the next day forecast) and **Weather log** (`#wlog`, the actual weather of each hour against the forecast made the day before, with the day's kWh). Live now shows one weather line under the alarms. Open-Meteo, fetched every hour by the ingest service; logs in `sites/<site>/weather/`. Setup and file format: [`WEATHER.md`](WEATHER.md).
+
 **Logger pages of `/live/<site>/`** (side menu, group *Logger*):
 
 | Menu | Address | What it is | Who |

@@ -188,5 +188,7 @@ docker compose exec ingest python tools/manage.py publish-fw /data/logger-0.4.0.
 
 ## 4. Next releases
 
+- **Service 0.5.0 (weather):** VPS only, section 2 as usual (no new `.env` key needed, no Caddy change). Then turn weather on once per site, with the hotel's position: `docker compose exec ingest python tools/manage.py weather adab --lat -8.xxxx --lon 115.xxxx` ([`WEATHER.md`](WEATHER.md)). The container must reach `api.open-meteo.com` (outbound HTTPS).
+
 - **VPS only:** a new tag `v0.x.y`, then section 2 (2.4 and 2.5 only if `.env.example` or the Caddy file changed: tutorial 2, C5 steps 3a and 3b, tell you).
 - **Firmware only:** change `FW_VERSION`, test on the bench logger, tag `fw-v<version>`, then section 3 from the panel. Every build gets a new version number, never reused ([`OTA.md`](OTA.md) section 2).

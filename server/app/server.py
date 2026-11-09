@@ -16,6 +16,8 @@ People endpoints (behind the Caddy web login, never published without it):
   GET  /api/v1/alarms/<site>   open alarms and the last 200 lines of the alarm log
   GET  /api/v1/history/<site>?days=15        one row per local hour: kWh, kW, sensors (from the day files)
   GET  /api/v1/history/<site>/day/<date>     the 1-minute power of one local day
+  GET  /api/v1/weather/<site>                Open-Meteo forecast (fetched every hour): today and tomorrow per hour
+  GET  /api/v1/weather/<site>/log?days=7     actual weather per hour with the day-ahead forecast (&format=csv)
   GET  /live/  /live/<site>/   site page: live now (refresh every 15 s) and the history graphs
   GET  /live/<site>/register   meter register table page of the site's logger (?device=LOG-0002 if several):
                                see, edit, import, send to the logger
@@ -38,7 +40,9 @@ Firmware update from the site page (people in ADMIN_USERS only, see docs/OTA.md)
 
 Settings (environment): DATA_DIR (/data), PORT (8800), BIND (0.0.0.0 in the container),
 MAX_BODY (262144 bytes), ADMIN_USERS (Caddy login names allowed to update firmware, comma separated,
-"*" = everyone who can log in, empty = nobody), FW_GITHUB_REPO (owner/name), FW_GITHUB_TOKEN.
+"*" = everyone who can log in, empty = nobody), FW_GITHUB_REPO (owner/name), FW_GITHUB_TOKEN,
+WEATHER (on; off = never fetch the forecast), WEATHER_EVERY_MIN (60). Weather per site: site.json "weather"
+(app/weather.py, manage.py weather).
 """
 
 import json
@@ -54,11 +58,12 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import history  # noqa: E402
 import registers  # noqa: E402
+import weather  # noqa: E402
 from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, IngestError, iso_now  # noqa: E402
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
@@ -216,6 +221,9 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/v1/history/([a-z0-9-]+)(?:/day/(\d{4}-\d{2}-\d{2}))?$", path)
         if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
             return self.history(m.group(1), m.group(2), parse_qs(u.query))
+        m = re.match(r"^/api/v1/weather/([a-z0-9-]+)(/log)?$", path)
+        if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
+            return self.weather_view(m.group(1), bool(m.group(2)), parse_qs(u.query))
         if path in ("/live", "/live/") or re.match(r"^/live/[a-z0-9-]+/?$", path):
             return self.page("live")
         if re.match(r"^/live/[a-z0-9-]+/register/?$", path):
@@ -405,6 +413,24 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return self.send_json(400, {"ok": False, "error": "bad date or days"})
 
+    def weather_view(self, site, log, q):
+        if not log:
+            return self.send_json(200, self.weather.view(site))
+        try:
+            days = int(q.get("days", ["7"])[0])
+        except ValueError:
+            return self.send_json(400, {"ok": False, "error": "bad days"})
+        if q.get("format", [""])[0] != "csv":
+            return self.send_json(200, self.weather.log(site, days))
+        body = self.weather.log_csv(site, days).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="weather-{site}-{days}d.csv"')
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        return self.wfile.write(body)
+
     def status(self):
         out = {"time": iso_now(), "sites": {}}
         for site in self.store.sites():
@@ -567,6 +593,7 @@ def make_server(data_dir, bind="127.0.0.1", port=8800):
     Handler.fw = Firmware(store)
     store.on_rollback = Handler.fw.note_rollback
     Handler.github = GitHub()
+    Handler.weather = weather.Weather(store)
     Handler.admin_users = os.environ.get("ADMIN_USERS", "")
     srv = ThreadingHTTPServer((bind, port), Handler)
     srv.daemon_threads = True
@@ -586,7 +613,17 @@ def main():
             except Exception as e:   # never let the watcher die
                 sys.stderr.write(f"{iso_now()} offline check failed: {e!r}\n")
 
+    def weather_watch():   # Open-Meteo forecast and the weather logs of the sites that have lat/lon
+        while True:
+            try:
+                Handler.weather.tick()
+            except Exception as e:
+                sys.stderr.write(f"{iso_now()} weather check failed: {e!r}\n")
+            time.sleep(60)
+
     threading.Thread(target=offline_watch, daemon=True).start()
+    if os.environ.get("WEATHER", "on").lower() not in ("off", "0", "no"):
+        threading.Thread(target=weather_watch, daemon=True).start()
     sys.stderr.write(f"{iso_now()} arkan-ingest {VERSION} on {bind}:{port}, data in {DATA_DIR}\n")
     try:
         srv.serve_forever()

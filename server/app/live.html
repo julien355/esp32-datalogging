@@ -85,6 +85,11 @@
   .empty{background:var(--card);border-radius:10px;padding:18px;color:var(--bad);font-weight:600}
   .ok{color:var(--good)}.bad{color:var(--bad)}
   .foot{font-size:.75rem;color:var(--muted);margin-top:18px}
+  .wxline{display:inline-flex;flex-wrap:wrap;gap:4px 12px;align-items:center;background:var(--card);border-radius:999px;padding:5px 14px;
+    margin:8px 0 0 8px;font-size:.88rem;color:var(--ink2);text-decoration:none;box-shadow:0 1px 3px rgba(15,39,71,.10)}
+  .wxline b{color:var(--ink)}.wxline:hover{background:#f4f7fb}
+  tr.past td{color:var(--muted)}tr.cur td{background:#eef5ff;font-weight:600}
+  .wxi{font-size:1.1em;margin-right:4px}
   details.fw{background:var(--card);border-radius:10px;padding:10px 14px;margin:8px 0;box-shadow:0 1px 3px rgba(15,39,71,.10)}
   details.fw summary{cursor:pointer;font-weight:600}
   .fw .row{margin:8px 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.9rem}
@@ -204,7 +209,8 @@ async function loadSite() {
     for (const a of al) html += `<div class="alarm ${esc(a.severity)}"><div class="ic">${icon[a.severity] || 'i'}</div><div>
       <div class="t">${esc(a.id)} ${esc(a.name)} <span class="sev ${esc(a.severity)}">${esc(a.severity)}</span></div>
       <div class="d">since ${localTime(a.since, off)} · worst ${esc(a.worst ?? '–')} ${esc(a.unit)}</div></div></div>`;
-  } else html += '<div style="margin-top:4px"><span class="okline">✓ No open alarm</span></div>';
+  } else html += '<div style="margin-top:4px;display:inline-block"><span class="okline">✓ No open alarm</span></div>';
+  html += await wxStrip();
 
   const devs = Object.keys(j.devices || {});
   if (!devs.length) html += '<h2>Now</h2><div class="empty">No live data for this site (logger offline or not installed yet).</div>';
@@ -353,6 +359,9 @@ const VIEWS = [
   {id: 'week', name: 'This week vs last', sub: 'kWh so far', grp: 'History'},
   {id: 'temperature', name: 'Temperature', sub: 'room and outdoor', grp: 'History'},
   {id: 'humidity', name: 'Humidity', sub: 'room and outdoor', grp: 'History'},
+  {id: 'wtoday', name: 'Today', sub: 'forecast hour by hour', grp: 'Weather'},
+  {id: 'wtomorrow', name: 'Tomorrow', sub: 'next day forecast', grp: 'Weather'},
+  {id: 'wlog', name: 'Weather log', sub: 'actual vs forecast', grp: 'Weather'},
   {id: 'firmware', name: 'Firmware update', sub: 'remote, admins only', grp: 'Logger', admin: true},
 ];
 let isAdmin = false, fwReady = Promise.resolve();   // set by fwInit() from /api/v1/admin/me (ADMIN_USERS)
@@ -447,7 +456,7 @@ function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits =
 function barChart(box, bars, unit) {
   sizeTo(box);
   if (!bars.length) { box.innerHTML = '<div class="card k">No records for this period.</div>'; return; }
-  const yt = nice(0, Math.max(...bars.map(b => b.v))), y1 = yt[yt.length - 1], bw = (CW - CM.l - CM.r) / bars.length;
+  const yt = nice(0, Math.max(...bars.map(b => b.v)) || 1), y1 = yt[yt.length - 1], bw = (CW - CM.l - CM.r) / bars.length;
   const Y = v => CH - CM.b - v / y1 * (CH - CM.t - CM.b);
   let g = '', b = '';
   for (const v of yt) g += `<line class="gl" x1="${CM.l}" x2="${CW - CM.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${CM.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
@@ -484,6 +493,7 @@ function byDay(rows) {   // local date -> {kwh, minutes, peak, peakT, tmin, tmax
 async function renderHistory() {
   const box = el('content');
   hideTip();
+  if (WXVIEWS[view]) return WXVIEWS[view](box);
   if (view === 'power') {
     const j = await hourly(span);
     const pk = j.hours.filter(r => r.p_max !== undefined).reduce((a, r) => (!a || r.p_max > a.p_max ? r : a), null);
@@ -566,6 +576,162 @@ async function renderHistory() {
   }
 }
 
+// ------------------------------------------------------------------ weather (server/app/weather.py, docs/WEATHER.md)
+// GET /api/v1/weather/<site>: the last Open-Meteo forecast (fetched every hour by the service), today and tomorrow per hour.
+// GET /api/v1/weather/<site>/log?days=N: the actual weather of each past hour, with the forecast made the day before.
+// Rows are hotel hours "YYYY-MM-DD HH:00" (the hour from HH:00 to HH+1:00), like the history rows: they join on "t".
+let WXC = null, WXL = {};
+async function wxNow() {
+  if (WXC && Date.now() - WXC.at < 300e3) return WXC.j;
+  const j = await (await fetch(`/api/v1/weather/${site}`, {cache: 'no-store'})).json();
+  WXC = {at: Date.now(), j};
+  return j;
+}
+async function wxLog(days) {
+  const c = WXL[days];
+  if (c && Date.now() - c.at < 300e3) return c.j;
+  const j = await (await fetch(`/api/v1/weather/${site}/log?days=${days}`, {cache: 'no-store'})).json();
+  WXL[days] = {at: Date.now(), j};
+  return j;
+}
+function wxIcon(code, day = 1) {   // WMO weather code -> symbol
+  if (code === null || code === undefined) return '';
+  const i = code <= 1 ? (day === 0 ? '🌙' : '☀️') : code === 2 ? (day === 0 ? '☁️' : '⛅') : code === 3 ? '☁️' : code <= 48 ? '🌫️'
+    : code <= 57 ? '🌦️' : code <= 67 || (code >= 80 && code <= 82) ? '🌧️' : code <= 86 ? '🌨️' : '⛈️';
+  return `<span class="wxi" aria-hidden="true">${i}</span>`;
+}
+const f1 = (v, d = 1) => v === null || v === undefined ? '–' : (+v).toFixed(d);
+const compass = d => d === null || d === undefined ? '' : ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(d / 45) % 8];
+const outId = () => (Object.entries(PROF.sensors || {}).find(([, v]) => /outdoor|outside/i.test(v)) || ['TH2'])[0];
+const wxSource = j => `${esc(j.source || 'Open-Meteo')}, model ${esc(j.model || 'best_match')}, ${f1(j.lat, 3)}, ${f1(j.lon, 3)}` +
+  (j.fetched ? `, updated ${localTime(j.fetched, PROF.utc_offset_h ?? 8, false).slice(0, 5)} hotel time` : '');
+function wxMissing(j, title) {
+  if (j.hours && j.hours.length) return '';
+  const how = `docker compose exec ingest python tools/manage.py weather ${esc(site)} --lat -8.xxxx --lon 115.xxxx`;
+  return frame(title, '') + (j.enabled
+    ? `<div class="empty">No forecast fetched yet${j.error ? ': ' + esc(j.error) : ' (the service fetches it within a minute of starting, then every hour)'}.</div>`
+    : `<div class="card">Weather is not set for this site. On the VPS, with the site's position (decimal degrees, south negative):
+       <pre style="white-space:pre-wrap">${how}</pre>See docs/WEATHER.md.</div>`);
+}
+async function measuredOutdoor(days) {   // hotel hour -> {t, min, max} of the outdoor sensor, from the day files
+  const O = outId(), m = {};
+  try { for (const r of (await hourly(days)).hours) if (r[`${O}_t`] !== undefined) m[r.t] = {t: r[`${O}_t`], min: r[`${O}_t_min`], max: r[`${O}_t_max`]}; }
+  catch (e) {}
+  return m;
+}
+function wxTable(rows, nowT, meas = null) {
+  const hr = nowT.slice(0, 13) + ':00';
+  let h = `<table><tr><th>Hour</th><th>Weather</th><th>Temp.</th><th class="hide-s">Feels like</th><th>Rain · chance</th>
+    <th class="hide-s">Humidity</th><th class="hide-s">Cloud</th><th class="hide-s">Wind</th><th class="hide-s">Sun</th>${meas ? `<th>Measured ${esc(outId())}</th>` : ''}</tr>`;
+  for (const r of rows) {
+    const cls = r.t < hr ? 'past' : r.t === hr ? 'cur' : '';
+    h += `<tr class="${cls}"><td>${r.t.slice(11)}${r.t === hr ? ' now' : ''}</td><td>${wxIcon(r.code, r.is_day)}${esc(r.condition)}</td><td>${f1(r.temp_c)} °C</td>
+      <td class="hide-s">${f1(r.feels_c)} °C</td><td>${r.precip_mm ? f1(r.precip_mm) + ' mm' : '0'}${r.precip_prob_pct !== null && r.precip_prob_pct !== undefined ? ` · ${r.precip_prob_pct} %` : ''}</td>
+      <td class="hide-s">${f1(r.rh_pct, 0)} %</td><td class="hide-s">${f1(r.cloud_pct, 0)} %</td><td class="hide-s">${f1(r.wind_kmh, 0)} km/h ${compass(r.wind_dir)}</td>
+      <td class="hide-s">${f1(r.rad_wm2, 0)} W/m²</td>${meas ? `<td>${meas[r.t] ? f1(meas[r.t].t) + ' °C' : ''}</td>` : ''}</tr>`;
+  }
+  return h + '</table>';
+}
+function rainBars(box, rows, nowT) {
+  const hr = nowT.slice(0, 13) + ':00';
+  barChart(box, rows.map(r => ({v: r.precip_mm ?? 0, light: r.t < hr, l1: r.t.slice(11, 13), l2: r.precip_prob_pct !== null && r.precip_prob_pct !== undefined ? r.precip_prob_pct + '%' : '',
+    tip: `<b>${r.t.slice(11)}–${String(+r.t.slice(11, 13) + 1).padStart(2, '0')}:00</b>${wxIcon(r.code, r.is_day)}${esc(r.condition)}<br>${f1(r.precip_mm, 1)} mm` +
+      (r.precip_prob_pct !== null && r.precip_prob_pct !== undefined ? `, chance ${r.precip_prob_pct} %` : '')})), 'mm');
+}
+async function wxStrip() {   // one line on "Live now"
+  try {
+    const j = await wxNow(), c = j.current;
+    if (!c) return '';
+    const today = j.now.slice(0, 10), d = (j.days || []).find(x => x.date === today), t = (j.days || []).find(x => x.date > today);
+    return `<a class="wxline" href="#wtoday">${wxIcon(c.code, c.is_day)}<span><b>${f1(c.temp_c, 0)} °C</b> ${esc(c.condition)}</span>` +
+      (d ? `<span>today ${f1(d.tmin_c, 0)}–${f1(d.tmax_c, 0)} °C, rain ${f1(d.precip_mm)} mm</span>` : '') +
+      (t ? `<span>tomorrow ${wxIcon(t.code)}${f1(t.tmin_c, 0)}–${f1(t.tmax_c, 0)} °C</span>` : '') + '</a>';
+  } catch (e) { return ''; }
+}
+
+const WXVIEWS = {
+  async wtoday(box) {
+    const j = await wxNow(), miss = wxMissing(j, 'Weather today');
+    if (miss) { box.innerHTML = miss; return; }
+    const today = j.now.slice(0, 10), rows = j.hours.filter(r => r.t.startsWith(today)), d = (j.days || []).find(x => x.date === today) || {};
+    const c = j.current || {}, meas = await measuredOutdoor(2), O = outId();
+    const next = rows.find(r => r.t > j.now && ((r.precip_prob_pct ?? 0) >= 50 || (r.precip_mm ?? 0) >= 0.3));
+    const lastM = Object.keys(meas).filter(k => k.startsWith(today)).sort().pop();
+    box.innerHTML = frame('Weather today, hour by hour', `Forecast for the hotel's position: ${wxSource(j)}. Past hours in grey. ` +
+        `Measured: hourly mean of the logger's outdoor sensor (${esc(O)}).`) +
+      `<div class="grid">${statTile('Now · ' + (c.condition || ''), `${wxIcon(c.code, c.is_day)}${f1(c.temp_c)}`, '°C', `feels like ${f1(c.feels_c)} °C · ${f1(c.rh_pct, 0)} % RH · wind ${f1(c.wind_kmh, 0)} km/h`)}
+        ${statTile('Today, lowest – highest', `${f1(d.tmin_c, 0)} – ${f1(d.tmax_c, 0)}`, '°C', `${wxIcon(d.code)}${esc(d.condition || '')}`)}
+        ${statTile('Rain today', f1(d.precip_mm), 'mm', `chance up to ${f1(d.precip_prob_pct, 0)} %${next ? ` · likely from ${next.t.slice(11)}` : ''}`)}
+        ${statTile('Sun', f1(d.sun_kwh_m2), 'kWh/m²', `sunrise ${esc(d.sunrise || '–')} · sunset ${esc(d.sunset || '–')} · UV ${f1(d.uv)}`)}
+        ${lastM ? statTile(`Measured outdoor, ${lastM.slice(11)} hour`, f1(meas[lastM].t), '°C', `forecast for that hour ${f1((rows.find(r => r.t === lastM) || {}).temp_c)} °C`) : ''}</div>
+      <h2>Temperature</h2><div class="card chartbox" id="ch"></div><h2>Rain per hour · chance under the bar</h2><div class="card chartbox" id="ch2"></div>
+      <h2>Hour by hour</h2>${wxTable(rows, j.now, Object.keys(meas).length ? meas : null)}
+      <div class="foot">Weather data: ${esc(j.source)}. Rain and sun of the hour from HH:00 to HH+1:00; temperature, humidity and wind: mean of the hour.</div>`;
+    const series = [{name: 'Forecast', color: C[1], pts: rows.map(r => [tp(r.t), r.temp_c])},
+      {name: 'Feels like', color: '#c4cad3', width: 1.4, pts: rows.map(r => [tp(r.t), r.feels_c])}];
+    if (Object.keys(meas).length) series.unshift({name: `Measured outdoor (${O})`, color: C[0], pts: rows.map(r => [tp(r.t), meas[r.t] ? meas[r.t].t : null])});
+    lineChart(el('ch'), series, {unit: '°C'});
+    rainBars(el('ch2'), rows, j.now);
+  },
+
+  async wtomorrow(box) {
+    const j = await wxNow(), miss = wxMissing(j, 'Weather tomorrow');
+    if (miss) { box.innerHTML = miss; return; }
+    const today = j.now.slice(0, 10), tom = isoDay(tp(today + ' 00:00') + 864e5);
+    const rows = j.hours.filter(r => r.t.startsWith(tom)), d = (j.days || []).find(x => x.date === tom) || {}, dt = (j.days || []).find(x => x.date === today) || {};
+    const diff = d.tmax_c !== undefined && dt.tmax_c !== undefined && d.tmax_c !== null && dt.tmax_c !== null ? d.tmax_c - dt.tmax_c : null;
+    const hot = rows.reduce((a, r) => (r.temp_c !== null && (!a || r.temp_c > a.temp_c) ? r : a), null);
+    const wet = rows.filter(r => (r.precip_prob_pct ?? 0) >= 50).map(r => r.t.slice(11, 13));
+    box.innerHTML = frame(`Weather tomorrow: ${fdate(tp(tom + ' 00:00'))}`, `Forecast: ${wxSource(j)}. ` +
+        `Saved every day at ${String(j.dayahead_hour ?? 18).padStart(2, '0')}:00 hotel time in the day-ahead log, to compare with the actual weather (Weather log).`) +
+      `<div class="grid">${statTile('Tomorrow', `${wxIcon(d.code)}${f1(d.tmin_c, 0)} – ${f1(d.tmax_c, 0)}`, '°C', esc(d.condition || ''))}
+        ${statTile('Highest against today', diff === null ? '–' : (diff >= 0 ? '+' : '') + diff.toFixed(1), '°C', hot ? `warmest hour ${hot.t.slice(11)} (${f1(hot.temp_c)} °C)` : '')}
+        ${statTile('Rain', f1(d.precip_mm), 'mm', `chance up to ${f1(d.precip_prob_pct, 0)} %${wet.length ? ` · likely ${wet[0]}:00–${String(+wet[wet.length - 1] + 1).padStart(2, '0')}:00` : ''}`)}
+        ${statTile('Sun', f1(d.sun_kwh_m2), 'kWh/m²', `sunrise ${esc(d.sunrise || '–')} · sunset ${esc(d.sunset || '–')} · UV ${f1(d.uv)}`)}</div>
+      <h2>Temperature</h2><div class="card chartbox" id="ch"></div><h2>Rain per hour · chance under the bar</h2><div class="card chartbox" id="ch2"></div>
+      <h2>Hour by hour</h2>${wxTable(rows, j.now)}
+      <div class="foot">Weather data: ${esc(j.source)}. A forecast more than a day ahead is less sure: it changes with each update (every hour).</div>`;
+    lineChart(el('ch'), [{name: 'Forecast', color: C[1], pts: rows.map(r => [tp(r.t), r.temp_c])},
+      {name: 'Feels like', color: '#c4cad3', width: 1.4, pts: rows.map(r => [tp(r.t), r.feels_c])}], {unit: '°C'});
+    rainBars(el('ch2'), rows, j.now);
+  },
+
+  async wlog(box) {
+    const [lg, j, meas] = await Promise.all([wxLog(span), wxNow(), measuredOutdoor(span)]);
+    if (!lg.hours.length) { box.innerHTML = wxMissing(j, 'Weather log') || frame('Weather log', '') +
+      '<div class="card k">Nothing logged yet: an hour is logged one hour after it ends, and tomorrow\'s forecast once a day.</div>'; return; }
+    let days = {}; try { days = byDay((await hourly(span)).hours); } catch (e) {}
+    const O = outId(), both = lg.hours.filter(r => r.temp_c !== null && r.fc_temp_c !== null);
+    const mae = both.length ? both.reduce((a, r) => a + Math.abs(r.fc_temp_c - r.temp_c), 0) / both.length : null;
+    const bias = both.length ? both.reduce((a, r) => a + r.fc_temp_c - r.temp_c, 0) / both.length : null;
+    const sm = lg.hours.filter(r => r.temp_c !== null && meas[r.t]);
+    const sd = sm.length ? sm.reduce((a, r) => a + meas[r.t].t - r.temp_c, 0) / sm.length : null;
+    const rainy = lg.days.filter(d => d.precip_mm >= 1).length, fcd = lg.days.filter(d => d.fc_hours >= 20);
+    const csv = `/api/v1/weather/${esc(site)}/log?days=${span}&format=csv`;
+    box.innerHTML = frame('Weather log: actual against forecast', `Actual: the weather service's value for each hour that has passed (logged one hour after it ends). ` +
+        `Forecast: what was forecast for that hour the day before, at ${String(j.dayahead_hour ?? 18).padStart(2, '0')}:00. Measured: the logger's outdoor sensor (${esc(O)}). Last ${span} days.`,
+        `<div style="display:flex;gap:8px;align-items:center">${spanPicker()}<a class="seg" style="padding:5px 10px;font-size:.8rem;text-decoration:none" href="${csv}">CSV ↓</a></div>`) +
+      `<div class="grid">${statTile('Hours logged', lg.hours.length, '', `${both.length} with a day-ahead forecast`)}
+        ${statTile('Day-ahead forecast error', mae === null ? '–' : '± ' + mae.toFixed(1), '°C', bias === null ? 'none yet: the first is saved this evening' : `mean of the hours; forecast ${bias >= 0 ? 'warmer' : 'cooler'} by ${Math.abs(bias).toFixed(1)} °C on average`)}
+        ${statTile('Rain days (≥ 1 mm)', rainy, `of ${lg.days.length}`, fcd.length ? `forecast the day before: ${fcd.filter(d => d.fc_precip_mm >= 1).length} of ${fcd.length}` : '')}
+        ${sd === null ? '' : statTile(`Sensor ${O} against the service`, (sd >= 0 ? '+' : '') + sd.toFixed(1), '°C', `mean over ${sm.length} hours (sun or a wall near the sensor shows here)`)}</div>
+      <h2>Temperature</h2><div class="card chartbox" id="ch"></div>
+      <h2>Day by day</h2><table><tr><th>Day</th><th>Weather</th><th>Temp. low – high</th><th>Rain</th><th class="hide-s">Sun</th>
+        <th>Forecast the day before</th><th class="hide-s">Measured ${esc(O)}</th><th>Energy</th></tr>${lg.days.slice().reverse().map(d => {
+          const mm = Object.entries(meas).filter(([k]) => k.startsWith(d.date)).map(([, v]) => v);
+          const lo = mm.length ? Math.min(...mm.map(v => v.min ?? v.t)) : null, hi = mm.length ? Math.max(...mm.map(v => v.max ?? v.t)) : null;
+          const e = days[d.date];
+          return `<tr><td>${fdate(tp(d.date + ' 00:00'))}${d.hours < 24 ? ` <span class="range">${d.hours} h</span>` : ''}</td><td>${wxIcon(d.code)}${esc(d.condition)}</td>
+            <td>${f1(d.tmin_c)} – ${f1(d.tmax_c)} °C</td><td>${f1(d.precip_mm)} mm</td><td class="hide-s">${f1(d.sun_kwh_m2)} kWh/m²</td>
+            <td>${d.fc_hours ? `${wxIcon(d.fc_code)}${f1(d.fc_tmin_c)} – ${f1(d.fc_tmax_c)} °C, ${f1(d.fc_precip_mm)} mm` : '<span class="range">not saved</span>'}</td>
+            <td class="hide-s">${lo === null ? '–' : `${f1(lo)} – ${f1(hi)} °C`}</td><td>${e ? e.kwh.toFixed(0) + ' kWh' : '–'}</td></tr>`; }).join('')}</table>
+      <div class="foot">Weather data: ${esc(lg.source)}. Low and high are the coolest and warmest hourly means. Files on the server: sites/${esc(site)}/weather/actual-YYYY.csv and dayahead-YYYY.csv.</div>`;
+    lineChart(el('ch'), [{name: 'Actual (weather service)', color: C[1], pts: lg.hours.map(r => [tp(r.t), r.temp_c])},
+      {name: 'Forecast the day before', color: '#9aa5b1', width: 1.4, pts: lg.hours.map(r => [tp(r.t), r.fc_temp_c])},
+      {name: `Measured outdoor (${O})`, color: C[0], width: 1.4, pts: lg.hours.map(r => [tp(r.t), meas[r.t] ? meas[r.t].t : null])}], {unit: '°C'});
+  },
+};
+
 async function show(id) {
   view = VIEWS.some(v => v.id === id) ? id : 'now';
   document.querySelectorAll('#side a[data-id]').forEach(a => a.classList.toggle('on', a.dataset.id === view));
@@ -581,7 +747,7 @@ async function show(id) {
   if (view === 'now') { el('content').innerHTML = ''; return tick(); }
   el('content').innerHTML = '<div class="card k">Loading…</div>';
   try { await renderHistory(); }
-  catch (e) { el('content').innerHTML = '<div class="empty">Could not read the history from the server.</div>'; }
+  catch (e) { el('content').innerHTML = `<div class="empty">Could not read the ${WXVIEWS[view] ? 'weather' : 'history'} from the server.</div>`; }
 }
 document.addEventListener('click', ev => {
   const b = ev.target.closest('button[data-span],button[data-day]');
@@ -740,7 +906,7 @@ if (site) {   // the live call also brings the site profile (names, sensors, con
 }
 else { el('wrap').classList.add('solo'); tick(); }
 setInterval(tick, 15000);
-setInterval(() => { if (site && view !== 'now' && view !== 'firmware' && !document.hidden) { delete HCACHE[span]; show(view); } }, 300e3);
+setInterval(() => { if (site && view !== 'now' && view !== 'firmware' && !document.hidden) { delete HCACHE[span]; WXC = null; WXL = {}; show(view); } }, 300e3);
 </script>
 </body>
 </html>
