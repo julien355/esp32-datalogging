@@ -6,3 +6,5 @@ server/.env
 server/deploy/oed/.env
 server/deploy/oed/*.env
 !server/deploy/oed/oed.env.example
+firmware/logs/
+logs/

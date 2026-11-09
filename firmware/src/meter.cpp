@@ -418,7 +418,7 @@ bool installFile(const String &csv, String &err) {
     if (r) r.close();
   }
   if (ok) {
-    sdFs->remove(FILE_REGISTERS_BAK);
+    if (sdFs->exists(FILE_REGISTERS_BAK)) sdFs->remove(FILE_REGISTERS_BAK);   // remove() of a missing file logs an error
     if (sdFs->exists(FILE_REGISTERS)) ok = sdFs->rename(FILE_REGISTERS, FILE_REGISTERS_BAK);
     if (ok) ok = sdFs->rename(FILE_REGISTERS_NEW, FILE_REGISTERS);
     if (!ok && !sdFs->exists(FILE_REGISTERS) && sdFs->exists(FILE_REGISTERS_BAK))
@@ -440,7 +440,7 @@ bool removeFile(String &err) {
   xSemaphoreTake(sdMutex, portMAX_DELAY);
   bool ok = true;
   if (sdFs->exists(FILE_REGISTERS)) {
-    sdFs->remove(FILE_REGISTERS_BAK);
+    if (sdFs->exists(FILE_REGISTERS_BAK)) sdFs->remove(FILE_REGISTERS_BAK);   // remove() of a missing file logs an error
     ok = sdFs->rename(FILE_REGISTERS, FILE_REGISTERS_BAK);
   }
   xSemaphoreGive(sdMutex);

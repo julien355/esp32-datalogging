@@ -1,6 +1,6 @@
 # Logger firmware: functions and settings
 
-Firmware **0.4.0** (CSV schema 3; 0.4.0 adds the remote register table (2.9.2) and the OTA build marker (2.8)), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
+Firmware **0.4.1** (CSV schema 3; 0.4.0 added the remote register table (2.9.2) and the OTA build marker (2.8); 0.4.1 fixes the watchdog restart on empty server replies, see [`UPDATING.md`](UPDATING.md) section 5, and moves the AM2301 default to GPIO 1), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
 Status: **written, compiled by CI, not yet run on the board.** The pin map and the meter register map are still **to verify** (Lab 1 and Lab 3 of the install manual).
 
 How to build, flash, configure and test it: [`OFFICE-PREP.md`](OFFICE-PREP.md). The file format: [`DATA-FORMAT.md`](DATA-FORMAT.md).
