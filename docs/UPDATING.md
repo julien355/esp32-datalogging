@@ -1,8 +1,140 @@
 # Updating the VPS and the loggers
 
-How a new version of this repository reaches `hermes-vps` and the loggers, and the extra steps of the **8 November 2026 release** (VPS `v0.4.0`, firmware `0.4.0`). The detailed tutorial steps are in [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
+How a new version of this repository reaches `hermes-vps` and the loggers. **This release: 9 November 2026, VPS `v0.5.0`** (section A, below); the loggers keep firmware `0.4.0`. The steps of the 8 November release (`v0.4.0`) follow it, for reference. The detailed tutorial steps are in [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
+
+## A. Release v0.5.0 (9 November 2026): weather, saved live data, firmware versions page
+
+### A0. What is in it
+
+| Part | What changed | What it needs |
+|---|---|---|
+| Weather | Menu group **Weather**: Today (forecast hour by hour), Tomorrow (next day forecast), Weather log (actual weather against the forecast and the outdoor sensor, CSV). One weather line on Live now. Open-Meteo, no key ([`WEATHER.md`](WEATHER.md)) | VPS update, then **once**: the site's position (A3.5). The container must reach `api.open-meteo.com` |
+| Live data saved | Every 15 s snapshot is also saved in the data folder (`live.json`, `live/<day>.jsonl`, 7 days, about 3 MB a day per logger); the live page refills after a restart; a second dashboard can read everything from one place ([`DATA-ACCESS.md`](DATA-ACCESS.md)) | VPS update. Optional `.env` key `LIVE_KEEP_DAYS` |
+| Firmware versions page | **Firmware versions** in the menu (group Logger), for everyone: running firmware, since when, last restart, offers, history, GitHub releases ([`OTA.md`](OTA.md) section 5) | VPS update |
+| Docker network | The service's network is now named `arkan-monitoring` (a second dashboard's container joins it) | Nothing: the restart creates it (A3.4) |
+| Firmware | No change: stays `0.4.0`, **no `fw-v` tag** this time | Nothing on the loggers |
+| Caddy | No change: the new pages and `/api/v1/weather/*`, `/api/v1/versions/*` are behind the Arkan login like the others | Nothing (checked in A3.3) |
+
+### A1. On GitHub (owner): merge, then tag
+
+1. Merge the pull request from `claude/practical-cori-ji7fop` into the default branch. Wait for CI to be green (jobs `firmware`, `server`, `tools`).
+2. Tag the merge commit `v0.5.0`, on GitHub (**Releases**, **Draft a new release**, **Choose a tag**, type `v0.5.0`, target the default branch, publish) or from a terminal on the merged commit:
+
+```bash
+git tag v0.5.0
+```
+
+```bash
+git push origin v0.5.0
+```
+
+Its `/health` answers `"version": "0.5.0"`.
+
+### A2. Before: where you start from
+
+**Where:** VPS, user ai (`ssh hermes-vps`), except the steps marked owner.
+
+```bash
+cd /opt/arkan-monitoring
+```
+
+```bash
+git describe --tags --always
+```
+
+**Expected:** `v0.4.0`. Write it down: it is what you go back to.
+
+```bash
+git status
+```
+
+**Expected:** `nothing to commit, working tree clean` (an untracked `server/.env` is fine). Modified files: stop and ask the owner.
+
+### A3. Update
+
+**A3.1 Backup**
+
+```bash
+/opt/arkan-monitoring/server/deploy/backup.sh
+```
+
+**A3.2 Get the new version**
+
+```bash
+git fetch --tags
+```
+
+```bash
+git checkout v0.5.0
+```
+
+**A3.3 `.env` and Caddy: nothing to change, check only**
+
+```bash
+diff /opt/edge/sites/monitoring.caddy /opt/arkan-monitoring/server/deploy/monitoring.caddy
+```
+
+**Expected:** no output (if OED is installed, compare with `server/deploy/oed/monitoring-oed.caddy`). The new `.env` keys are optional; without them the defaults apply: `WEATHER` (on), `WEATHER_EVERY_MIN` (60), `LIVE_KEEP_DAYS` (7); see `server/.env.example`.
+
+**A3.4 Rebuild and restart (owner approves)**
+
+```bash
+cd /opt/arkan-monitoring/server
+```
+
+```bash
+docker compose up -d --build
+```
+
+**Expected:** `Network arkan-monitoring Created` and the container `Recreated`, `Started`. The old network of the service (`server_default`) is no longer used; once the container is up, the owner may remove it (it fails harmlessly if something else still uses it):
+
+```bash
+docker network rm server_default
+```
+
+**A3.5 Weather: the hotel's position (once)**
+
+Adab Sidemen Resort, from the Google Maps pin:
+
+```bash
+docker compose exec ingest python tools/manage.py weather adab --lat -8.4766 --lon 115.4319
+```
+
+**Expected:** `fetched ... hours`, then `now (...)`, then three lines, today, tomorrow and the day after, each with a weather, a temperature range and rain. If it says `Open-Meteo not reachable`, the container cannot open an HTTPS connection to `api.open-meteo.com`: check the VPS outbound firewall rules (the firmware panel reaches `api.github.com` the same way), then run the command again. The rest of the release works without it.
+
+### A4. Checks
+
+```bash
+curl -s http://127.0.0.1:8800/health
+```
+
+**Expected:** `{"ok": true, "version": "0.5.0", ...}`.
+
+```bash
+docker compose ps
+```
+
+**Expected:** `Up ... (healthy)` after a minute.
+
+```bash
+ls -l /srv/arkan-monitoring/data/sites/adab/LOG-0001/live.json /srv/arkan-monitoring/data/sites/adab/weather/
+```
+
+**Expected:** `live.json` changed in the last 15 s (the logger is sending live data); `forecast.json`, `actual-2026.csv` in the weather folder (`dayahead-2026.csv` appears at 18:00 hotel time).
+
+In the browser, `https://arkan-monitoring.duckdns.org/live/adab/`:
+- **Live now**: the weather line under the alarms;
+- menu **Weather**: Today, Tomorrow and Weather log show data;
+- menu **Logger**, **Firmware versions**: LOG-0001 on `0.4.0`, "up to date", its history;
+- restart test (optional, owner approves): `docker compose restart ingest`, then Live now still shows the last 60 minutes at once.
+
+**Going back:** `git checkout v0.4.0`, then `docker compose up -d --build`. The data folder keeps the new `weather/` and `live/` files; `v0.4.0` ignores them, so going back is safe. Nothing to undo in Caddy.
+
+---
+
+# Release v0.4.0 (8 November 2026), for reference
 
 ## 0. What is in this release
 
@@ -187,6 +319,7 @@ docker compose exec ingest python tools/manage.py publish-fw /data/logger-0.4.0.
 ```
 
 ## 4. Next releases
+
 
 - **VPS only:** a new tag `v0.x.y`, then section 2 (2.4 and 2.5 only if `.env.example` or the Caddy file changed: tutorial 2, C5 steps 3a and 3b, tell you).
 - **Firmware only:** change `FW_VERSION`, test on the bench logger, tag `fw-v<version>`, then section 3 from the panel. Every build gets a new version number, never reused ([`OTA.md`](OTA.md) section 2).

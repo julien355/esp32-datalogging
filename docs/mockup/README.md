@@ -29,7 +29,7 @@ From the repository root (Python 3.9+, Node with Playwright for the screenshots)
 ```bash
 D=$(mktemp -d)
 python3 server/tools/manage.py --data $D init
-python3 server/tools/manage.py --data $D add-site adab --name "Adab hotel" --contracted-kva 82.5 --rated-a 200
+python3 server/tools/manage.py --data $D add-site adab --name "Adab hotel" --contracted-kva 82.5 --rated-a 200 --lat -8.4766 --lon 115.4319
 python3 server/tools/manage.py --data $D add-device adab LOG-0001          # prints the token
 DATA_DIR=$D BIND=127.0.0.1 PORT=8800 python3 server/app/server.py &
 python3 server/tools/simulate_logger.py --token <token> --backlog-hours 336 --event dip --live &

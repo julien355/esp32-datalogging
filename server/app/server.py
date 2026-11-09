@@ -2,7 +2,7 @@
 
 Device endpoints (token in "Authorization: Bearer <token>", no web login in Caddy):
   POST /api/v1/ingest          text/csv: header line + 1-minute rows, stored in the site's day files
-  POST /api/v1/live            JSON snapshot every 15 s, kept in memory only (last 60 min)
+  POST /api/v1/live            JSON snapshot every 15 s: last 60 min in memory, every snapshot saved (LIVE_KEEP_DAYS)
   GET  /api/v1/ota?fw=x.y.z    204 = up to date, 200 = {"version","url","md5","size"}
   GET  /api/v1/firmware/<file> firmware image for the OTA update
   GET  /api/v1/config          204 = nothing set, 200 = {"version", "settings"} (manage.py set-config)
@@ -13,9 +13,14 @@ People endpoints (behind the Caddy web login, never published without it):
   GET  /health                 {"ok": true}
   GET  /api/v1/status          every site and logger: last record, last live, firmware
   GET  /api/v1/live/<site>     live values, 60-minute history and open alarms of a site
+  GET  /api/v1/live/<site>/day/<YYYY-MM-DD>?device=   every saved 15 s snapshot of that UTC day
   GET  /api/v1/alarms/<site>   open alarms and the last 200 lines of the alarm log
+  GET  /api/v1/versions/<site> firmware of each logger: running, since, offer, every change and restart,
+                               GitHub releases (asked once an hour), files on the server (read only, everyone)
   GET  /api/v1/history/<site>?days=15        one row per local hour: kWh, kW, sensors (from the day files)
   GET  /api/v1/history/<site>/day/<date>     the 1-minute power of one local day
+  GET  /api/v1/weather/<site>                Open-Meteo forecast (fetched every hour): today and tomorrow per hour
+  GET  /api/v1/weather/<site>/log?days=7     actual weather per hour with the day-ahead forecast (&format=csv)
   GET  /live/  /live/<site>/   site page: live now (refresh every 15 s) and the history graphs
   GET  /live/<site>/register   meter register table page of the site's logger (?device=LOG-0002 if several):
                                see, edit, import, send to the logger
@@ -38,7 +43,9 @@ Firmware update from the site page (people in ADMIN_USERS only, see docs/OTA.md)
 
 Settings (environment): DATA_DIR (/data), PORT (8800), BIND (0.0.0.0 in the container),
 MAX_BODY (262144 bytes), ADMIN_USERS (Caddy login names allowed to update firmware, comma separated,
-"*" = everyone who can log in, empty = nobody), FW_GITHUB_REPO (owner/name), FW_GITHUB_TOKEN.
+"*" = everyone who can log in, empty = nobody), FW_GITHUB_REPO (owner/name), FW_GITHUB_TOKEN,
+WEATHER (on; off = never fetch the forecast), WEATHER_EVERY_MIN (60), LIVE_KEEP_DAYS (7). Weather per site: site.json "weather"
+(app/weather.py, manage.py weather).
 """
 
 import json
@@ -48,20 +55,23 @@ import sys
 import threading
 import time
 from collections import deque
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import history  # noqa: E402
 import registers  # noqa: E402
+import weather  # noqa: E402
 from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
-from store import CODE_RE, DEVICE_RE, DataStore, IngestError, iso_now  # noqa: E402
+from store import CODE_RE, DEVICE_RE, DataStore, IngestError, atomic_write, iso_now  # noqa: E402
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
+LIVE_KEEP_DAYS = int(os.environ.get("LIVE_KEEP_DAYS", "7"))   # days of saved 15 s snapshots, 0 = memory only
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAGES = {"live": "live.html", "registers": "registers.html"}
 # Meter link settings the register page may change remotely (firmware/src/settings.cpp).
@@ -74,16 +84,97 @@ REGISTERS_ADMIN_RE = re.compile(r"^/api/v1/admin/(registers|meter-settings)/")
 
 
 class Live:
-    """Last snapshots per site and device, in memory only (a restart empties it)."""
+    """15-second snapshots per site and device.
 
-    def __init__(self):
+    The last 60 minutes are kept in memory for the live page, and every snapshot is also saved in the data
+    folder, so another dashboard can read the same live data and a restart does not empty the page:
+        sites/<site>/<device>/live.json                   the last snapshot (rewritten whole, never half written)
+        sites/<site>/<device>/live/YYYY-MM-DD.jsonl       every snapshot of that UTC day, one JSON per line
+    "recv" = when the server received it (UTC), "ts" = the logger's clock. Day files older than
+    LIVE_KEEP_DAYS (7) are deleted; LIVE_KEEP_DAYS=0 = memory only, nothing saved (before 0.5.0).
+    """
+
+    def __init__(self, store=None, keep_days=None):
         self.lock = threading.Lock()
+        self.wlock = threading.Lock()
         self.data = {}   # site -> device -> deque of (received_epoch, snapshot dict)
+        self.store = store
+        self.keep_days = LIVE_KEEP_DAYS if keep_days is None else keep_days
+        if self.store and self.keep_days > 0:
+            self.restore()
+
+    def dir(self, site, device):
+        return self.store.device_dir(site, device)
 
     def add(self, site, device, snap):
+        now = time.time()
         with self.lock:
             q = self.data.setdefault(site, {}).setdefault(device, deque(maxlen=LIVE_POINTS))
-            q.append((time.time(), snap))
+            q.append((now, snap))
+        if self.store and self.keep_days > 0:
+            self.save(site, device, now, snap)
+
+    def save(self, site, device, now, snap):
+        recv = datetime.fromtimestamp(now, timezone.utc)
+        doc = dict(snap, recv=recv.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        line = json.dumps(doc, separators=(",", ":"), sort_keys=True)
+        d = self.dir(site, device)
+        try:
+            with self.wlock:
+                os.makedirs(os.path.join(d, "live"), exist_ok=True)
+                with open(os.path.join(d, "live", recv.strftime("%Y-%m-%d") + ".jsonl"), "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+                atomic_write(os.path.join(d, "live.json"), line + "\n")
+        except OSError as e:   # a full disk must not stop the live page
+            sys.stderr.write(f"{iso_now()} live snapshot not saved for {device}: {e}\n")
+
+    def read_day(self, site, device, day):
+        """Every saved snapshot of a UTC day, oldest first. A last line still being written is skipped."""
+        p = os.path.join(self.dir(site, device), "live", day + ".jsonl")
+        out = []
+        try:
+            with open(p, encoding="utf-8") as f:
+                for ln in f:
+                    if not ln.endswith("\n"):
+                        break
+                    try:
+                        out.append(json.loads(ln))
+                    except ValueError:
+                        continue
+        except FileNotFoundError:
+            pass
+        return out
+
+    def restore(self):
+        """Refill the last 60 minutes from the saved snapshots (after a restart or an update)."""
+        now = datetime.now(timezone.utc)
+        since = now.timestamp() - LIVE_POINTS * 15 - 60
+        days = [(now - timedelta(days=1)).strftime("%Y-%m-%d"), now.strftime("%Y-%m-%d")]
+        for site in self.store.sites():
+            for device in self.store.site_devices(site):
+                for day in days:
+                    for doc in self.read_day(site, device, day):
+                        try:
+                            t = datetime.strptime(doc.pop("recv"), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+                        except (KeyError, TypeError, ValueError):
+                            continue
+                        if t >= since:
+                            with self.lock:
+                                self.data.setdefault(site, {}).setdefault(device, deque(maxlen=LIVE_POINTS)).append((t, doc))
+
+    def prune(self):
+        """Delete the day files older than LIVE_KEEP_DAYS."""
+        if not self.store or self.keep_days <= 0:
+            return
+        oldest = (datetime.now(timezone.utc) - timedelta(days=self.keep_days)).strftime("%Y-%m-%d")
+        for site in self.store.sites():
+            for device in self.store.site_devices(site):
+                d = os.path.join(self.dir(site, device), "live")
+                if not os.path.isdir(d):
+                    continue
+                for fn in os.listdir(d):
+                    if fn.endswith(".jsonl") and fn[:10] < oldest:
+                        os.unlink(os.path.join(d, fn))
 
     def site(self, site):
         with self.lock:
@@ -210,12 +301,27 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {"site": site, "profile": self.public_profile(site),
                                         "devices": self.live.site(site),
                                         "alarms": self.store.alarms.open_alarms(site), "time": iso_now()})
+        m = re.match(r"^/api/v1/live/([a-z0-9-]+)/day/(\d{4}-\d{2}-\d{2})$", path)
+        if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
+            devs = self.store.site_devices(m.group(1))
+            dev = parse_qs(u.query).get("device", [devs[0] if devs else ""])[0]
+            if dev not in devs:
+                return self.send_json(404, {"ok": False, "error": "no such logger on this site"})
+            return self.send_json(200, {"site": m.group(1), "device": dev, "day_utc": m.group(2),
+                                        "snapshots": self.live.read_day(m.group(1), dev, m.group(2))})
+        m = re.match(r"^/api/v1/versions/([a-z0-9-]+)$", path)
+        if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
+            rel, err = self.cached_releases()
+            return self.send_json(200, self.fw.site_view(m.group(1), rel, err))
         m = re.match(r"^/api/v1/alarms/([a-z0-9-]+)$", path)
         if m and CODE_RE.match(m.group(1)):
             return self.send_json(200, self.alarm_view(m.group(1)))
         m = re.match(r"^/api/v1/history/([a-z0-9-]+)(?:/day/(\d{4}-\d{2}-\d{2}))?$", path)
         if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
             return self.history(m.group(1), m.group(2), parse_qs(u.query))
+        m = re.match(r"^/api/v1/weather/([a-z0-9-]+)(/log)?$", path)
+        if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
+            return self.weather_view(m.group(1), bool(m.group(2)), parse_qs(u.query))
         if path in ("/live", "/live/") or re.match(r"^/live/[a-z0-9-]+/?$", path):
             return self.page("live")
         if re.match(r"^/live/[a-z0-9-]+/register/?$", path):
@@ -405,6 +511,39 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return self.send_json(400, {"ok": False, "error": "bad date or days"})
 
+    _releases = {"at": 0, "rel": None, "err": None}
+
+    def cached_releases(self):
+        """GitHub releases for the versions page, asked at most once an hour (GitHub limits anonymous calls)."""
+        c = Handler._releases
+        if not self.github or not self.github.configured():
+            return None, "FW_GITHUB_REPO is not set on the server"
+        if time.time() - c["at"] > (3600 if c["rel"] is not None else 600):
+            try:
+                c["rel"], c["err"] = self.github.releases(20), None
+            except FirmwareError as e:
+                c["err"] = str(e)
+            c["at"] = time.time()
+        return c["rel"], c["err"]
+
+    def weather_view(self, site, log, q):
+        if not log:
+            return self.send_json(200, self.weather.view(site))
+        try:
+            days = int(q.get("days", ["7"])[0])
+        except ValueError:
+            return self.send_json(400, {"ok": False, "error": "bad days"})
+        if q.get("format", [""])[0] != "csv":
+            return self.send_json(200, self.weather.log(site, days))
+        body = self.weather.log_csv(site, days).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="weather-{site}-{days}d.csv"')
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        return self.wfile.write(body)
+
     def status(self):
         out = {"time": iso_now(), "sites": {}}
         for site in self.store.sites():
@@ -563,10 +702,11 @@ def make_server(data_dir, bind="127.0.0.1", port=8800):
     store = DataStore(data_dir)
     store.alarms = AlarmEngine(store)
     Handler.store = store
-    Handler.live = Live()
+    Handler.live = Live(store)
     Handler.fw = Firmware(store)
     store.on_rollback = Handler.fw.note_rollback
     Handler.github = GitHub()
+    Handler.weather = weather.Weather(store)
     Handler.admin_users = os.environ.get("ADMIN_USERS", "")
     srv = ThreadingHTTPServer((bind, port), Handler)
     srv.daemon_threads = True
@@ -578,15 +718,29 @@ def main():
     port = int(os.environ.get("PORT", "8800"))
     srv = make_server(DATA_DIR, bind, port)
 
-    def offline_watch():   # A01: a logger that sends nothing
+    def offline_watch():   # A01: a logger that sends nothing; once an hour, old live day files deleted
+        n = 0
         while True:
             time.sleep(60)
             try:
                 Handler.store.alarms.check_offline()
+                if n % 60 == 0:
+                    Handler.live.prune()
             except Exception as e:   # never let the watcher die
                 sys.stderr.write(f"{iso_now()} offline check failed: {e!r}\n")
+            n += 1
+
+    def weather_watch():   # Open-Meteo forecast and the weather logs of the sites that have lat/lon
+        while True:
+            try:
+                Handler.weather.tick()
+            except Exception as e:
+                sys.stderr.write(f"{iso_now()} weather check failed: {e!r}\n")
+            time.sleep(60)
 
     threading.Thread(target=offline_watch, daemon=True).start()
+    if os.environ.get("WEATHER", "on").lower() not in ("off", "0", "no"):
+        threading.Thread(target=weather_watch, daemon=True).start()
     sys.stderr.write(f"{iso_now()} arkan-ingest {VERSION} on {bind}:{port}, data in {DATA_DIR}\n")
     try:
         srv.serve_forever()

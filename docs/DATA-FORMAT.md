@@ -35,9 +35,14 @@ sites/adab/LOG-0001/raw/2026/11/2026-11-07.csv same file as on the SD card (same
 sites/adab/LOG-0001/events.jsonl               boots and their reason, firmware changes, settings sent/applied, column changes, backfills
 sites/adab/LOG-0001/config.json                settings sent to the logger (manage.py set-config)
 sites/adab/LOG-0001/settings-reported.json     settings the logger reported after its last boot
+sites/adab/LOG-0001/live.json                  the last 15 s live snapshot (docs/LIVE.md)
+sites/adab/LOG-0001/live/2026-11-09.jsonl      every 15 s live snapshot of that UTC day, kept 7 days
 sites/adab/alarms/2026.csv                     alarm and warning log of the site (docs/alarms/README.md)
 alarm-register.csv                             the alarm register in use (Excel)
 sites/adab/daily.csv                           one row per WITA day (manage.py daily)
+sites/adab/weather/actual-2026.csv             actual weather, one row per WITA hour (Open-Meteo, docs/WEATHER.md)
+sites/adab/weather/dayahead-2026.csv           tomorrow's forecast, saved every day at 18:00 WITA
+sites/adab/weather/forecast.json               the last forecast fetched (every hour)
 export/oed/adab/*.csv                          OED upload files (manage.py export-oed)
 ```
 Backups: `/srv/arkan-monitoring/backups/data-<date>.tar.gz`, nightly, 14 kept (`server/deploy/backup.sh`).

@@ -8,7 +8,7 @@ or anywhere with --data <folder> (for example a copy of the data folder on a lap
 Commands:
   init                                  create the folder layout
   add-site <code> --name "Adab hotel" --contracted-kva 82.5 --rated-a 200 [--nominal-v 230]
-                                        [--tz Asia/Makassar] [--utc-offset 8]
+                                        [--tz Asia/Makassar] [--utc-offset 8] [--lat -8.5 --lon 115.2]
   add-device <site> <device> [--sd-settings FILE --server URL]
                                         register a logger, print its token and setup WiFi password ONCE
   rotate-token <device>                 new token (the old one stops working at once)
@@ -29,6 +29,9 @@ Commands:
   show-registers <device>               register table sent, table the logger reported, history
   alarms <site> [--rebuild]             open alarms and the last lines of the alarm log;
                                         --rebuild replays every record (after a backfill or a register change)
+  weather <site> [--lat L --lon L] [--dayahead-hour 18] [--model M] [--off] [--no-fetch]
+                                        weather forecast and log of the site (Open-Meteo, no key, app/weather.py):
+                                        set or change the place, fetch once now, show today, tomorrow and the log
 """
 
 import argparse
@@ -45,6 +48,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import registers  # noqa: E402
 from alarms import AlarmEngine  # noqa: E402
 from firmware import Firmware, FirmwareError, check_image  # noqa: E402
+from weather import Weather  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, atomic_write, iso_now, token_hash  # noqa: E402
 
 
@@ -113,6 +117,8 @@ def cmd_add_site(store, a):
         "contract_v_ln": 220,
         "rated_a": a.rated_a,
     }
+    if a.lat is not None and a.lon is not None:
+        prof["weather"] = {"lat": a.lat, "lon": a.lon, "dayahead_hour": 18, "model": "best_match"}
     atomic_write(p, json.dumps(prof, indent=2) + "\n")
     print(f"site {a.code} created: {p}")
 
@@ -507,6 +513,60 @@ def cmd_alarms(store, a):
             print("  " + ln)
 
 
+def cmd_weather(store, a):
+    p = os.path.join(store.site_dir(a.site), "site.json")
+    if not os.path.exists(p):
+        die(f"no site {a.site}")
+    prof = store.site_profile(a.site)
+    w = dict(prof.get("weather") or {})
+    changed = False
+    if (a.lat is None) != (a.lon is None):
+        die("give both --lat and --lon (decimal degrees, south and west negative, e.g. --lat -8.5069 --lon 115.2625)")
+    if a.lat is not None:
+        if not (-90 <= a.lat <= 90 and -180 <= a.lon <= 180):
+            die("latitude -90..90, longitude -180..180")
+        w.update(lat=a.lat, lon=a.lon, enabled=True)
+        w.setdefault("dayahead_hour", 18)
+        w.setdefault("model", "best_match")
+        changed = True
+    if a.dayahead_hour is not None:
+        if not 0 <= a.dayahead_hour <= 23:
+            die("--dayahead-hour 0..23 (hotel time)")
+        w["dayahead_hour"] = a.dayahead_hour
+        changed = True
+    if a.model:
+        w["model"] = a.model
+        changed = True
+    if a.off:
+        w["enabled"] = False
+        changed = True
+    if changed:
+        prof["weather"] = w
+        atomic_write(p, json.dumps(prof, indent=2) + "\n")
+        print(f"site.json: weather {json.dumps(w)}")
+    wx = Weather(store)
+    if not wx.settings(a.site):
+        print("weather is off for this site" + ("" if w.get("lat") is not None else ": set --lat and --lon"))
+        return
+    if not a.no_fetch:
+        try:
+            r = wx.update(a.site)
+        except Exception as e:
+            die(f"fetch failed: {e}")
+        print(f"fetched {r['hours']} hours; logged {r['actual']} actual hour(s), {r['dayahead']} day-ahead hour(s)")
+    v = wx.view(a.site)
+    if v.get("current"):
+        c = v["current"]
+        print(f"now ({c['t']}): {c['temp_c']} C, {c['rh_pct']} %RH, {c['condition']}, wind {c['wind_kmh']} km/h")
+    for d in (v.get("days") or []):
+        if d["date"] >= v["now"][:10]:
+            print(f"{d['date']}: {d['condition']:<22} {d['tmin_c']}-{d['tmax_c']} C, rain {d['precip_mm']} mm "
+                  f"({d['precip_prob_pct']} %), sun {d['sun_kwh_m2']} kWh/m2, {d['sunrise']}-{d['sunset']}")
+    lg = wx.log(a.site, 7)
+    print(f"weather log, last 7 days: {len(lg['hours'])} hour(s), {sum(1 for h in lg['hours'] if h['fc_temp_c'] is not None)} "
+          f"with a day-ahead forecast. Files: {wx.dir(a.site)}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", default=os.environ.get("DATA_DIR", "/data"), help="data folder (default $DATA_DIR or /data)")
@@ -517,6 +577,8 @@ def main():
     p.add_argument("--contracted-kva", type=float, help="PLN contract, e.g. 82.5 (A08, A37)")
     p.add_argument("--rated-a", type=float, help="main breaker or CT rating in A, e.g. 200 (A29)")
     p.add_argument("--nominal-v", type=float, default=230, help="nominal phase voltage L-N")
+    p.add_argument("--lat", type=float, help="latitude of the site for the weather forecast, e.g. -8.5069")
+    p.add_argument("--lon", type=float, help="longitude of the site, e.g. 115.2625")
     p = sub.add_parser("add-device"); p.add_argument("site"); p.add_argument("device")
     p.add_argument("--sd-settings", help="also write a settings.txt for the logger's SD card")
     p.add_argument("--server", default="https://arkan-monitoring.duckdns.org")
@@ -544,6 +606,12 @@ def main():
     p = sub.add_parser("show-registers"); p.add_argument("device")
     p = sub.add_parser("alarms"); p.add_argument("site"); p.add_argument("--rebuild", action="store_true")
     p.add_argument("--lines", type=int, default=20)
+    p = sub.add_parser("weather"); p.add_argument("site")
+    p.add_argument("--lat", type=float); p.add_argument("--lon", type=float)
+    p.add_argument("--dayahead-hour", type=int, help="hotel hour at which tomorrow's forecast is logged (default 18)")
+    p.add_argument("--model", help="Open-Meteo model, default best_match (e.g. ecmwf_ifs025, gfs_seamless)")
+    p.add_argument("--off", action="store_true", help="stop fetching for this site (the logs are kept)")
+    p.add_argument("--no-fetch", action="store_true")
     a = ap.parse_args()
     store = DataStore(a.data)
     {
@@ -552,7 +620,7 @@ def main():
         "enable-device": lambda s, x: cmd_enable(s, x, False), "list": cmd_list, "daily": cmd_daily,
         "export-oed": cmd_export_oed, "backfill": cmd_backfill, "publish-fw": cmd_publish_fw,
         "set-config": cmd_set_config, "show-config": cmd_show_config, "alarms": cmd_alarms,
-        "set-registers": cmd_set_registers, "show-registers": cmd_show_registers,
+        "set-registers": cmd_set_registers, "show-registers": cmd_show_registers, "weather": cmd_weather,
     }[a.cmd](store, a)
 
 

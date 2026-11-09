@@ -73,6 +73,8 @@ Loggers report their build (`usb` or `uart`) from firmware **0.4.0** on, the fir
 - **Withdraw the offer:** removes what was offered to this logger. If an offer to every logger (`manage.py publish-fw` without `--device`) exists, that one applies again.
 - The panel shows only to the logins listed in `ADMIN_USERS`. The live values stay visible to everyone with a login.
 
+**Firmware versions** (`#versions`, everyone with a login, read only, service 0.5.0): what each logger runs and since when, its last restart and why, the offer and its state, the versions it refused, the full history of firmware changes and offers (and every restart if asked), the GitHub releases with the logger running each, and the files on the server. Use it to check an update went through; the panel above is only for sending.
+
 A version that rolled back is not offered to that logger again. To try it again anyway, send it again from the panel. The logger also remembers it and skips it, until someone types `ota` on its console. The real fix is a new build with a new version number.
 
 ## 6. Server settings (once, on the VPS)

@@ -42,9 +42,10 @@ Default for Adab:
 - Data use: about 2 MB a day on the hotel WiFi.
 
 **Ingest service:**
-- Keeps the last snapshot and the **last 60 minutes** (240 points) per site **in memory only**: a few kB per site.
+- Keeps the last snapshot and the **last 60 minutes** (240 points) per site in memory for the page: a few kB per site.
+- **Since 0.5.0 every snapshot is also saved** in the data folder, so a second dashboard reads the same live data ([`DATA-ACCESS.md`](DATA-ACCESS.md)): `sites/<site>/<device>/live.json` (the last snapshot) and `live/YYYY-MM-DD.jsonl` (every snapshot of the UTC day, kept 7 days, `LIVE_KEEP_DAYS`). About 3 MB a day per logger (22 MB for 7 days); `LIVE_KEEP_DAYS=0` goes back to memory only.
 - Serves `/api/v1/live/<site>` (JSON) and the page `/live/<site>/`.
-- A restart empties the 60 minutes; they refill as snapshots arrive.
+- After a restart or an update the 60 minutes are read back from the saved snapshots: the page is full at once.
 - The live alarms (A04 phase lost, A07 frequency) are checked on the snapshots, so they react within 15 to 30 s.
 
 **Live page `/live/<site>/`** (layout of the dashboard mockup, `docs/mockup/`, approved 8 November 2026):
@@ -77,11 +78,14 @@ Default for Adab:
 - Each day file is summarised once and kept in memory until it changes: the first 14-day request reads the files (under a second for 14 days), later ones take a few milliseconds.
 - These pages overlap with OED's line, bar and compare graphs. OED stays for what they do not do: groups of sites, export, maps, the comparison of any period.
 
+**Weather pages of `/live/<site>/`** (side menu, group *Weather*, added 9 November 2026): **Today** (`#wtoday`, the forecast hour by hour with the outdoor sensor beside the past hours), **Tomorrow** (`#wtomorrow`, the next day forecast) and **Weather log** (`#wlog`, the actual weather of each hour against the forecast made the day before, with the day's kWh). Live now shows one weather line under the alarms. Open-Meteo, fetched every hour by the ingest service; logs in `sites/<site>/weather/`. Setup and file format: [`WEATHER.md`](WEATHER.md).
+
 **Logger pages of `/live/<site>/`** (side menu, group *Logger*):
 
 | Menu | Address | What it is | Who |
 |---|---|---|---|
 | Meter registers | `/live/<site>/register` (`?device=LOG-0002` if the site has several loggers) | the meter register table the logger reads: see, edit, import, check and send it, history of versions, and the meter link settings (`meters`, `mb_baud`, `mb_format`, `ct_mult`). Firmware 0.4.0 or later. Steps: [`meter/README.md`](meter/README.md#changing-the-register-table) | everyone with the Arkan login |
+| Firmware versions | `#versions` | each logger's running firmware and build, since when, last restart and why, what is offered and its state, versions refused; the history of every firmware change, offer and (optional) restart; the GitHub releases and which logger runs each; the firmware files on the server. Read only. Data: `GET /api/v1/versions/<site>` | everyone with the Arkan login |
 | Firmware update | `#firmware` | one panel per logger: send a GitHub release, a `.bin` file or a stored file to that logger, status and recent events. [`OTA.md`](OTA.md) | only the logins in `ADMIN_USERS` (`server/.env`); the menu entry is hidden for the others |
 
 **`/live/`** lists all sites with their status and total kW: the multi-site live overview.
