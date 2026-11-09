@@ -10,6 +10,7 @@ reading a FORT FCN300 (3E4Y or 3EH4Y, same registers) meter over Modbus RTU. Pil
 - **Step-by-step tutorials** (logger on site, VPS, Open Energy Dashboard, Modbus registers): [`docs/tutorials/`](docs/tutorials/)
 - **Updating the VPS and the loggers** (and what the 9 November 2026 release, `v0.5.0`, needs): [`docs/UPDATING.md`](docs/UPDATING.md)
 - Site page `/live/<site>/`: live data every 15 s, history pages, meter register page, firmware update: [`docs/LIVE.md`](docs/LIVE.md). Design mockup: [`docs/mockup/`](docs/mockup/)
+- **Power quality** pages on the site page: voltage per phase (mean, lowest and highest 15 s sample, one day minute by minute), dips and swells, unbalance, frequency, power factor and the kVArh PLN bills, against the limits of the alarm register: [`docs/LIVE.md`](docs/LIVE.md#option-a-in-detail) (Power quality pages)
 - **Weather** on the site page: today's forecast hour by hour, tomorrow's forecast, and a log of the actual weather against the forecast and the outdoor sensor (Open-Meteo, no key): [`docs/WEATHER.md`](docs/WEATHER.md)
 - **One server, one data folder:** where every piece of data is (live, records, alarms, weather) and how a second dashboard reads it at the same time: [`docs/DATA-ACCESS.md`](docs/DATA-ACCESS.md)
 - Keeping RAM low on the VPS: [`docs/VPS-MEMORY.md`](docs/VPS-MEMORY.md)

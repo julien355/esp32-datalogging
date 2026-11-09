@@ -13,6 +13,12 @@ const [base = 'http://127.0.0.1:8800', out = 'docs/mockup/img'] = process.argv.s
     await desk.goto(base + '/live/adab/#' + v); await desk.waitForSelector('svg.chart, .cmp');
     await desk.screenshot({path: `${out}/site-${v}.png`});
   }
+  for (const v of ['quality', 'voltage', 'pf']) {   // the power quality pages, over 31 days to include the simulated dip
+    await desk.goto(base + '/live/adab/#' + v); await desk.waitForSelector('svg.chart');
+    await desk.click('button[data-span="31"]'); await desk.waitForSelector('button[data-span="31"].on');
+    await desk.waitForSelector('svg.chart'); await desk.waitForTimeout(300);
+    await desk.screenshot({path: `${out}/site-${v}.png`});
+  }
   const phone = await b.newPage({viewport: {width: 390, height: 844}, deviceScaleFactor: 2});
   await phone.goto(base + '/live/adab/'); await phone.waitForSelector('.card');
   await phone.screenshot({path: out + '/live-adab-phone.png'});

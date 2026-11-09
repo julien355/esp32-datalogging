@@ -350,6 +350,68 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(self.req("GET", "/api/v1/history/adab/day/2026-13-40")[0], 400)
         self.assertEqual(self.req("GET", "/api/v1/history/adab?meter=../x")[0], 400)
 
+    def test_quality(self):
+        hdr = ("ts,EM01_v1,EM01_v1_min,EM01_v1_max,EM01_v2,EM01_v2_min,EM01_v2_max,EM01_v3,EM01_v3_min,EM01_v3_max,"
+               "EM01_i1,EM01_i2,EM01_i3,EM01_f,EM01_f_min,EM01_f_max,EM01_p,EM01_q,EM01_pf,EM01_pf_min,EM01_pf_max,"
+               "EM01_e,EM01_eq,EM01_n,rssi,backlog_min,sd,boot")
+        rows = []
+        for n, m in enumerate(range(9, -1, -1)):   # 10 minutes; e +0.5 kWh and eq +0.25 kVArh a minute
+            v2, v2min, v3max, p, pf, pfmin = 230, 229, 231, 20, 0.9, 0.88
+            if n == 3:
+                v2, v2min = 205, 180          # undervoltage minute (mean < 207) and a dip (sample < 207)
+            if n == 5:
+                pf, pfmin = 0.80, 0.78        # power factor below 0.85
+            if n == 7:
+                p, pf, pfmin = 0.5, 0.5, 0.5  # below 1 kW: no power factor counted
+            if n == 8:
+                v3max = 255                   # a swell (sample > 253)
+            rows.append(f"{ts(m)},230,229,231,{v2},{v2min},{v2},230,229,{v3max},10,10,10,50,49.98,50.02,{p},10,{pf},{pfmin},"
+                        f"{pf},{1000 + n * 0.5:.2f},{500 + n * 0.25:.2f},4,-63,0,1,")
+        code, body = self.req("POST", "/api/v1/ingest", hdr + "\n" + "\n".join(rows) + "\n", self.token)
+        self.assertEqual(code, 200, body)
+        code, body = self.req("GET", "/api/v1/quality/adab?days=2")
+        self.assertEqual(code, 200, body)
+        j = json.loads(body)
+        h = j["hours"]
+        tot = lambda k: sum(r.get(k, 0) for r in h)
+        self.assertEqual(tot("minutes"), 10)
+        self.assertEqual((tot("vn"), tot("vok"), tot("vlow"), tot("vhigh")), (10, 9, 1, 0))
+        self.assertEqual((tot("dips"), tot("swells"), tot("lost")), (1, 1, 0))
+        self.assertEqual((tot("loaded"), tot("pf_low")), (9, 1))
+        self.assertAlmostEqual(tot("kwh"), 4.5, places=3)
+        self.assertAlmostEqual(tot("kvarh"), 2.25, places=3)
+        self.assertEqual(min(r["v2_min"] for r in h), 180)
+        self.assertEqual(max(r["v3_max"] for r in h), 255)
+        self.assertEqual(min(r["pf_min"] for r in h), 0.78)
+        self.assertAlmostEqual(max(r["vu_max"] for r in h), (665 / 3 - 205) / (665 / 3) * 100, places=2)
+        self.assertEqual((j["limits"]["low"]["v"], j["limits"]["swell"]["v"], j["limits"]["pf"]["v"]), (207, 253, 0.85))
+        ids = {e["id"] for e in j["events"]}
+        self.assertTrue({"A26", "A27"} <= ids, ids)          # dip and swell lines of the alarm log
+        self.assertFalse(ids - {"A04", "A05", "A06", "A07", "A09", "A10", "A26", "A27", "A28"}, ids)
+        # minute by minute, over the one or two hotel days the 10 minutes fall on
+        local = lambda m: (datetime.now(timezone.utc) - timedelta(minutes=m) + timedelta(hours=8)).strftime("%Y-%m-%d")
+        got = []
+        for day in sorted({local(9), local(0)}):
+            code, body = self.req("GET", f"/api/v1/quality/adab/day/{day}")
+            self.assertEqual(code, 200, body)
+            d = json.loads(body)
+            got += [dict(zip(d["cols"], r)) for r in d["rows"]]
+        self.assertEqual(len(got), 10)
+        self.assertEqual(sorted(r["v2_min"] for r in got)[0], 180)
+        self.assertEqual(sum(r["pf"] is None for r in got), 1)   # the 0.5 kW minute
+        # the limits follow the alarm register: a site line A06 at 229 V puts every minute above the limits
+        with open(os.path.join(self.data, "alarm-register.csv"), encoding="utf-8") as f:
+            reg = f.read().splitlines()
+        a06 = next(ln for ln in reg if ln.startswith("A06,")).replace(",242,240,", ",229,228,")
+        with open(os.path.join(self.data, "sites", "adab", "alarm-register.csv"), "w", encoding="utf-8") as f:
+            f.write(reg[0] + "\n" + a06 + "\n")
+        j = json.loads(self.req("GET", "/api/v1/quality/adab?days=2")[1])
+        self.assertEqual(j["limits"]["high"]["v"], 229)
+        self.assertEqual((sum(r["vok"] for r in j["hours"]), sum(r["vhigh"] for r in j["hours"])), (0, 10))
+        self.assertEqual(self.req("GET", "/api/v1/quality/nosite")[0], 404)
+        self.assertEqual(self.req("GET", "/api/v1/quality/adab/day/2026-13-40")[0], 400)
+        self.assertEqual(self.req("GET", "/api/v1/quality/adab?days=x")[0], 400)
+
     def write_image(self, version, env="usb", **kw):
         p = os.path.join(self.data, f"build-{env}-{version}.bin")
         with open(p, "wb") as f:
