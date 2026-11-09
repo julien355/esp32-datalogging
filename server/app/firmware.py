@@ -31,6 +31,9 @@ MAX_IMAGE = 0x1E0000            # one app slot of min_spiffs.csv (firmware/platf
 MIN_IMAGE = 64 * 1024
 
 
+HISTORY_KINDS = ("firmware", "ota_offered", "ota_cancelled", "ota_failed", "boot")
+
+
 class FirmwareError(ValueError):
     pass
 
@@ -260,6 +263,56 @@ class Firmware:
                 if len(out) >= n:
                     break
         return out
+
+    def history(self, site, device, limit=500):
+        """Every firmware event and restart of a logger, newest first (events.jsonl)."""
+        p = os.path.join(self.store.device_dir(site, device), "events.jsonl")
+        out = []
+        try:
+            with open(p, encoding="utf-8") as f:
+                lines = f.read().splitlines()
+        except FileNotFoundError:
+            return out
+        for ln in reversed(lines):
+            try:
+                e = json.loads(ln)
+            except ValueError:
+                continue
+            if e.get("kind") in HISTORY_KINDS:
+                out.append(e)
+                if len(out) >= limit:
+                    break
+        return sorted(out, key=lambda e: str(e.get("ts", "")), reverse=True)
+
+    def site_view(self, site, releases=None, releases_error=None):
+        """GET /api/v1/versions/<site>: what each logger runs, what is offered, the history, the releases."""
+        stable = [r for r in (releases or []) if not r.get("prerelease") and str(r.get("tag", "")).startswith("fw-v")]
+        latest = max(stable, key=lambda r: version_key(r["tag"][4:]), default=None)
+        latest_v = latest["tag"][4:] if latest else None
+        loggers = []
+        for device in self.store.site_devices(site):
+            v = self.view(device)
+            info = self.store.load_devices().get("devices", {}).get(device) or {}
+            rep = self.reported(site, device)
+            hist = self.history(site, device)
+            running = v["running"]
+            since = next((e["ts"] for e in hist if e.get("kind") == "firmware" and e.get("to") == running), None)
+            boot = next((e for e in hist if e.get("kind") == "boot"), None)
+            if not running or not latest_v:
+                update = "unknown"
+            elif version_key(latest_v) > version_key(running):
+                update = "available"
+            else:
+                update = "up_to_date"
+            loggers.append({
+                "device": device, "running": running, "env": rep.get("env") or v["env"], "since": since,
+                "added": info.get("added"), "disabled": bool(info.get("disabled")),
+                "reported": rep.get("received"), "boot_reported": rep.get("boot"), "schema": rep.get("schema"),
+                "cfg_version": rep.get("cfg_version"), "reg_version": rep.get("reg_version"),
+                "reg_source": rep.get("reg_source"), "ota_on": v["ota_on"], "offer": v["offer"], "scope": v["scope"],
+                "state": v["state"], "failed": v["failed"], "last_boot": boot, "update": update, "history": hist})
+        return {"site": site, "latest": latest_v, "latest_published": latest.get("published") if latest else None,
+                "releases": releases or [], "releases_error": releases_error, "files": self.files(), "loggers": loggers}
 
     def view(self, device):
         dev = self.store.load_devices().get("devices", {}).get(device)

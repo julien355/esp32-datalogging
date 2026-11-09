@@ -340,7 +340,7 @@ async function loadAll() {
       const st = d.live_age_s === null ? '<span class="bad">none</span>'
         : d.live_age_s < 60 ? `<span class="ok">● ${d.live_age_s} s ago</span>` : `<span class="bad">● ${Math.round(d.live_age_s / 60)} min ago</span>`;
       html += `<tr><td><a href="/live/${esc(s)}/"><b>${esc(s)}</b></a></td><td>${esc(dev)}</td><td>${p === null ? '–' : p.toFixed(1) + ' kW'}</td>
-        <td>${st}</td><td class="hide-s">${esc(d.last_record || '–')}</td><td class="hide-s">${esc(d.fw || '–')}</td></tr>`;
+        <td>${st}</td><td class="hide-s">${esc(d.last_record || '–')}</td><td class="hide-s"><a href="/live/${esc(s)}/#versions">${esc(d.fw || '–')}</a></td></tr>`;
     }
   }
   el('content').innerHTML = html + '</table><div class="foot">Click a site for its live page. History: <a href="/">Open Energy Dashboard</a>.</div>';
@@ -362,6 +362,7 @@ const VIEWS = [
   {id: 'wtoday', name: 'Today', sub: 'forecast hour by hour', grp: 'Weather'},
   {id: 'wtomorrow', name: 'Tomorrow', sub: 'next day forecast', grp: 'Weather'},
   {id: 'wlog', name: 'Weather log', sub: 'actual vs forecast', grp: 'Weather'},
+  {id: 'versions', name: 'Firmware versions', sub: 'running, history', grp: 'Logger'},
   {id: 'firmware', name: 'Firmware update', sub: 'remote, admins only', grp: 'Logger', admin: true},
 ];
 let isAdmin = false, fwReady = Promise.resolve();   // set by fwInit() from /api/v1/admin/me (ADMIN_USERS)
@@ -494,6 +495,7 @@ async function renderHistory() {
   const box = el('content');
   hideTip();
   if (WXVIEWS[view]) return WXVIEWS[view](box);
+  if (view === 'versions') return versionsView(box);
   if (view === 'power') {
     const j = await hourly(span);
     const pk = j.hours.filter(r => r.p_max !== undefined).reduce((a, r) => (!a || r.p_max > a.p_max ? r : a), null);
@@ -732,6 +734,80 @@ const WXVIEWS = {
   },
 };
 
+// ------------------------------------------------------------------ firmware versions (everyone; sending firmware: #firmware, admins)
+// GET /api/v1/versions/<site>: running firmware per logger, the offer, every firmware change and restart (events.jsonl),
+// the GitHub releases (asked by the server once an hour) and the files stored on the server.
+let vfAll = false;
+const BUILD = {usb: 'USB (native)', uart: 'UART'};
+function bootText(r) {   // the logger's restart reason, in words
+  const s = String(r || ''), [why, ver] = s.split('@');
+  const w = {poweron: 'power on', ext: 'reset button', sw: 'restarted by the firmware', panic: 'crash (panic)',
+    int_wdt: 'watchdog (frozen)', task_wdt: 'watchdog (task frozen)', wdt: 'watchdog', deepsleep: 'wake from sleep',
+    brownout: 'supply voltage dropped (brownout)', sdio: 'SDIO reset', 'sw:ota': 'after a firmware update',
+    'sw:ota_rollback': 'went back to the previous firmware', 'sw:daily': 'daily restart', 'sw:console': 'restart typed on the console',
+    'sw:portal': 'restart from the setup portal', 'sw:import': 'settings imported from the SD card', 'sw:remote_regs': 'new register table',
+    'sw:lowheap': 'memory low', 'sw:offline': 'no network for too long'}[why] || why || 'unknown';
+  return w + (ver ? ` (firmware ${ver})` : '');
+}
+function fwEvent(e) {
+  const by = e.by ? ` by ${esc(e.by)}` : '';
+  switch (e.kind) {
+    case 'firmware': return e.from ? ['Firmware changed', `<b>${esc(e.from)}</b> → <b>${esc(e.to)}</b>`] : ['First seen', `firmware <b>${esc(e.to)}</b>`];
+    case 'ota_offered': return ['Update offered', `<b>${esc(e.version)}</b>${e.source ? ' from ' + esc(e.source) : ''}${by}`];
+    case 'ota_cancelled': return ['Offer withdrawn', `${esc(e.version || '')}${by}`];
+    case 'ota_failed': return ['Update refused by the logger', `<span class="bad">${esc(e.version)}: kept restarting, went back</span>`];
+    case 'boot': return ['Restart', esc(bootText(e.reason)) + (e.record ? ` <span class="range">record ${esc(e.record.slice(11, 16))} UTC</span>` : '')];
+    default: return [esc(e.kind), ''];
+  }
+}
+async function versionsView(box) {
+  const j = await (await fetch(`/api/v1/versions/${site}`, {cache: 'no-store'})).json(), off = PROF.utc_offset_h ?? 8;
+  const L = j.loggers || [];
+  const badge = d => d.update === 'available' ? `<span class="sev warning">${esc(j.latest)} available</span>`
+    : d.update === 'up_to_date' ? '<span class="sev info">up to date</span>' : '';
+  let h = frame('Firmware versions', 'What each logger runs, since when, what is offered to it, and every firmware change and restart. ' +
+    `Sending a firmware: ${isAdmin ? '<a href="#firmware">Firmware update</a>' : 'Firmware update (logins in ADMIN_USERS)'}. See docs/OTA.md.`);
+  h += `<div class="grid">${statTile('Latest release on GitHub', j.latest ? esc(j.latest) : '–', '',
+      j.latest_published ? 'published ' + localTime(j.latest_published, off).slice(0, 10) : esc(j.releases_error || 'no release with logger files'))}` +
+    L.map(d => statTile(d.device, esc(d.running || '–'), '', `${badge(d)} ${d.env ? esc(BUILD[d.env] || d.env) + ' build' : ''}`)).join('') + '</div>';
+  if (!L.length) h += '<div class="card k" style="margin-top:12px">No logger registered on this site.</div>';
+  for (const d of L) {
+    const o = d.offer, st = {installed: '<span class="ok">installed</span>', waiting: '<span class="warn">waiting for the logger</span>',
+      rolled_back: '<span class="bad">refused: the logger went back</span>', not_newer: 'not newer than the running one'}[d.state] || '';
+    h += `<h2>${esc(d.device)}${d.disabled ? ' · <span class="bad">disabled</span>' : ''}</h2><div class="card"><div class="facts">
+      <div>Running<b>${esc(d.running || '–')}</b></div>
+      <div>Build<b>${esc(BUILD[d.env] || d.env || '–')}</b></div>
+      <div>Running it since (hotel time)<b>${d.since ? localTime(d.since, off) : '–'}</b></div>
+      <div>Last restart<b>${d.last_boot ? localTime(d.last_boot.ts, off) : '–'}</b>${d.last_boot ? `<span class="range">${esc(bootText(d.last_boot.reason))}</span>` : ''}</div>
+      <div>Last report from the logger<b>${d.reported ? localTime(d.reported, off) : '–'}</b></div>
+      <div>Remote update<b>${d.ota_on === '0' ? '<span class="bad">off (ota_on=0)</span>' : d.reported ? 'on' : '–'}</b></div>
+      <div>Offered<b>${o ? esc(o.version) : 'nothing'}</b>${o ? `<span class="range">${st}${o.scope === 'default' || d.scope === 'default' ? ', to every logger' : ''}${o.by ? ', by ' + esc(o.by) : ''}</span>` : ''}</div>
+      <div>Refused versions<b>${d.failed.length ? `<span class="bad">${d.failed.map(esc).join(', ')}</span>` : 'none'}</b></div>
+      <div>Data format, settings, registers<b>${d.reported ? `${esc(d.schema ?? '–')} · v${esc(d.cfg_version ?? '–')} · v${esc(d.reg_version ?? '–')}` : '–'}</b><span class="range">${esc(d.reg_source || '')}</span></div>
+      <div>Registered on the server<b>${d.added ? localTime(d.added, off).slice(0, 10) : '–'}</b></div>
+    </div></div>`;
+  }
+  const rows = L.flatMap(d => d.history.map(e => ({...e, device: d.device}))).filter(e => vfAll || e.kind !== 'boot' || /ota/.test(e.reason || ''))
+    .sort((a, b) => (a.ts < b.ts ? 1 : -1));
+  h += `<div class="vhead" style="margin-top:22px"><h2 style="margin:0">History · hotel time</h2><div class="seg">
+      <button data-vf="fw" class="${vfAll ? '' : 'on'}">Firmware only</button><button data-vf="all" class="${vfAll ? 'on' : ''}">With every restart</button></div></div>`;
+  h += rows.length ? `<table><tr><th>Time</th>${L.length > 1 ? '<th>Logger</th>' : ''}<th>Event</th><th>Detail</th></tr>${rows.slice(0, 300).map(e => {
+      const [what, det] = fwEvent(e);
+      return `<tr><td>${localTime(e.ts, off)}</td>${L.length > 1 ? `<td>${esc(e.device)}</td>` : ''}<td>${what}</td><td>${det}</td></tr>`; }).join('')}</table>`
+    : '<div class="card k">Nothing recorded yet.</div>';
+  const runs = {}; for (const d of L) if (d.running) (runs[d.running] ??= []).push(d.device);
+  h += `<h2>Releases on GitHub${j.releases_error ? ` · <span class="bad" style="text-transform:none;letter-spacing:0">${esc(j.releases_error)}</span>` : ''}</h2>`;
+  h += (j.releases || []).length ? `<table><tr><th>Version</th><th>Published</th><th class="hide-s">Files</th><th>Running on</th></tr>${j.releases.map(r => {
+      const v = String(r.tag || '').replace(/^fw-v/, '');
+      return `<tr><td><b>${esc(v)}</b>${r.prerelease ? ' <span class="sev">pre-release</span>' : ''}</td><td>${r.published ? localTime(r.published, off).slice(0, 10) : '–'}</td>
+        <td class="hide-s">${r.assets.map(a => esc(a.name)).join(', ')}</td><td>${(runs[v] || []).map(esc).join(', ')}</td></tr>`; }).join('')}</table>`
+    : '<div class="card k">None listed.</div>';
+  h += `<h2>Firmware files on the server</h2>` + ((j.files || []).length ? `<table><tr><th>File</th><th>Version</th><th>Build</th><th>Size</th></tr>${j.files.map(f =>
+      `<tr><td>${esc(f.file)}</td><td>${esc(f.version)}</td><td>${esc(BUILD[f.env] || f.env)}</td><td>${Math.round(f.size / 1024)} kB</td></tr>`).join('')}</table>`
+    : '<div class="card k">None yet (sent from GitHub or uploaded on Firmware update).</div>');
+  box.innerHTML = h + '<div class="foot">From the server\'s records: devices.json, each logger\'s events.jsonl and settings-reported.json. GitHub is asked at most once an hour.</div>';
+}
+
 async function show(id) {
   view = VIEWS.some(v => v.id === id) ? id : 'now';
   document.querySelectorAll('#side a[data-id]').forEach(a => a.classList.toggle('on', a.dataset.id === view));
@@ -747,11 +823,12 @@ async function show(id) {
   if (view === 'now') { el('content').innerHTML = ''; return tick(); }
   el('content').innerHTML = '<div class="card k">Loading…</div>';
   try { await renderHistory(); }
-  catch (e) { el('content').innerHTML = `<div class="empty">Could not read the ${WXVIEWS[view] ? 'weather' : 'history'} from the server.</div>`; }
+  catch (e) { el('content').innerHTML = `<div class="empty">Could not read the ${WXVIEWS[view] ? 'weather' : view === 'versions' ? 'firmware versions' : 'history'} from the server.</div>`; }
 }
 document.addEventListener('click', ev => {
-  const b = ev.target.closest('button[data-span],button[data-day]');
+  const b = ev.target.closest('button[data-span],button[data-day],button[data-vf]');
   if (!b) return;
+  if (b.dataset.vf) vfAll = b.dataset.vf === 'all';
   if (b.dataset.span) span = +b.dataset.span;
   if (b.dataset.day) dayShown = b.dataset.day;
   show(view);

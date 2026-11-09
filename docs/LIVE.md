@@ -85,6 +85,7 @@ Default for Adab:
 | Menu | Address | What it is | Who |
 |---|---|---|---|
 | Meter registers | `/live/<site>/register` (`?device=LOG-0002` if the site has several loggers) | the meter register table the logger reads: see, edit, import, check and send it, history of versions, and the meter link settings (`meters`, `mb_baud`, `mb_format`, `ct_mult`). Firmware 0.4.0 or later. Steps: [`meter/README.md`](meter/README.md#changing-the-register-table) | everyone with the Arkan login |
+| Firmware versions | `#versions` | each logger's running firmware and build, since when, last restart and why, what is offered and its state, versions refused; the history of every firmware change, offer and (optional) restart; the GitHub releases and which logger runs each; the firmware files on the server. Read only. Data: `GET /api/v1/versions/<site>` | everyone with the Arkan login |
 | Firmware update | `#firmware` | one panel per logger: send a GitHub release, a `.bin` file or a stored file to that logger, status and recent events. [`OTA.md`](OTA.md) | only the logins in `ADMIN_USERS` (`server/.env`); the menu entry is hidden for the others |
 
 **`/live/`** lists all sites with their status and total kW: the multi-site live overview.

@@ -15,6 +15,8 @@ People endpoints (behind the Caddy web login, never published without it):
   GET  /api/v1/live/<site>     live values, 60-minute history and open alarms of a site
   GET  /api/v1/live/<site>/day/<YYYY-MM-DD>?device=   every saved 15 s snapshot of that UTC day
   GET  /api/v1/alarms/<site>   open alarms and the last 200 lines of the alarm log
+  GET  /api/v1/versions/<site> firmware of each logger: running, since, offer, every change and restart,
+                               GitHub releases (asked once an hour), files on the server (read only, everyone)
   GET  /api/v1/history/<site>?days=15        one row per local hour: kWh, kW, sensors (from the day files)
   GET  /api/v1/history/<site>/day/<date>     the 1-minute power of one local day
   GET  /api/v1/weather/<site>                Open-Meteo forecast (fetched every hour): today and tomorrow per hour
@@ -307,6 +309,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(404, {"ok": False, "error": "no such logger on this site"})
             return self.send_json(200, {"site": m.group(1), "device": dev, "day_utc": m.group(2),
                                         "snapshots": self.live.read_day(m.group(1), dev, m.group(2))})
+        m = re.match(r"^/api/v1/versions/([a-z0-9-]+)$", path)
+        if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
+            rel, err = self.cached_releases()
+            return self.send_json(200, self.fw.site_view(m.group(1), rel, err))
         m = re.match(r"^/api/v1/alarms/([a-z0-9-]+)$", path)
         if m and CODE_RE.match(m.group(1)):
             return self.send_json(200, self.alarm_view(m.group(1)))
@@ -504,6 +510,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, history.hourly(self.store, site, dev, int(q.get("days", ["15"])[0]), meter))
         except ValueError:
             return self.send_json(400, {"ok": False, "error": "bad date or days"})
+
+    _releases = {"at": 0, "rel": None, "err": None}
+
+    def cached_releases(self):
+        """GitHub releases for the versions page, asked at most once an hour (GitHub limits anonymous calls)."""
+        c = Handler._releases
+        if not self.github or not self.github.configured():
+            return None, "FW_GITHUB_REPO is not set on the server"
+        if time.time() - c["at"] > (3600 if c["rel"] is not None else 600):
+            try:
+                c["rel"], c["err"] = self.github.releases(20), None
+            except FirmwareError as e:
+                c["err"] = str(e)
+            c["at"] = time.time()
+        return c["rel"], c["err"]
 
     def weather_view(self, site, log, q):
         if not log:

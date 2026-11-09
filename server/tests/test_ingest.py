@@ -468,6 +468,31 @@ class ToolsAndHttpTest(unittest.TestCase):
                               headers=admin)
         self.assertEqual(code, 200)
 
+    def test_versions_page(self):
+        # the logger says its firmware on each upload; the page lists it, the history and the releases
+        self.req("POST", "/api/v1/ingest", HEADER + "\n" + row(ts(2)) + "\n", self.token, headers={"X-Fw": "0.3.1"})
+        self.req("POST", "/api/v1/ingest", HEADER + "\n" + row(ts(1), boot="sw:ota@0.3.1") + "\n", self.token,
+                 headers={"X-Fw": "0.4.0"})
+        server_mod.Handler._releases = {"at": time.time(), "err": None, "rel": [
+            {"tag": "fw-v0.4.0", "published": "2026-11-08T01:00:00Z", "prerelease": False, "assets": []},
+            {"tag": "fw-v0.5.0-rc1", "published": "2026-11-09T01:00:00Z", "prerelease": True, "assets": []}]}
+        gh = server_mod.Handler.github
+        server_mod.Handler.github = type("G", (), {"configured": lambda s: True})()
+        try:
+            code, body = self.req("GET", "/api/v1/versions/adab")
+        finally:
+            server_mod.Handler.github = gh
+            server_mod.Handler._releases = {"at": 0, "rel": None, "err": None}
+        self.assertEqual(code, 200, body)
+        j = json.loads(body)
+        self.assertEqual(j["latest"], "0.4.0")                     # a pre-release is not the latest
+        d = j["loggers"][0]
+        self.assertEqual((d["device"], d["running"], d["update"]), ("LOG-0001", "0.4.0", "up_to_date"))
+        kinds = [(e["kind"], e.get("to") or e.get("reason")) for e in d["history"]]
+        self.assertIn(("firmware", "0.4.0"), kinds)
+        self.assertIn(("boot", "sw:ota@0.3.1"), kinds)
+        self.assertEqual(self.req("GET", "/api/v1/versions/nosite")[0], 404)
+
     def test_github_releases(self):
         from firmware import GitHub
         gh = GitHub("julien355/esp32-datalogging", "")
