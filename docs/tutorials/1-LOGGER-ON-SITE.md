@@ -563,7 +563,7 @@ The **serial console** is a text window on the laptop where the logger prints wh
    Time: NOT SET (RTC found)
    SD: ok, rows written 0, SD errors 0
    Heap: ... free, ... min free
-   WiFi: down for 41 s
+   WiFi: down for 41 s, in range at the last scan: not scanned yet
    Server: https://arkan-monitoring.duckdns.org (NO TOKEN)
    Uploads: ok 0, failed 0, last ok never, last error none yet
    Backlog: 0 min, pointer ..., RAM queue 0 rows
@@ -572,7 +572,7 @@ The **serial console** is a text window on the laptop where the logger prints wh
    Last sample: (clock not set, nothing recorded) TH1=26.4C/58% TH2=fault
    Last record: none yet
    ```
-   This is the normal state of a new, unconfigured board: no WiFi, no token, no time, so **nothing is recorded yet** (the logger never writes a record without a valid clock).
+   This is the normal state of a new, unconfigured board: no WiFi, no token, no time, so **nothing is recorded yet** (the logger never writes a record without a valid clock). The end of the WiFi line, `in range at the last scan: ...`, comes with firmware 0.5.1: which of the configured networks the last search saw.
 
 ### A6 The device token and the setup WiFi password
 
@@ -705,7 +705,7 @@ From [`../OFFICE-PREP.md` section 4](../OFFICE-PREP.md#4-before-leaving-for-the-
 | | Verified pins set (and reported, so they become firmware defaults) | `show`: `pin_rs_tx`, `pin_rs_rx`, `pin_rs_de`, `pin_sd_cs`... marked `(changed)` where needed |
 | | Build used (`logger` or `logger-uart`) written down | Record sheet |
 | | Hotel staff WiFi set, if the owner has its name and password already | `set wifi_ssid <hotel staff WiFi name>`, `set wifi_pass <hotel staff WiFi password>`, `reboot`. Otherwise it is set on site (B8) |
-| | Office network removed as backup | `unset wifi_ssid2` (no 4G router at Adab, so it stays empty) |
+| | Office network removed as second network; the other site's network set if the logger moves between two sites | `unset wifi_ssid2` and `unset wifi_pass2`, or: `set wifi_ssid2 <second WiFi name>`, `set wifi_pass2 <second WiFi password>` |
 | | `portal_pass` = the logger's own setup password from `manage.py add-device` | In the password manager; you have access to it on site |
 | | Hole in the lid over BOOT, labelled "Setup: hold 3 s" | Tested with the lid closed |
 | | Site profile on the VPS: 82.5 kVA, 200 A, 230 V | Owner: `add-site ... --contracted-kva 82.5 --rated-a 200` |
@@ -862,13 +862,13 @@ Skip to step 7 if the hotel WiFi was set at the office and `status` showed `WiFi
 5. **Fill in the WiFi group only:**
    - **`wifi_ssid`**: the hotel staff network's name, **exactly** as it appears in the list (capitals and spaces count);
    - **`wifi_pass`**: its WPA2 password (from the owner);
-   - leave **`wifi_ssid2`** and **`wifi_pass2`** empty (no backup network at Adab).
+   - **`wifi_ssid2`** / **`wifi_pass2`**: the **second** network, if the logger also works at another site (that site's network) or there is a 4G router: same rules as above. The logger joins whichever of the two is in range and stays on it until the link drops. Leave both empty if there is no second network.
    Leave every other field as it is. Secret fields (`wifi_pass`, `dev_token`, `portal_pass`) show "(set: leave empty to keep)": **an empty secret field keeps the stored value**.
 6. **Tap "Save and restart"** (the blue button at the bottom).
    Expected: "2 setting(s) saved. Restarting..." and "Reconnect your phone to the normal WiFi." The `ARKAN-LOG-0001` network disappears.
 7. **Reconnect your phone** to your normal network (or mobile data).
 8. **Check the connection** within 2 minutes: open the live page (B9 step 1).
-   If it shows "No data": the logger has probably not joined the hotel WiFi. Open the portal again (step 1): the status box shows `WiFi: down for ... s`. Check the network name and password, that it is a 2.4 GHz WPA2 network **without a login page**, and the RSSI. While the portal is open and the logger is searching, the phone may drop off `ARKAN-LOG-0001` for a moment (the search can move the setup WiFi's channel): simply reconnect.
+   If it shows "No data": the logger has probably not joined the hotel WiFi. Open the portal again (step 1): the status box shows `WiFi: down for ... s` (with `in range at the last scan: not scanned (setup portal open)`: while the portal is open the logger does not search by itself, so look for the hotel network in the portal's list of networks seen). Check the network name and password, that it is a 2.4 GHz WPA2 network **without a login page**, and the RSSI. While the portal is open and the logger is searching, the phone may drop off `ARKAN-LOG-0001` for a moment (the search can move the setup WiFi's channel): simply reconnect.
 
 The portal closes by itself after 15 minutes without activity (`portal_min`), or with the grey button **"Close the setup WiFi"**.
 
@@ -1097,7 +1097,7 @@ The console commands need the laptop on USB (a power swap). Many checks are also
 
 | Symptom | Diagnose (console) | Alarm that shows it | What to do |
 |---|---|---|---|
-| **No WiFi** | `status`: `WiFi: down for n s`. `wifi`: is the network seen, at what RSSI? `tail /log/<YYYY-MM>.log 20`: `WiFi: connection failed (attempt n, status s)` | **A01** Logger offline (no record for 15 min); **A17** Weak WiFi (below -80 dBm for 60 min) | Re-enter the name and password with the portal (B8); the network must be 2.4 GHz WPA2 without a login page; the hotel may have changed the password (ask the owner); RSSI must be better than -70 dBm. After 6 h offline the logger reboots by itself (`sw:offline`): that is normal and harmless |
+| **No WiFi** | `status`: `WiFi: down for n s, in range at the last scan: ...` (firmware 0.5.1: the configured network(s) the logger saw; `none of the configured networks` = the name is wrong, or the network is off or out of range). `wifi`: is the network seen, at what RSSI? `tail /log/<YYYY-MM>.log 20`: `WiFi: connection failed (attempt n, status s, in range: ...)`. Network seen but no connection: wrong password, or a login page | **A01** Logger offline (no record for 15 min); **A17** Weak WiFi (below -80 dBm for 60 min) | Re-enter the name and password with the portal (B8); the network must be 2.4 GHz WPA2 without a login page; the hotel may have changed the password (ask the owner); RSSI must be better than -70 dBm. After 6 h offline the logger reboots by itself (`sw:offline`): that is normal and harmless |
 | **No meter answer** | Site page: `Meter EM01 · Modbus not connected` (red, with the reason) at the top of the open alarms. `status`: `Meter EM01 (id 1): NO ANSWER for n reads ...` with the reason, and `EM01: no answer (n in a row)`. `mb 1 3 0 16` (with the meter's address): `error 0xE2 (timeout ...)`. Boot log or `mb`: `RS485 pins not set` | **A03** Meter not answering | Swap A/B once (power off); check `meters`, `mb_baud`, `mb_format` against the meter menu; check `pin_rs_tx`, `pin_rs_rx`, `pin_rs_de` against the record; `120` jumper ON; ask the electrician to check the meter end. **If the RS485 pins are not set, the meter columns are missing completely and A03 cannot fire**: check `status` shows `EM01_...` values |
 | **Sensor err** | `status`: `TH1=fault` or `TH2=fault`. `i2c` for `TH1` (its address must be listed). Day file: `err` in `TH1_t`/`TH2_t` | **A14** Temp/RH sensor fault | `TH2`: check TS1 wiring and colours, DATA idle 3.2 to 3.4 V, pull-up 4.7 kohm, `th2_on` = 1, `pin_dht` = 1. `TH1`: `th1_type` = `auto`. Outdoors after rain, 99 to 100 % RH for hours is normal (A25 only after a day) |
 | **Clock not set** | `time`: `System UTC NOT SET, RTC invalid or absent`. `status`: `Time: NOT SET`; `Last sample: (clock not set, nothing recorded)` | **A01** (no record without a valid clock); **A18** Clock wrong (more than 2 min off) | Connect to WiFi (NTP sets the clock and the RTC), or `time set 2026-11-12T03:15:00` in **UTC**. If the time is lost at every power cut: replace the CR1220 cell (+ side up) |
@@ -1153,7 +1153,7 @@ All settings: [`../FIRMWARE.md` section 3](../FIRMWARE.md#3-all-settings). Every
 |---|---|---|---|
 | `wifi_ssid` | (empty) | Hotel staff network name | No |
 | `wifi_pass` | (empty) | Hotel staff network password (secret) | No |
-| `wifi_ssid2`, `wifi_pass2` | (empty) | Keep empty (no 4G router) | No |
+| `wifi_ssid2`, `wifi_pass2` | (empty) | Second network: the other site's network when the logger moves between two sites (or a 4G router), else keep empty. The logger joins whichever is in range | No |
 | `dev_token` | (empty) | Only with a token from the owner (secret) | No |
 | `portal_pass` | `arkan-setup` | The logger's setup password from the owner (secret, 8 characters or more) | No |
 | `meters` | `EM01:1` | `EM01:<meter address>` from the meter menu | Yes |

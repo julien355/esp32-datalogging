@@ -34,6 +34,7 @@ static volatile bool forceUpload = false, forceOta = false, hintOta = false;
 static uint32_t lastUploadTry = 0, lastOta = 0, authBlockedUntil = 0, liveBlockedUntil = 0;
 static uint32_t nextWifiAttempt = 0, lastStackReset = 0;
 static int wifiAttempts = 0, uploadFailRun = 0, rejectRun = 0, liveFailRun = 0;
+static String wifiSeen = "not scanned yet";   // configured networks in range at the last scan (log, status)
 static uint32_t lastLiveSeq = 0;
 static String lastUploadError = "none yet";
 
@@ -58,6 +59,39 @@ static bool tryConnect(const String &ssid, const String &pass) {
     if (WiFi.status() == WL_CONNECTED) return true;
     wdtDelay(250);
   }
+  return false;
+}
+
+// The logger moves between sites: wifi_ssid and wifi_ssid2 are two networks of equal rank.
+// One round scans first and tries only the configured networks in range (wifi_ssid first if both
+// are), so it does not spend 20 s on a network of the other site. If the scan saw neither (hidden
+// network, missed beacon, or the setup portal is open and no scan is made), it tries both.
+// Once connected it stays on that network: nothing is looked for until the link drops.
+static bool connectAvailable(const String &s1, const String &s2) {
+  bool seen1 = false, seen2 = false;
+  if (st.portalOn) {
+    wifiSeen = "not scanned (setup portal open)";   // a scan would empty the portal's network list
+  } else {
+    WiFi.disconnect(false, false);   // stop any connection attempt still running, or the scan is refused
+    // Active scan, 100 to 150 ms per channel: about 2 s. The WiFi library gives up after 10 s, well
+    // within the 60 s task watchdog. Returns WIFI_SCAN_RUNNING while another scan (console "wifi") runs.
+    int n = WiFi.scanNetworks(false, false, false, 150);
+    for (int i = 0; i < n; i++) {
+      String s = WiFi.SSID(i);
+      if (s1.length() && s == s1) seen1 = true;
+      if (s2.length() && s == s2) seen2 = true;
+    }
+    WiFi.scanDelete();
+    wifiSeen = n == WIFI_SCAN_RUNNING ? String("not scanned (another scan running)")
+               : n < 0                ? String("scan failed")
+               : seen1 && seen2       ? "\"" + s1 + "\" and \"" + s2 + "\""
+               : seen1                ? "\"" + s1 + "\""
+               : seen2                ? "\"" + s2 + "\""
+                                      : String("none of the configured networks (") + n + " other networks seen)";
+  }
+  bool any = seen1 || seen2;
+  if (s1.length() && (seen1 || !any) && tryConnect(s1, cfg::get("wifi_pass"))) return true;
+  if (s2.length() && (seen2 || !any) && tryConnect(s2, cfg::get("wifi_pass2"))) return true;
   return false;
 }
 
@@ -88,10 +122,7 @@ static void handleOffline() {
     wdtDelay(500);
     return;
   }
-  // Alternate between the main and the backup network.
-  bool useBackup = s2.length() && (!s1.length() || (wifiAttempts % 2 == 1));
-  bool ok = useBackup ? tryConnect(s2, cfg::get("wifi_pass2")) : tryConnect(s1, cfg::get("wifi_pass"));
-  if (ok) {
+  if (connectAvailable(s1, s2)) {
     wifiAttempts = 0;
     return;
   }
@@ -102,8 +133,8 @@ static void handleOffline() {
   if (st.portalOn) backoff = max<uint32_t>(backoff, 120);
   nextWifiAttempt = millis() + backoff * 1000;
   if (wifiAttempts == 1 || wifiAttempts % 10 == 0)
-    evlog("WiFi: connection failed (attempt %d, status %d), next try in %lu s", wifiAttempts, WiFi.status(),
-          (unsigned long)backoff);
+    evlog("WiFi: connection failed (attempt %d, status %d, in range: %s), next try in %lu s", wifiAttempts,
+          WiFi.status(), wifiSeen.c_str(), (unsigned long)backoff);
 }
 
 // ---------------------------------------------------------------- HTTP
@@ -436,6 +467,7 @@ static void task(void *) {
       st.wifiDownSince = millis();
       st.ip[0] = 0;
       nextWifiAttempt = millis() + 2000;
+      wifiSeen = "not scanned yet";   // the last scan is from before this connection
       evlog("WiFi lost (status %d)", WiFi.status());
     }
     if (!up) {
@@ -469,6 +501,9 @@ void begin() {
     if (cfg::getInt("tls_verify") == 1) tls.setCACert(CA_BUNDLE);
     else tls.setInsecure();
   }
+  if (cfg::get("wifi_ssid").length() && cfg::get("wifi_ssid2").length())
+    evlog("WiFi: networks \"%s\" and \"%s\": joins the one in range, stays on it until the link drops",
+          cfg::get("wifi_ssid").c_str(), cfg::get("wifi_ssid2").c_str());
   evlog("Server %s (%s), upload every %lu s, live %s, OTA %s, remote settings %s", baseUrl.c_str(),
         https ? (cfg::getInt("tls_verify") == 1 ? "TLS verified" : "TLS NOT verified") : "plain HTTP",
         (unsigned long)(uploadPeriodMs / 1000), liveOn ? "on" : "off", otaOn ? "on" : "off", rcfgOn ? "on" : "off");
@@ -483,7 +518,8 @@ String statusText() {
   String s;
   s += "WiFi: ";
   s += st.wifiUp ? String("up, ") + WiFi.SSID() + " " + st.ip + " rssi " + String((int)st.rssi) + " dBm"
-                 : String("down for ") + String(st.wifiDownSince ? (millis() - st.wifiDownSince) / 1000 : 0) + " s";
+                 : String("down for ") + String(st.wifiDownSince ? (millis() - st.wifiDownSince) / 1000 : 0) +
+                       " s, in range at the last scan: " + wifiSeen;
   s += "\nServer: " + baseUrl + (token.length() ? "" : " (NO TOKEN)");
   s += "\nUploads: ok " + String((unsigned long)st.uploadsOk) + ", failed " + String((unsigned long)st.uploadsFail) +
        ", last ok " + (st.lastUploadOk ? isoTime(st.lastUploadOk) : String("never")) + ", last error " +

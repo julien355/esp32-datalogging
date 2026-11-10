@@ -19,7 +19,7 @@ And before pushing a tag, check which commit it points to: `git log -1 --oneline
 
 1. <https://github.com/julien355/esp32-datalogging/tags>: the newest `v…` tag is what the VPS must run; the newest `fw-v…` is the logger firmware. Tags named `archive/…` are old branches kept for reference (section 6).
 2. <https://github.com/julien355/esp32-datalogging/actions>: the newest run on `ccr-a52c0421-oygp4n` is green.
-3. <https://github.com/julien355/esp32-datalogging/branches>: only the default branch, plus branches of work in progress (today `claude/great-bell-00lrct`, the firmware with two WiFi networks, not released).
+3. <https://github.com/julien355/esp32-datalogging/branches>: only the default branch, plus branches of work in progress (today `claude/great-bell-00lrct`, the firmware with two WiFi networks, which comes as `0.5.1` in pull request #13, and the branch of #13, `claude/fervent-heisenberg-3gi5iq`, until it is merged).
 
 ## 3. Our computer (PowerShell)
 
@@ -140,7 +140,7 @@ A cloud session cannot push tags or delete branches (GitHub access refuses it), 
 
 Step 2 after step 1. Steps 4 and 5 after step 3, in any order. Step 6 only after step 5 passed.
 
-**Not in this update:** `claude/great-bell-00lrct`, a firmware change that adds two WiFi networks of equal rank (the logger joins whichever of `wifi_ssid` and `wifi_ssid2` is in range). It is not reviewed or bench tested yet, and it does not change `FW_VERSION`. Its branch has one commit more than its archive tag (`d1a03fa` after `ffb7cbd`), so keep the branch: do not delete it in step 2.
+**Not in this update:** `claude/great-bell-00lrct`, a firmware change that adds two WiFi networks of equal rank (the logger joins whichever of `wifi_ssid` and `wifi_ssid2` is in range). It is reviewed and comes as firmware `0.5.1` in pull request #13, on top of 0.5.0; its bench test and the tag `fw-v0.5.1` come after this update ([`UPDATING.md`](UPDATING.md) section W). Its branch has one commit more than its archive tag (`d1a03fa` after `ffb7cbd`), so keep the branch: do not delete it in step 2, nor until #13 is merged.
 
 ### Step 1. Push the tags `v0.7.1` and `v0.8.0` (PC, PowerShell)
 
@@ -209,7 +209,7 @@ foreach ($b in $old) { git tag "archive/$b" "origin/$b"; git push origin "archiv
 
 **Expected:** for each name, `* [new tag] archive/...`, then `- [deleted] ...`.
 
-**Done when:** <https://github.com/julien355/esp32-datalogging/branches> shows only `ccr-a52c0421-oygp4n` and `claude/great-bell-00lrct`.
+**Done when:** <https://github.com/julien355/esp32-datalogging/branches> shows only `ccr-a52c0421-oygp4n` and `claude/great-bell-00lrct` (plus `claude/fervent-heisenberg-3gi5iq` while pull request #13 is open).
 
 ### Step 3. Update the VPS from `v0.6.0` to `v0.8.0` (`ssh hermes-vps`)
 

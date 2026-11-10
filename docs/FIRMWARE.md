@@ -1,6 +1,6 @@
 # Logger firmware: functions and settings
 
-Firmware **0.4.1** (CSV schema 3; 0.4.0 added the remote register table (2.9.2) and the OTA build marker (2.8); 0.4.1 fixes the watchdog restart on empty server replies, see [`UPDATING.md`](UPDATING.md) section 5, and moves the AM2301 default to GPIO 1), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
+Firmware **0.5.1** (CSV schema 3; 0.4.0 added the remote register table (2.9.2) and the OTA build marker (2.8); 0.4.1 fixes the watchdog restart on empty server replies, see [`UPDATING.md`](UPDATING.md) section 5, and moves the AM2301 default to GPIO 1; 0.5.0 sends the Modbus link of each meter (2.7); 0.5.1 treats `wifi_ssid` and `wifi_ssid2` as two networks of equal rank and joins the one in range (2.4), see [`UPDATING.md`](UPDATING.md) section W), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
 Status: **written, compiled by CI, not yet run on the board.** The pin map and the meter register map are still **to verify** (Lab 1 and Lab 3 of the install manual).
 
 How to build, flash, configure and test it: [`OFFICE-PREP.md`](OFFICE-PREP.md). The file format: [`DATA-FORMAT.md`](DATA-FORMAT.md).
@@ -12,7 +12,7 @@ How to build, flash, configure and test it: [`OFFICE-PREP.md`](OFFICE-PREP.md). 
 | Task | Core | Does | Under the watchdog |
 |---|---|---|---|
 | **sampler** | 1 | Every `sample_s` (15 s, on the clock: :00, :15, :30, :45) reads the meters (Modbus RTU), TH1 and TH2; makes the live snapshot; at each new minute writes the **1-minute record** to the SD card | yes |
-| **net** | 0 | WiFi (main + backup network), NTP, **uploads the SD backlog** to the server, posts the live snapshot, OTA check | yes |
+| **net** | 0 | WiFi (two networks, joins the one in range), NTP, **uploads the SD backlog** to the server, posts the live snapshot, OTA check | yes |
 | **loop** | 1 | Serial console, setup portal, setup button, status LED, daily reboot, memory check, boot-loop guard | yes |
 
 A task stuck for 60 s reboots the board (task watchdog with panic). Records are written to the SD card **before** any network activity, so a network problem never costs data.
@@ -52,7 +52,7 @@ One CSV file per UTC day, same columns as the server's files. **The day files ar
 | Situation | What the logger does |
 |---|---|
 | WiFi drops | Records go on to the SD card. Reconnects with back-off: 10, 20, 40, 80, 160 s, then every 5 min |
-| Backup network | If `wifi_ssid2` is set (for example a 4G router), attempts alternate between the two networks |
+| Two networks (two sites) | `wifi_ssid` and `wifi_ssid2` are of equal rank: the logger is moved between two sites, each with its own network. Each reconnection round first **scans** (about 2 s) and tries only the network(s) in range, `wifi_ssid` first if both are; if the scan sees neither (hidden network, missed beacon, setup portal open), it tries both. **Once connected it stays on that network** and looks for nothing else; only when the link drops does the next round scan again. With only `wifi_ssid` set, it is tried every round, seen or not: one network works as before. `status` (`WiFi: down for n s, in range at the last scan: ...`) and the event log (`WiFi: connection failed (attempt n, status s, in range: ...)`) say what the last scan saw: the configured network(s) in range by name, `none of the configured networks (n other networks seen)`, `not scanned (setup portal open)` or `scan failed`. Since 0.5.1 |
 | Offline 30 min | Restarts the WiFi driver (fixes most stuck radios), then every 30 min |
 | Offline `offline_rbt_h` hours (6) | Full reboot. Harmless: the data is on the SD card |
 | Link back | Uploads at once, then **catch-up**: up to 20 batches of 60 records back to back per minute (1,200 records a minute, so a 3-day outage is cleared in about 4 minutes) |
@@ -124,13 +124,20 @@ A file `/config/settings.txt` with `key=value` lines is applied at boot, **then 
 
 Stored in NVS (survive power cuts and reflashing; erased only by `factory`). Change with the console (`set`), the portal, `/config/settings.txt`, or from the VPS (`manage.py set-config`, applied and rebooted by itself), then **reboot**.
 
+**Setting the second WiFi network** (by hand, on site or at the office: never from the VPS). Any one of:
+- console: `set wifi_ssid2 <network name>`, `set wifi_pass2 <password>`, then `reboot` (a name with spaces is typed as it is: everything after the key is the value);
+- setup portal: fields `wifi_ssid2` and `wifi_pass2` in the WiFi group, then "Save and restart";
+- SD card `/config/settings.txt`: lines `wifi_ssid2=<network name>` and `wifi_pass2=<password>`.
+
+The name must match exactly (capitals and spaces count), 2.4 GHz, WPA2, no login page, not hidden. After the reboot the event log shows `WiFi: networks "<first>" and "<second>": joins the one in range, stays on it until the link drops`. To test it on the bench: switch off (or move away from) the first network, reboot, and check `status` shows `WiFi: up, <second network>`. To remove it: `unset wifi_ssid2` and `unset wifi_pass2`.
+
 | Group | Key | Default | Meaning |
 |---|---|---|---|
 | Identity | `dev_id` | `LOG-0001` | Logger code, as registered on the platform Not changeable remotely. |
 | WiFi | `wifi_ssid` | (empty) | Main WiFi network (2.4 GHz) Not changeable remotely. |
 |  | `wifi_pass` | (empty) | Main WiFi password **Secret**: never shown. Not changeable remotely. |
-|  | `wifi_ssid2` | (empty) | Backup WiFi network (for example a 4G router), empty = none Not changeable remotely. |
-|  | `wifi_pass2` | (empty) | Backup WiFi password **Secret**: never shown. Not changeable remotely. |
+|  | `wifi_ssid2` | (empty) | Second WiFi network (another site, or a 4G router): the logger joins whichever is in range, empty = none Not changeable remotely. |
+|  | `wifi_pass2` | (empty) | Second WiFi password **Secret**: never shown. Not changeable remotely. |
 | Server | `srv_url` | `https://arkan-monitoring.duckdns.org` | Platform base URL (http://IP:8800 for an office test) Not changeable remotely. |
 |  | `dev_token` | (empty) | Device token given by tools/manage.py add-device **Secret**: never shown. Not changeable remotely. |
 |  | `tls_verify` | `1` | 1 = check the server certificate, 0 = do not (bench only) Not changeable remotely. |

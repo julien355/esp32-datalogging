@@ -1,4 +1,4 @@
-// Network task (core 0): WiFi with a backup network and back-off, NTP, uploads of the
+// Network task (core 0): WiFi (two networks, joins the one in range) with back-off, NTP, uploads of the
 // SD backlog, live snapshots, and the optional firmware update check.
 #pragma once
 #include <Arduino.h>
