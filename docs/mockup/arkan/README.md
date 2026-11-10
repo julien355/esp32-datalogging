@@ -1,6 +1,7 @@
 # Dashboard mockup in the Arkan design (for review)
 
-The pages of `arkan-monitoring.duckdns.org` (`/live/`, `/live/adab/` and its sub pages, `/live/adab/register`) redrawn with the
+The pages of `arkan-monitoring.duckdns.org` as of release v0.6.0 (`/live/`, `/live/adab/` and its sub pages, the three Power quality
+pages included, and `/live/adab/register`) redrawn with the
 Arkan UI kit, the design of the CMMS. **Same content, new look.** Open **[`index.html`](index.html)** in a browser: one file, no network,
 simulated data (14 days), nothing is sent to a logger.
 
@@ -20,6 +21,7 @@ simulated data (14 days), nothing is sent to a logger.
   browser as in the CMMS and shared with it on the same address. Also who is logged in, and the site details from `site.json` (read only).
 - **Meter registers** and **All sites** are pages of the same shell (today they are separate pages).
 - Charts, tables, values, texts and the 15 s refresh are those of `server/app/live.html` and `registers.html`.
+- Every chart shows both axes with their scales and names; in a row of cards the figures and the charts line up (review of 10 November).
 
 ## To decide at the review
 

@@ -47,6 +47,9 @@ def main():
     fx["registers"] = get(f"/api/v1/admin/registers/{dev}")
     days = sorted({r["t"][:10] for r in fx["history"]["hours"]})[-3:]
     fx["days"] = {d: get(f"/api/v1/history/{s}/day/{d}") for d in days}
+    fx["quality"] = get(f"/api/v1/quality/{s}?days=31")
+    low = min((r for r in fx["quality"]["hours"] if "v1_min" in r), key=lambda r: min(r[f"v{k}_min"] for k in (1, 2, 3)))["t"][:10]
+    fx["qdays"] = {d: get(f"/api/v1/quality/{s}/day/{d}") for d in sorted(set(days[-2:] + [low]))}
 
     # ---- made-up parts (the simulator does not send them)
     t0 = fx["time"]
