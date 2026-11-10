@@ -875,7 +875,7 @@ The portal closes by itself after 15 minutes without activity (`portal_min`), or
 ### B9 Checking the data on the live page and on the VPS
 
 1. **Live page.** On your phone or laptop, open `https://arkan-monitoring.duckdns.org/live/adab/` and sign in with the Arkan login.
-   Expected: in the dark blue header, the green pill **"Live · updated n s ago"** (n below about 30) and the hotel time; under it, cards for total power, apparent power (with the share of the 82.5 kVA PLN contract), power factor and frequency, one card each for the voltage and the current of L1, L2, L3, room and outdoor temperature and humidity, and a **Logger** card (WiFi signal, upload backlog, SD card, firmware), updating every 15 s. On a phone the side menu becomes a row of tabs at the top.
+   Expected: at the top right of the page (and at the bottom of the side bar), the green pill **"Live · updated n s ago"** (n below about 30) and the hotel time; under it, cards for total power, apparent power (with the share of the 82.5 kVA PLN contract), power factor and frequency, one card each for the voltage and the current of L1, L2, L3, room and outdoor temperature and humidity, and a **Logger** card (WiFi signal, upload backlog, SD card, firmware), updating every 15 s. On a phone the side menu becomes tabs at the bottom, with **More** for the other pages.
    If "No data for n min" in red: the logger is not online (B8 step 8) or the token is refused (see [C6](#c6-troubleshooting)).
 2. **Ask the operator to check the day file and the alarm log.** Send him these blocks (he runs them on `hermes-vps`):
    ```bash

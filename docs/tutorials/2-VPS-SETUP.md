@@ -165,9 +165,9 @@ Where the next parts will plug in:
 | [../../server/app/server.py](../../server/app/server.py) | The web service: device endpoints, site page, status, alarms, history and admin API |
 | [../../server/app/store.py](../../server/app/store.py) | The data folder: checks and stores the rows, tokens, settings |
 | [../../server/app/alarms.py](../../server/app/alarms.py) | The alarm engine |
-| [../../server/app/live.html](../../server/app/live.html) | The site page `/live/<site>/`: live now, history pages, firmware update (and the overview `/live/`) |
+| [../../server/app/live.html](../../server/app/live.html) | The site page `/live/<site>/`: live now, history pages, meter registers, firmware update, settings (and the overview `/live/`). Its look comes from the Arkan UI kit in [../../server/app/arkan-ui/](../../server/app/arkan-ui/), served at `/live/_ui/` |
 | [../../server/app/history.py](../../server/app/history.py) | Hourly and 1-minute summaries of the day files for the history pages |
-| [../../server/app/registers.html](../../server/app/registers.html), [../../server/app/registers.py](../../server/app/registers.py) | The meter register page `/live/<site>/register` and its checks |
+| [../../server/app/registers.py](../../server/app/registers.py) | The checks of the meter register page (`/live/<site>/#register`, in `live.html`) |
 | [../../server/app/firmware.py](../../server/app/firmware.py) | Firmware checks, offers per logger, GitHub releases ([../OTA.md](../OTA.md)) |
 | [../../server/tools/manage.py](../../server/tools/manage.py) | The admin tool (every command in Part C) |
 | [../../server/tools/simulate_logger.py](../../server/tools/simulate_logger.py) | A fake logger, to test without the board |
@@ -1087,8 +1087,8 @@ curl.exe -s -u <hub-user> https://arkan-monitoring.duckdns.org/health
 
 1. Open https://arkan-monitoring.duckdns.org/ in Chrome, Edge or Firefox.
 2. The browser shows its own small sign-in box. Type your Arkan dashboard login (`<hub-user>` and its password, from the owner).
-3. **Expected:** the page moves to `/live/`: a dark blue header `All sites · Live` with the time, and a table with the columns `Site`, `Logger`, `Power now`, `Live`, `Last record (UTC)`, `Firmware`, and one row: `adab`, `LOG-0001`, `–`, `none` (in red), `–`, `–`. Nothing has been received yet: that is correct.
-4. Click `adab`. **Expected:** the site page `/live/adab/`: the header `Adab hotel` with a red pill `No live data`, a side menu (**Live now**; **History**: Power, One day, Energy per day, This week vs last, Temperature, Humidity; **Logger**: Meter registers, and Firmware update if your login is in `ADMIN_USERS`; **Elsewhere**), and in the page the red box `No live data for this site (logger offline or not installed yet).` (the open alarms and the alarm log are still shown). The history pages say there is nothing yet.
+3. **Expected:** the page moves to `/live/`: the Arkan side bar on the left, the title `All sites` with the time, and a table with the columns `Site`, `Logger`, `Power now`, `Live`, `Last record (UTC)`, `Firmware`, and one row: `adab`, `LOG-0001`, `–`, `none` (in red), `–`, `–`. Nothing has been received yet: that is correct.
+4. Click `adab`. **Expected:** the site page `/live/adab/`: in the side bar `Adab hotel`, **View as** with your login, the menu (**Live now**; **History**: Power, One day, Energy per day, This week vs last, Temperature, Humidity; **Power quality**; **Weather**; **Logger**: Meter registers, Firmware versions, and Firmware update if your login is in `ADMIN_USERS`; **Platform**: All sites), **Settings** and a red pill `No live data` at the bottom, and in the page the message `No live data for this site (logger offline or not installed yet).` (the open alarms and the alarm log are still shown). The history pages say there is nothing yet.
 5. Check the padlock next to the address: it should say the connection is secure.
 
 **If** the sign-in box keeps coming back, the login is wrong or not in `hub-users.caddy`: ask the owner.

@@ -72,13 +72,15 @@ from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, IngestError, atomic_write, iso_now  # noqa: E402
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
 LIVE_KEEP_DAYS = int(os.environ.get("LIVE_KEEP_DAYS", "7"))   # days of saved 15 s snapshots, 0 = memory only
 HERE = os.path.dirname(os.path.abspath(__file__))
-PAGES = {"live": "live.html", "registers": "registers.html"}
+PAGES = {"live": "live.html"}
+# The Arkan UI kit the page loads (server/app/arkan-ui/, a copy of the CMMS's kit): /live/_ui/<file>
+UI_FILES = {"arkan-ui.css": "text/css; charset=utf-8", "arkan-ui.js": "text/javascript; charset=utf-8"}
 # Meter link settings the register page may change remotely (firmware/src/settings.cpp).
 METER_KEYS = ("meters", "mb_baud", "mb_format", "ct_mult")
 BAUDS = ("1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200")
@@ -329,8 +331,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.weather_view(m.group(1), bool(m.group(2)), parse_qs(u.query))
         if path in ("/live", "/live/") or re.match(r"^/live/[a-z0-9-]+/?$", path):
             return self.page("live")
-        if re.match(r"^/live/[a-z0-9-]+/register/?$", path):
-            return self.page("registers")
+        if path.startswith("/live/_ui/") and path[10:] in UI_FILES:
+            return self.page(path[10:], UI_FILES[path[10:]])
+        m = re.match(r"^/live/([a-z0-9-]+)/register/?$", path)
+        if m:                                   # the register page is now a page of the site: old links keep working
+            self.send_response(302)
+            self.send_header("Location", f"/live/{m.group(1)}/#register")
+            self.send_header("Content-Length", "0")
+            return self.end_headers()
         m = re.match(r"^/api/v1/admin/registers/([A-Za-z0-9_-]+)$", path)
         if m:
             return self.registers_view(m.group(1))
@@ -353,13 +361,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.firmware(m.group(1))
         return self.send_json(404, {"ok": False, "error": "not found"})
 
-    def page(self, name):
-        with open(os.path.join(HERE, PAGES[name]), "rb") as f:
+    def page(self, name, ctype=None):
+        """The site page, or with ctype a file of the UI kit (the browser may keep it 5 minutes)."""
+        with open(os.path.join(HERE, "arkan-ui", name) if ctype else os.path.join(HERE, PAGES[name]), "rb") as f:
             page = f.read()
         self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Type", ctype or "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(page)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", "max-age=300" if ctype else "no-store")
         self.end_headers()
         return self.wfile.write(page)
 

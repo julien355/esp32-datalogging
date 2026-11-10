@@ -2,124 +2,199 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
 <title>Live</title>
+<link rel="stylesheet" href="/live/_ui/arkan-ui.css">
 <style>
-  :root{color-scheme:light;--ink:#1f2933;--ink2:#52606d;--muted:#7b8794;--line:#e4e7eb;--bg:#eef1f5;--card:#fff;
-    --navy:#0f2747;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--good:#127a3a;--warn:#b45309;--bad:#b42318;--info:#2563eb}
-  *{box-sizing:border-box}
-  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
-  a{color:inherit}
-  .top{background:var(--navy);color:#fff;padding:14px 20px}
-  .top .row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;max-width:1400px;margin:auto}
-  .top h1{margin:0;font-size:1.3rem}
-  .top nav a{color:#cfe0ff;text-decoration:none;margin-left:16px;font-size:.9rem;white-space:nowrap}
-  .top nav a:hover{text-decoration:underline}
-  .sub{display:flex;gap:10px;flex-wrap:wrap;align-items:center;max-width:1400px;margin:8px auto 0;font-size:.85rem;color:#cfe0ff}
-  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-weight:600;background:rgba(255,255,255,.12);
-    border:1px solid rgba(255,255,255,.25);color:#fff}
-  .pill i{width:8px;height:8px;border-radius:50%;background:#9aa5b1}
-  .pill.live i{background:#3ddc84}.top .pill.bad{color:#fff}.pill.bad{background:#b42318;border-color:#b42318}.pill.bad i{background:#fff}
-  .wrap{display:grid;grid-template-columns:220px 1fr;gap:20px;max-width:1440px;margin:auto;padding:16px 20px 30px}
-  .wrap.solo{grid-template-columns:1fr;max-width:1200px}.wrap.solo .side{display:none}
-  .side{position:sticky;top:12px;align-self:start}
-  .side h3{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 6px 6px}
-  .side h3:first-child{margin-top:4px}
-  .side a{display:block;text-decoration:none;padding:7px 10px;border-radius:6px;font-size:.9rem;color:var(--ink)}
-  .side a small{display:block;color:var(--muted);font-size:.74rem}
-  .side a:hover{background:#dfe5ec}.side a.on{background:var(--card);box-shadow:0 1px 3px rgba(15,39,71,.12);font-weight:600}
-  main{min-width:0}
-  .vhead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:2px 0 12px}
-  .vt{font-size:1.15rem;text-transform:none;letter-spacing:0;color:var(--ink);margin:0 0 2px}
-  .vn{font-size:.85rem;color:var(--ink2);max-width:720px}
-  .seg{display:inline-flex;border:1px solid #c9ced6;border-radius:6px;overflow:hidden;background:var(--card)}
-  .seg button{border:0;background:transparent;padding:5px 10px;font:inherit;font-size:.8rem;color:var(--ink2);cursor:pointer;border-left:1px solid #e4e7eb}
-  .seg button:first-child{border-left:0}.seg button.on{background:var(--navy);color:#fff}.seg button:disabled{opacity:.4;cursor:default}
-  .chartbox{margin-top:12px;padding:10px 12px}
-  svg.chart{display:block;width:100%;height:auto}
-  .gl{stroke:#eceff3}.ax text{fill:var(--muted);font-size:11px}
-  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.82rem;color:var(--ink2);margin:0 0 4px 44px}
-  .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
-  .tip>b:first-child{display:block;margin-bottom:2px}
-  .tip .sq{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
-  .cmp{display:flex;gap:48px;justify-content:center;align-items:flex-end;min-height:300px;text-align:center}
-  .cmp .cbar{width:130px;border-radius:4px 4px 0 0;margin:4px auto 6px}.cmp small{color:var(--muted)}
-  .verdict{text-align:center;font-weight:600;margin:12px 0 4px;color:var(--ink2)}
-  h2{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 2px 8px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
-  .grid.wide{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
-  .card{background:var(--card);border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,39,71,.10);position:relative}
-  .k{font-size:.8rem;color:var(--ink2)}
-  .v{font-size:1.75rem;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
-  .v small{font-size:.9rem;font-weight:500;color:var(--ink2);margin-left:3px}
-  .range{font-size:.72rem;color:var(--muted);font-variant-numeric:tabular-nums}
-  .meter{height:6px;border-radius:3px;background:#e4e7eb;margin:6px 0 2px;overflow:hidden}
-  .meter b{display:block;height:100%;border-radius:3px;background:var(--s1)}
-  .meter b.warn{background:#d97706}.meter b.bad{background:var(--bad)}
-  .spark{display:block;width:100%;height:40px;margin-top:6px;overflow:visible}
-  .spark.tall{height:64px}
-  .phase{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:2px 12px;align-items:baseline;margin-top:4px;font-variant-numeric:tabular-nums}
-  .phase .h{font-size:.72rem;color:var(--muted);text-align:right}
-  .phase .n{font-size:1.25rem;font-weight:700;text-align:right}
-  .phase .l{font-size:.8rem;color:var(--ink2)}
-  .phase .sw{display:inline-block;width:10px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
-  .alarm{display:flex;gap:10px;align-items:flex-start;background:var(--card);border-radius:10px;padding:10px 14px;margin:8px 0;
-    box-shadow:0 1px 3px rgba(15,39,71,.10);border-left:6px solid var(--info)}
-  .alarm.critical{border-left-color:var(--bad)}.alarm.warning{border-left-color:#d97706}
-  .alarm .ic{font-weight:700;width:20px;text-align:center}
-  .alarm.critical .ic{color:var(--bad)}.alarm.warning .ic{color:var(--warn)}.alarm.info .ic{color:var(--info)}
-  .alarm .t{font-weight:600}.alarm .d{font-size:.85rem;color:var(--ink2)}
-  .okline{display:inline-flex;align-items:center;gap:6px;background:var(--card);border-radius:999px;padding:5px 12px;font-size:.88rem;
-    color:var(--good);font-weight:600;box-shadow:0 1px 3px rgba(15,39,71,.10)}
-  .facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 16px}
-  .facts div{font-size:.8rem;color:var(--ink2)}.facts b{display:block;font-size:1rem;color:var(--ink);font-variant-numeric:tabular-nums}
-  table{border-collapse:collapse;width:100%;background:var(--card);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(15,39,71,.10)}
-  td,th{padding:7px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:.85rem;vertical-align:top}
-  th{font-size:.75rem;color:var(--muted);font-weight:600;background:#f8f9fb}
-  tr:last-child td{border-bottom:0}
-  .sev{display:inline-block;border-radius:4px;padding:1px 6px;font-size:.72rem;font-weight:600;background:#e4e7eb;color:var(--ink2)}
-  .sev.critical{background:#fde8e7;color:var(--bad)}.sev.warning{background:#fef3c7;color:var(--warn)}.sev.info{background:#e0ecff;color:var(--info)}
-  .tip{position:fixed;pointer-events:none;background:#fff;border:1px solid #d5dae0;border-radius:6px;padding:5px 8px;font-size:.78rem;
-    box-shadow:0 2px 6px rgba(0,0,0,.12);display:none;white-space:nowrap;z-index:5}
-  .empty{background:var(--card);border-radius:10px;padding:18px;color:var(--bad);font-weight:600}
-  .ok{color:var(--good)}.bad{color:var(--bad)}
-  .foot{font-size:.75rem;color:var(--muted);margin-top:18px}
-  .wxline{display:inline-flex;flex-wrap:wrap;gap:4px 12px;align-items:center;background:var(--card);border-radius:999px;padding:5px 14px;
-    margin:8px 0 0 8px;font-size:.88rem;color:var(--ink2);text-decoration:none;box-shadow:0 1px 3px rgba(15,39,71,.10)}
-  .wxline b{color:var(--ink)}.wxline:hover{background:#f4f7fb}
-  tr.past td{color:var(--muted)}tr.cur td{background:#eef5ff;font-weight:600}
-  .wxi{font-size:1.1em;margin-right:4px}
-  details.fw{background:var(--card);border-radius:10px;padding:10px 14px;margin:8px 0;box-shadow:0 1px 3px rgba(15,39,71,.10)}
-  details.fw summary{cursor:pointer;font-weight:600}
-  .fw .row{margin:8px 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.9rem}
-  .fw .row b{min-width:210px}
-  .fw select{max-width:340px}
-  .fw .msg{margin:6px 0;font-weight:600}
-  .fw .ev{font-size:.82rem;color:var(--ink2);margin:2px 0}
-  .fw .warn{color:var(--warn)}
-  @media (max-width:900px){.wrap{grid-template-columns:1fr;padding:10px 12px 24px}
-    .side{position:static;display:flex;overflow-x:auto;gap:4px;padding-bottom:4px}.side h3{display:none}
-    .side a{white-space:nowrap;flex:none}.side a small{display:none}}
-  @media (max-width:520px){.top nav a{margin:0 12px 0 0}.v{font-size:1.5rem}.grid{grid-template-columns:1fr 1fr}.grid.wide{grid-template-columns:1fr}
-    td,th{padding:6px 8px}.hide-s{display:none}}
+/* Arkan design (the CMMS's UI kit, server/app/arkan-ui/, served at /live/_ui/). Below: the monitoring additions; the kit itself is not changed. */
+/* Series colours: L1, L2, L3 / first, second, third series, never cycled; --s4 is the quiet reference line. */
+:root{--s1:#0D62BC;--s2:#D9641E;--s3:#12957F;--s4:#9AA5B1}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]):not([data-theme="contrast"]){--s1:#5AA2EC;--s2:#F5924E;--s3:#3CC9AE;--s4:#6E7C91}}
+:root[data-theme="dark"]{--s1:#5AA2EC;--s2:#F5924E;--s3:#3CC9AE;--s4:#6E7C91}
+:root[data-theme="contrast"]{--s1:#FFE14D;--s2:#7FD4FF;--s3:#FF9CF0;--s4:#E6E6E6}
+
+/* View as above the navigation, as in the CMMS (cmms-demo/src/features.css) */
+.side-role{display:flex;flex-direction:column;gap:8px}
+.side-role .full{display:none}
+@container app (min-width:1100px){.side-role .rail{display:none}.side-role .full{display:flex;flex-direction:column;gap:8px}}
+.side a.prop{text-decoration:none;color:inherit}
+.side a.prop:hover{background:var(--surface-2)}
+.snav .nl{display:none}
+@container app (min-width:1100px){.snav .nl{display:inline}.snav .ns{display:none}}
+.side-foot .full{font-size:12.5px;color:var(--muted);padding:0 4px}
+/* The page list scrolls on its own; Settings and the live state stay at the bottom of the side bar */
+.side{overflow:hidden}
+#snav{flex:1 1 auto;min-height:0;overflow-y:auto}
+.side-foot{margin-top:0;border-top:1px solid var(--line);padding-top:8px}
+@container app (min-width:1100px){.snav a{padding-block:7px}.snav .sep{margin-block:6px}}
+@container app (max-width:699px){.wxline{border-radius:var(--r-lg);padding:8px 14px}}
+.topbar .icon-btn{margin:0}
+
+.sec{margin:24px 2px 10px}
+.sec span{text-transform:none;letter-spacing:0;font-weight:500}
+.tiles{margin-bottom:0}
+.tiles.qt{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.headtools{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap}
+.clock{font-size:13px;color:var(--muted);white-space:nowrap}
+.live-pill.off{color:var(--crit-ink);background:var(--crit-bg)}
+.live-pill.off i{background:var(--crit);animation:none}
+.live-pill.idle{color:var(--muted);background:var(--surface-2)}
+.live-pill.idle i{background:var(--muted);animation:none}
+.spk{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 6px;margin-top:6px}
+.spk.tall{margin-top:12px}
+/* Cards of one row: the label keeps two lines (kit), so the figures line up; the chart sits at the bottom, so the charts line up */
+.kpi .spk,.two>.card>.spk{margin-top:auto;padding-top:8px}
+.two>.card{display:flex;flex-direction:column}
+.two>.card>.phase{margin-bottom:6px}
+.spy{display:flex;flex-direction:column;justify-content:space-between;text-align:right}
+.spx{grid-column:2;display:flex;justify-content:space-between}
+.spy,.spx{font-size:10.5px;line-height:1;color:var(--muted);white-space:nowrap}
+.spark{display:block;width:100%;height:44px;overflow:visible;border-left:1px solid var(--line-2);border-bottom:1px solid var(--line-2)}
+.spark.tall{height:72px}
+.spark .sg{stroke:var(--grid)}
+.chart .axl{stroke:var(--line-2);stroke-width:1}
+.chart .lim{stroke:var(--warn);stroke-width:1.2;stroke-dasharray:5 4}
+.chart .liml{fill:var(--ink-2);stroke:var(--surface);stroke-width:3;paint-order:stroke}
+.legend i.limk{height:0;border-top:2px dashed var(--warn);background:none;border-radius:0}
+.spark path{fill:none;stroke-width:2;stroke-linejoin:round}
+.spark .xh{stroke:var(--control);stroke-dasharray:2 2}
+.phase{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:2px 12px;align-items:baseline}
+.phase .h{font-size:12px;color:var(--muted);text-align:right}
+.phase .n{font-size:22px;font-weight:800;color:var(--ink);text-align:right;line-height:1.25;letter-spacing:-.01em}
+.phase .l{font-size:12.5px;color:var(--muted)}
+.swl{display:inline-block;width:12px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.capbar span.warn{background:var(--warn)}
+.capbar span.crit{background:var(--crit)}
+.facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.facts>div{background:var(--surface-2);border-radius:var(--r-md);padding:10px 12px;min-width:0}
+.facts small{display:block;color:var(--muted);font-size:12px}
+.facts b{display:block;font-size:15px;color:var(--ink);font-weight:700;overflow-wrap:anywhere}
+.facts .note{display:block;font-size:12px;color:var(--muted)}
+.chart svg{width:100%;height:auto}
+.chart svg path.sl{fill:none;stroke-linejoin:round;stroke-linecap:round}
+.chart .xh{stroke-dasharray:3 3}
+.legend{margin:0 0 8px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
+.ftip{position:fixed;pointer-events:none;background:var(--ink);color:var(--surface);font-size:12px;padding:6px 9px;border-radius:6px;white-space:nowrap;box-shadow:var(--shadow-pop);z-index:90;display:none}
+.ftip>b:first-child{display:block;margin-bottom:2px}
+.ftip .sq{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
+.ftip .dim{opacity:.75}
+.cmp{display:flex;gap:48px;justify-content:center;align-items:flex-end;min-height:300px;text-align:center}
+.cmp .cbar{width:130px;max-width:30vw;border-radius:6px 6px 0 0;margin:4px auto 6px;background:var(--s1)}
+.cmp .cbar.prev{opacity:.45}
+.cmp .cv{font-size:19px;font-weight:800;color:var(--ink)}
+.cmp small{color:var(--muted);font-size:12px}
+.verdict{text-align:center;font-weight:700;margin:14px 0 4px;color:var(--ink-2)}
+.ok{color:var(--good-ink)}.bad{color:var(--crit-ink)}.warnc{color:var(--warn-ink)}
+.dimtxt{color:var(--muted);font-size:12px;font-weight:500}
+.wxline{display:inline-flex;flex-wrap:wrap;gap:4px 12px;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:var(--r-pill);padding:3px 14px;font-size:13.5px;color:var(--ink-2);text-decoration:none}
+.wxline b{color:var(--ink)}
+.wxline:hover{background:var(--surface-2)}
+.wxi{margin-right:4px}
+table.data tr.past td{color:var(--muted)}
+table.data tr.cur td{background:var(--brand-tint);font-weight:700}
+table.data{margin-top:0}
+table.data a{font-weight:700;text-decoration:none}
+.banner.good{background:var(--good-bg);color:var(--good-ink)}
+.banner.crit{background:var(--crit-bg);color:var(--crit-ink)}
+.banner{white-space:pre-wrap}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.bar select,.bar input[type="text"]{width:auto}
+table.regs input,table.regs select{padding:4px 6px;font-size:13px;min-width:64px}
+table.regs input[type="checkbox"]{width:18px;height:18px;min-width:0;accent-color:var(--action)}
+table.regs tr.changed td{background:var(--warn-bg)}
+table.regs tr.new td{background:var(--good-bg)}
+table.regs td.n{color:var(--muted);width:2em}
+textarea.csv{min-height:220px;font-family:var(--mono);font-size:12.5px}
+.btn.danger{color:var(--crit-ink);border-color:var(--crit)}
+code{background:var(--surface-2);padding:0 4px;border-radius:4px;font-family:var(--mono);font-size:.86em}
+pre{background:var(--surface-2);padding:10px 12px;border-radius:var(--r-md);font-family:var(--mono);font-size:12.5px;white-space:pre-wrap}
+.help{font-size:13px;color:var(--muted)}
+.help p{margin-top:8px}
+.fwrow{display:grid;grid-template-columns:minmax(0,1fr);gap:6px 12px;align-items:end;padding-block:10px;border-top:1px solid var(--line)}
+@container app (min-width:700px){.fwrow{grid-template-columns:220px minmax(0,1fr) auto;align-items:center}}
+.fwrow b{color:var(--ink);font-size:14px}
+.fwstat{font-size:14px;margin-bottom:10px}
+.fwstat .ev{font-size:12.5px;color:var(--muted);margin-top:2px}
+@container app (max-width:560px){.hide-s{display:none}}
+.mocknote{background:var(--warn-bg);color:var(--warn-ink);font-size:12.5px;font-weight:600;text-align:center;padding:4px 12px}
 </style>
+<script src="/live/_ui/arkan-ui.js"></script>
 </head>
 <body>
-<div class="top">
-  <div class="row"><h1 id="title">Live</h1>
-    <nav><a href="/live/">All sites</a><a href="/">Open Energy Dashboard ↗</a></nav></div>
-  <div class="sub" id="status"><span class="pill"><i></i>Loading…</span></div>
+<a class="skip" href="#main">Skip to the page</a>
+<div class="mocknote" id="mocknote" hidden>Design mockup · simulated data, 14 days · nothing is sent to a logger</div>
+<div class="shell" id="shell">
+  <div class="app" id="app">
+    <aside class="side" aria-label="Main navigation">
+      <div class="brand"><span class="mark-tile"><svg viewBox="1010 1060 1325 1220" aria-hidden="true"><path fill="#0f95b5" d="M496.599 356.248C523.564 350.908 550.495 345.403 577.392 339.732C591.906 336.736 608.303 333.808 622.539 330.4L586.54 397.802C581.774 406.757 571.994 426.59 566.753 434.555C560.874 446.535 553.568 458.877 547.42 470.783C546.172 473.2 537.48 489.659 536.355 490.953C528.595 508.428 517.532 525.582 509.271 542.947C508.138 545.329 502.711 556.014 501.276 557.534L500.462 557.155L500.725 555.977C493.643 541.354 491.64 525.595 473.296 520.268C466.18 518.201 462.087 508.489 451.713 507.93C445.97 508.065 412.735 517.703 410.277 514.737C411.827 513.067 413.806 508.251 414.216 505.999C416.366 500.776 423.972 487.203 426.945 481.58L456.894 425.656L483.081 376.306C486.28 370.323 489.649 363.779 492.877 357.758C493.58 356.447 494.957 356.561 496.599 356.248Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><defs><linearGradient x1="614.34" y1="326.044" x2="534.365" gradientUnits="userSpaceOnUse" y2="396.159" id="m1-a"><stop stop-color="#54d173" offset="0"/><stop stop-color="#11afaa" offset="1"/></linearGradient></defs><path fill="url(#m1-a)" d="M496.599 356.248C523.564 350.908 550.495 345.403 577.392 339.732C591.906 336.736 608.303 333.808 622.539 330.4L586.54 397.802C581.774 406.757 571.994 426.59 566.753 434.555C566.271 434.407 566.529 434.539 566.056 434.034C567.336 431.55 568.856 428.957 569.555 426.29C566.529 427.877 570.007 427.402 566.749 428.909C563.931 428.669 559.289 423.009 557.455 420.614C554.378 416.596 553.331 409.228 549.9 404.85C541.651 394.325 529.506 386.528 519.124 378.013C519.188 376.873 519.225 377.401 519.064 376.427C511.274 373.274 513.614 368.386 511.45 361.036C510.735 358.61 512.287 356.837 513.519 354.845C509.451 352.891 500.912 358.219 496.599 356.248Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><path fill="#0d567f" d="M451.713 507.93C462.143 504.987 480.87 501.81 491.988 499.277C500.38 497.365 529.786 490.943 536.355 490.953C528.595 508.428 517.532 525.582 509.271 542.947C508.138 545.329 502.711 556.014 501.276 557.534L500.462 557.155L500.725 555.977C493.643 541.354 491.64 525.595 473.296 520.268C466.18 518.201 462.087 508.489 451.713 507.93Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><defs><linearGradient x1="367.371" y1="713.197" x2="459.9" gradientUnits="userSpaceOnUse" y2="510.279" id="m1-b"><stop stop-color="#0a1637" offset="0"/><stop stop-color="#0e4f80" offset="1"/></linearGradient></defs><path fill="url(#m1-b)" d="M314.795 691.349C319.217 681.695 328.107 666.459 333.353 656.753C345.526 634.366 357.573 611.911 369.493 589.389L399.248 533.521C402.033 528.27 411.222 510.139 414.216 505.999C413.806 508.251 411.827 513.067 410.277 514.737C412.735 517.703 445.97 508.065 451.713 507.93C462.087 508.489 466.18 518.201 473.296 520.268C491.64 525.595 493.643 541.354 500.725 555.977L500.462 557.155L501.276 557.534C487.714 585.182 470.227 615.885 455.501 643.026L438.719 674.165C436.179 678.887 432.182 686.846 429.378 691.111C418.365 691.847 400.463 691.258 388.973 691.234L314.795 691.349Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><defs><linearGradient x1="568.34" y1="701.532" x2="650.643" gradientUnits="userSpaceOnUse" y2="584.052" id="m1-c"><stop stop-color="#0b305c" offset="0"/><stop stop-color="#12699c" offset="1"/></linearGradient></defs><path fill="url(#m1-c)" d="M509.142 580.47L523.646 580.505L605.5 580.528C618.91 580.515 634.438 580.127 647.661 580.521C655.007 592.125 665.535 613.022 672.369 625.797L708.02 691.481L590.733 691.473C582.608 677.616 574.47 662.196 566.76 648.017L489.451 648.421C483.964 648.43 478.478 648.405 472.992 648.346C476.263 641.011 481.795 631.164 485.649 623.951L509.142 580.47Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><path fill="#0a2a4d" d="M509.142 580.47L523.646 580.505C519.398 587.496 489.321 644.76 489.451 648.421C483.964 648.43 478.478 648.405 472.992 648.346C476.263 641.011 481.795 631.164 485.649 623.951L509.142 580.47Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><defs><linearGradient x1="542.198" y1="571.233" x2="618.519" gradientUnits="userSpaceOnUse" y2="507.607" id="m1-d"><stop stop-color="#0d5f99" offset="0"/><stop stop-color="#108eb8" offset="1"/></linearGradient></defs><path fill="url(#m1-d)" d="M577.529 451.367C580.287 455.915 582.821 460.621 585.387 465.282C602.024 497.523 620.887 530.984 638.226 563.001C603.76 562.944 567.137 563.675 532.958 562.975L518.4 562.985C529.077 543.159 539.7 523.273 550.39 503.453C559.604 486.368 568.248 468.326 577.529 451.367Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><path fill="#0d567f" d="M577.529 451.367C580.287 455.915 582.821 460.621 585.387 465.282C582.302 472.129 577.283 480.782 573.649 487.55C567.819 498.656 561.931 509.732 555.985 520.776L542.303 546.232C539.706 551.1 536.623 557.416 533.649 561.929L533.221 562.585L532.958 562.975L518.4 562.985C529.077 543.159 539.7 523.273 550.39 503.453C559.604 486.368 568.248 468.326 577.529 451.367Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/></svg></span><span class="brand-txt"><span class="wm"><svg viewBox="900 1810 2300 392" role="img" aria-label="Arkan"><path fill="currentColor" d="M1419.71 1826.29C1464.14 1824.08 1518.26 1826.22 1564.05 1825.64C1610.89 1827.65 1662.61 1821.09 1708.63 1828.66C1810.9 1845.51 1838.04 1963.46 1779.37 2036.68C1776.84 2039.46 1772.61 2044.43 1770.04 2046.83C1750.2 2064.79 1734.35 2070.19 1707.48 2072.31C1734.43 2102.26 1777.71 2156.11 1805.22 2180.55C1808.96 2184.86 1809.04 2184.45 1809.84 2190.02C1803.24 2193.61 1724.4 2191.51 1710.9 2191.35C1694.7 2175.78 1673.63 2150.11 1658.43 2132.47C1642.31 2116.02 1627.04 2097.87 1611.89 2080.45C1576.57 2079.15 1538.3 2079.53 1502.76 2079.21L1502.88 2189.96C1476.16 2189.99 1447.65 2190.52 1421.16 2189.07C1419.35 2134.24 1420.25 2076.03 1420.05 2021C1419.4 1956.1 1419.29 1891.19 1419.71 1826.29ZM1502.85 2002.83L1617.15 2002.82C1645.2 2002.91 1692.01 2007.64 1713.87 1991.08C1735.76 1957.95 1731.64 1935.4 1703.21 1910.09C1673.47 1903.47 1541.65 1906 1503.78 1906.27C1503.16 1938.45 1502.84 1970.64 1502.85 2002.83Z"/><path fill="currentColor" d="M1658.43 2132.47C1674.16 2133.84 1674.67 2138.69 1687.04 2151.42C1688.78 2143.41 1686.74 2146.24 1691.72 2141.59L1696.45 2143.2C1697.07 2153.66 1697.05 2166.67 1704.67 2174.54C1721.29 2180.78 1795.93 2191.13 1805.22 2180.55C1808.96 2184.86 1809.04 2184.45 1809.84 2190.02C1803.24 2193.61 1724.4 2191.51 1710.9 2191.35C1694.7 2175.78 1673.63 2150.11 1658.43 2132.47Z"/><path fill="currentColor" d="M1770.04 2046.83C1769.66 2035.24 1760.02 2025.14 1764.21 2017.55C1772.96 2024.95 1769.88 2029.57 1779.37 2036.68C1776.84 2039.46 1772.61 2044.43 1770.04 2046.83Z"/><path fill="currentColor" d="M2786.09 1882.88C2786.41 1846.39 2811.44 1819.7 2847.9 1821.96C2889.04 1824.51 2933.65 1886.99 2959.93 1916.54C3007.16 1970.14 3054.78 2023.41 3102.77 2076.34C3103.31 2020.58 3103.42 1964.82 3103.1 1909.05C3103.08 1886.12 3101.93 1847.75 3103.68 1825.99C3153.81 1825.46 3196.35 1809.93 3185.04 1873.24C3183.64 1881.07 3185.03 1892.72 3183.99 1900.83C3184.53 1951.04 3184.78 2001.25 3184.74 2051.46C3184.79 2079.26 3187.57 2122.33 3182.02 2146.6C3167.65 2209.4 3101.71 2204.54 3067.46 2159.95C3054.47 2143.03 3037.11 2126.83 3024.51 2110.37C3014.02 2100.15 3003.96 2087.85 2994.31 2076.69C2953.89 2029.93 2910.28 1986.23 2868.77 1940.38C2868.44 1983.94 2868.35 2027.5 2868.49 2071.06C2868.5 2083.52 2869.33 2121.9 2867.95 2133.28C2869.06 2150.28 2868.54 2172.72 2868.63 2190.13C2841.05 2190.8 2813.46 2191.01 2785.87 2190.76C2783.12 2142.25 2785.82 2075.76 2785.01 2025.68C2784.43 1989.71 2782.93 1916.24 2786.09 1882.88Z"/><path fill="currentColor" d="M3024.51 2110.37L3027.74 2108.1C3042.19 2109.68 3083.67 2172.43 3108.82 2180.7C3115.87 2183.01 3121.38 2189.65 3136.77 2184.75C3139.47 2185.87 3140.29 2179.78 3141.11 2179.5C3179.15 2166.52 3164.94 2149.26 3169.73 2121.25L3172.39 2119.82C3175.05 2125.38 3173.01 2138.05 3174.23 2146.85C3182.32 2134.13 3168.3 2114.14 3169.33 2100.34C3170.8 2080.83 3168.01 2056.96 3169.5 2037.74C3172.55 1998.62 3176.76 1958.61 3178.91 1919.38C3179.94 1900.59 3177.91 1881.22 3178.94 1860.39C3179.19 1874.56 3179.01 1916.45 3181.16 1928.79C3181.5 1918.48 3181.71 1911.05 3183.99 1900.83C3184.53 1951.04 3184.78 2001.25 3184.74 2051.46C3184.79 2079.26 3187.57 2122.33 3182.02 2146.6C3167.65 2209.4 3101.71 2204.54 3067.46 2159.95C3054.47 2143.03 3037.11 2126.83 3024.51 2110.37Z"/><path fill="currentColor" d="M2786.09 1882.88C2786.49 1883.88 2786.89 1884.88 2787.29 1885.89C2789.68 1979.18 2790.35 2072.86 2791.62 2166.41C2791.95 2190.18 2814.43 2177.07 2829.96 2180.11C2833.3 2180.77 2848.95 2182.57 2850.48 2182.2C2846.99 2158.07 2851.54 2118 2851.66 2092.27C2851.89 2043.06 2850.15 1994.1 2852.31 1945.01C2861.22 1995.37 2852.29 2059.96 2861.76 2113.67L2861.73 2110.39C2862.85 2116.07 2864.35 2130.34 2867.95 2133.28C2869.06 2150.28 2868.54 2172.72 2868.63 2190.13C2841.05 2190.8 2813.46 2191.01 2785.87 2190.76C2783.12 2142.25 2785.82 2075.76 2785.01 2025.68C2784.43 1989.71 2782.93 1916.24 2786.09 1882.88Z"/><path fill="currentColor" d="M2462.07 1840.49C2489.11 1817.03 2549.25 1814.01 2571.92 1844.53C2594.36 1874.74 2608.92 1915.03 2627.39 1948.04C2660 2011.57 2695.04 2077.05 2725.16 2141.56C2732.51 2155.9 2742.88 2170.29 2748.32 2184.47L2746.85 2187.02C2730.68 2191.94 2678.68 2190.35 2658.4 2190.28C2650.37 2174.32 2642.44 2158.31 2634.59 2142.26C2630.53 2138.7 2631.24 2131.38 2621.45 2124.15C2561.04 2123.97 2492.6 2125.34 2432.86 2122.92C2437.14 2109.52 2454.57 2074.65 2461.03 2061.49C2462.13 2058.73 2463.17 2055.83 2465.29 2053.65C2474.49 2044.15 2568.21 2049.2 2586.36 2048.83C2566.61 2002.59 2538.75 1951.58 2514.83 1906.95C2498.03 1929.98 2476.75 1974.63 2462.85 2001.7L2400.64 2121.32C2394.25 2133.91 2373.19 2178.33 2365.4 2187.3C2348.74 2194.28 2293.67 2191.4 2272.21 2191.15C2299.07 2144.53 2323.16 2093.38 2349 2045.95C2360.35 2025.13 2371.59 2001.19 2384.3 1981.4C2385.1 1978.18 2395.28 1959.67 2397.5 1955.49C2410.01 1928.49 2433.45 1883.55 2448.46 1858.26C2452 1851.94 2457.35 1846.1 2462.07 1840.49Z"/><path fill="currentColor" d="M2634.59 2142.26L2638.48 2139.93C2640.69 2141.55 2642.27 2143.07 2644.94 2143.83C2647.59 2134.58 2649.27 2120.37 2653.29 2113.27C2656.9 2128.14 2654.9 2168.37 2661.76 2178.7L2669.73 2178.72L2669.24 2181.02L2666.07 2182.56C2679.53 2182.29 2713.41 2182.45 2725.22 2180.68C2728.85 2167.31 2724.43 2156.44 2725.16 2141.56C2732.51 2155.9 2742.88 2170.29 2748.32 2184.47L2746.85 2187.02C2730.68 2191.94 2678.68 2190.35 2658.4 2190.28C2650.37 2174.32 2642.44 2158.31 2634.59 2142.26Z"/><path fill="currentColor" d="M2461.03 2061.49C2463.46 2071.3 2461.97 2103.97 2462.53 2118.15C2481.79 2117.68 2610.16 2115.55 2620.07 2121.22L2621.45 2124.15C2561.04 2123.97 2492.6 2125.34 2432.86 2122.92C2437.14 2109.52 2454.57 2074.65 2461.03 2061.49Z"/><path fill="currentColor" d="M2397.5 1955.49C2398.28 1963.65 2398.82 2007.75 2396.62 2013.63C2388.19 1997.14 2395.48 1986.54 2384.3 1981.4C2385.1 1978.18 2395.28 1959.67 2397.5 1955.49Z"/><path fill="currentColor" d="M2462.07 1840.49C2462.97 1846.39 2459.82 1874.59 2459.35 1884.03C2456.45 1873.67 2457.66 1862.33 2448.46 1858.26C2452 1851.94 2457.35 1846.1 2462.07 1840.49Z"/><path fill="currentColor" d="M1137.33 1820.66C1159.23 1817.46 1187.83 1822.3 1201.74 1841.26C1223.92 1871.47 1240.79 1908.55 1257.95 1942.11C1286.26 1997.95 1314.97 2053.59 1344.06 2109.02C1355.24 2130.31 1371.17 2163.06 1383.02 2182.7L1384.67 2185.42L1382.84 2188.44C1366.31 2193.43 1313.52 2191.23 1292.97 2190.96C1282.78 2168.45 1272.03 2146.21 1260.74 2124.24C1203.89 2120.41 1123.46 2123.32 1064.32 2122.69C1074.52 2106.1 1098.28 2049.91 1118.24 2049.47C1151.29 2048.73 1186.39 2049.51 1219.78 2049.02C1214.83 2034.14 1211.7 2026.7 1204.93 2012.52C1193.58 1985.38 1162.95 1927.06 1148.22 1901.45C1106.46 1993.03 1045.37 2098.76 998.789 2191.55C973.327 2192.38 933.362 2191.91 908.55 2190.7C916.374 2169.11 946.496 2118.26 958.62 2094.66L1028.68 1959.59C1042.82 1932.22 1056.87 1902.93 1072.07 1876.3C1091.32 1842.57 1099.98 1830.48 1137.33 1820.66Z"/><path fill="currentColor" d="M2143.49 1823.81C2176.06 1827.87 2224.98 1821.52 2254.58 1825.51C2241.92 1843.47 2185.68 1888.47 2166.74 1906.06C2136.16 1934.45 2102.73 1965.26 2070.66 1991.91C2090.58 2015.2 2118.88 2042.57 2140.74 2064.73C2182.47 2107.15 2224.57 2149.21 2267.02 2190.92C2232.12 2191.73 2191.31 2192.22 2156.17 2191.1C2135.05 2167.74 2108.1 2143.21 2085.54 2120.74C2061.23 2096.51 2034.1 2068.47 2007.94 2046.5C1993.87 2055.83 1958.97 2080.65 1947.07 2092.61C1949.25 2116.58 1947.78 2163.25 1947.68 2188.86C1927 2190.46 1889.29 2189.9 1868.15 2189.33C1867.14 2138.69 1866.19 2068.55 1868.08 2018.71C1866.42 1993.73 1867.17 1957.68 1866.83 1931.93C1866.39 1899.09 1865.25 1859.3 1866.82 1826.92C1888.79 1824.97 1925.12 1825.91 1947.6 1826.3C1949.33 1879.9 1947.04 1943.32 1947.5 1998.65C1970.17 1982.21 2130.73 1843.13 2143.49 1823.81Z"/><path fill="currentColor" d="M1868.08 2018.71C1880.85 2034.59 1870.4 2163.19 1880.15 2174.88L1879.47 2174.52C1883.56 2169.96 1884.46 2168.35 1883.57 2161.64C1878.44 2123.18 1882.38 2085.59 1882.95 2046.86L1885.04 1839.38C1890.9 1845.62 1885.26 2144.67 1889.81 2174.3C1892.2 2189.91 1916.32 2175.86 1934.77 2184.85C1954.82 2177.31 1936.7 2111.21 1947.07 2092.61C1949.25 2116.58 1947.78 2163.25 1947.68 2188.86C1927 2190.46 1889.29 2189.9 1868.15 2189.33C1867.14 2138.69 1866.19 2068.55 1868.08 2018.71Z"/></svg></span><span class="prod">Monitoring</span></span></div>
+      <a class="prop" href="#sites" id="prop"><b>Site</b><small></small></a>
+      <div class="side-role" id="sideRole"></div>
+      <nav class="snav" id="snav"></nav>
+      <div class="side-foot" id="sideFoot"></div>
+    </aside>
+    <header class="topbar">
+      <span class="mark-tile"><svg viewBox="1010 1060 1325 1220" aria-hidden="true"><path fill="#0f95b5" d="M496.599 356.248C523.564 350.908 550.495 345.403 577.392 339.732C591.906 336.736 608.303 333.808 622.539 330.4L586.54 397.802C581.774 406.757 571.994 426.59 566.753 434.555C560.874 446.535 553.568 458.877 547.42 470.783C546.172 473.2 537.48 489.659 536.355 490.953C528.595 508.428 517.532 525.582 509.271 542.947C508.138 545.329 502.711 556.014 501.276 557.534L500.462 557.155L500.725 555.977C493.643 541.354 491.64 525.595 473.296 520.268C466.18 518.201 462.087 508.489 451.713 507.93C445.97 508.065 412.735 517.703 410.277 514.737C411.827 513.067 413.806 508.251 414.216 505.999C416.366 500.776 423.972 487.203 426.945 481.58L456.894 425.656L483.081 376.306C486.28 370.323 489.649 363.779 492.877 357.758C493.58 356.447 494.957 356.561 496.599 356.248Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><defs><linearGradient x1="614.34" y1="326.044" x2="534.365" gradientUnits="userSpaceOnUse" y2="396.159" id="m2-a"><stop stop-color="#54d173" offset="0"/><stop stop-color="#11afaa" offset="1"/></linearGradient></defs><path fill="url(#m2-a)" d="M496.599 356.248C523.564 350.908 550.495 345.403 577.392 339.732C591.906 336.736 608.303 333.808 622.539 330.4L586.54 397.802C581.774 406.757 571.994 426.59 566.753 434.555C566.271 434.407 566.529 434.539 566.056 434.034C567.336 431.55 568.856 428.957 569.555 426.29C566.529 427.877 570.007 427.402 566.749 428.909C563.931 428.669 559.289 423.009 557.455 420.614C554.378 416.596 553.331 409.228 549.9 404.85C541.651 394.325 529.506 386.528 519.124 378.013C519.188 376.873 519.225 377.401 519.064 376.427C511.274 373.274 513.614 368.386 511.45 361.036C510.735 358.61 512.287 356.837 513.519 354.845C509.451 352.891 500.912 358.219 496.599 356.248Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><path fill="#0d567f" d="M451.713 507.93C462.143 504.987 480.87 501.81 491.988 499.277C500.38 497.365 529.786 490.943 536.355 490.953C528.595 508.428 517.532 525.582 509.271 542.947C508.138 545.329 502.711 556.014 501.276 557.534L500.462 557.155L500.725 555.977C493.643 541.354 491.64 525.595 473.296 520.268C466.18 518.201 462.087 508.489 451.713 507.93Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><defs><linearGradient x1="367.371" y1="713.197" x2="459.9" gradientUnits="userSpaceOnUse" y2="510.279" id="m2-b"><stop stop-color="#0a1637" offset="0"/><stop stop-color="#0e4f80" offset="1"/></linearGradient></defs><path fill="url(#m2-b)" d="M314.795 691.349C319.217 681.695 328.107 666.459 333.353 656.753C345.526 634.366 357.573 611.911 369.493 589.389L399.248 533.521C402.033 528.27 411.222 510.139 414.216 505.999C413.806 508.251 411.827 513.067 410.277 514.737C412.735 517.703 445.97 508.065 451.713 507.93C462.087 508.489 466.18 518.201 473.296 520.268C491.64 525.595 493.643 541.354 500.725 555.977L500.462 557.155L501.276 557.534C487.714 585.182 470.227 615.885 455.501 643.026L438.719 674.165C436.179 678.887 432.182 686.846 429.378 691.111C418.365 691.847 400.463 691.258 388.973 691.234L314.795 691.349Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><defs><linearGradient x1="568.34" y1="701.532" x2="650.643" gradientUnits="userSpaceOnUse" y2="584.052" id="m2-c"><stop stop-color="#0b305c" offset="0"/><stop stop-color="#12699c" offset="1"/></linearGradient></defs><path fill="url(#m2-c)" d="M509.142 580.47L523.646 580.505L605.5 580.528C618.91 580.515 634.438 580.127 647.661 580.521C655.007 592.125 665.535 613.022 672.369 625.797L708.02 691.481L590.733 691.473C582.608 677.616 574.47 662.196 566.76 648.017L489.451 648.421C483.964 648.43 478.478 648.405 472.992 648.346C476.263 641.011 481.795 631.164 485.649 623.951L509.142 580.47Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><path fill="#0a2a4d" d="M509.142 580.47L523.646 580.505C519.398 587.496 489.321 644.76 489.451 648.421C483.964 648.43 478.478 648.405 472.992 648.346C476.263 641.011 481.795 631.164 485.649 623.951L509.142 580.47Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><defs><linearGradient x1="542.198" y1="571.233" x2="618.519" gradientUnits="userSpaceOnUse" y2="507.607" id="m2-d"><stop stop-color="#0d5f99" offset="0"/><stop stop-color="#108eb8" offset="1"/></linearGradient></defs><path fill="url(#m2-d)" d="M577.529 451.367C580.287 455.915 582.821 460.621 585.387 465.282C602.024 497.523 620.887 530.984 638.226 563.001C603.76 562.944 567.137 563.675 532.958 562.975L518.4 562.985C529.077 543.159 539.7 523.273 550.39 503.453C559.604 486.368 568.248 468.326 577.529 451.367Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/><path fill="#0d567f" d="M577.529 451.367C580.287 455.915 582.821 460.621 585.387 465.282C582.302 472.129 577.283 480.782 573.649 487.55C567.819 498.656 561.931 509.732 555.985 520.776L542.303 546.232C539.706 551.1 536.623 557.416 533.649 561.929L533.221 562.585L532.958 562.975L518.4 562.985C529.077 543.159 539.7 523.273 550.39 503.453C559.604 486.368 568.248 468.326 577.529 451.367Z" transform="matrix(3.26855 0 0 3.26855 0 -7.62939e-06)"/></svg></span>
+      <div class="t-prop"><b id="tSite">Site</b><small id="tView"></small></div>
+      <button class="icon-btn" data-ui-open="roleSheet" aria-label="View as" title="View as"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></button>
+    </header>
+    <main class="main" id="main"><div id="content"></div><div id="fw" hidden></div></main>
+    <nav class="tabbar" id="tabbar" aria-label="Main navigation"></nav>
+  </div>
 </div>
-<div class="wrap" id="wrap"><nav class="side" id="side" aria-label="Site pages"></nav><main><div id="content"></div><div id="fw" class="fw" hidden></div></main></div>
-<div class="tip" id="tip"></div>
+<div class="sheet-wrap" id="moreSheet" hidden><div class="sheet small" tabindex="-1" role="dialog" aria-label="All pages">
+  <div class="sheet-top"><h2>All pages</h2><button class="icon-btn" data-ui-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="more-list" id="moreList"></div></div></div>
+<div class="sheet-wrap" id="roleSheet" hidden><div class="sheet small" tabindex="-1" role="dialog" aria-label="View as">
+  <div class="sheet-top"><h2>View as</h2><button class="icon-btn" data-ui-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div id="roleList"></div><p class="muted small" id="roleHint"></p></div></div>
+<div class="toast" id="ui-toast" role="status" hidden></div>
+<div class="ftip" id="tip"></div>
 <script>
-const m = location.pathname.match(/^\/live\/([a-z0-9-]+)\/?$/);
-const site = m ? m[1] : null;
+// One page for /live/ (all sites) and /live/<site>/ (the site's pages, by #name). The server's answers come from /api/v1/...
+// FX stays null here. Only the mockup build (docs/mockup/arkan/build.py) puts saved answers in it, to show the page without a server.
+const FX = /*__FIXTURES__*/null;
+const MOCK = !!FX;
+const site = MOCK ? FX.site : (location.pathname.match(/^\/live\/([a-z0-9-]+)/) || [])[1] || null;
 const el = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const C = ['#2a78d6', '#eb6834', '#1baf7a'];   // L1, L2, L3 / series order, never cycled
+const C = ['var(--s1)', 'var(--s2)', 'var(--s3)'];   // L1, L2, L3 / series order, never cycled
+const QUIET = 'var(--s4)';
 const num = x => { const v = parseFloat(x); return isFinite(v) ? v : null; };
+const nowMs = () => MOCK ? Date.parse(FX.time) : Date.now();
+const toast = msg => window.ArkanUI && ArkanUI.toast(msg);
+// The mockup may run in a frame where confirm() is refused: there it goes ahead (nothing is sent anyway).
+const ask = text => MOCK ? true : confirm(text);
+
+const IC = {
+ gauge:'<path d="M12 14.5 16 10"/><path d="M4 18a9 9 0 1 1 16 0z"/>',
+ zap:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+ clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+ bars:'<path d="M5 20V10M12 20V4M19 20v-7"/>',
+ swap:'<path d="M7 7h12l-3-3M17 17H5l3 3"/>',
+ thermo:'<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/>',
+ drop:'<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+ sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+ cal:'<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+ clip:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 12.5l2 2 4-4"/>',
+ list:'<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
+ chip:'<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
+ upload:'<path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
+ home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
+ sliders:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+ ext:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+ user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+ dots:'<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>',
+ alert:'<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.1"/>',
+ info:'<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 7.8v.1"/>',
+ check:'<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+ down:'<path d="M12 5v14M6 13l6 6 6-6"/>',
+ pulse:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+ plug:'<path d="M9 3v5M15 3v5M7 8h10v4a5 5 0 0 1-10 0zM12 17v4"/>',
+ angle:'<path d="M4 19h16M4 19 16 5"/><path d="M11 19a8 8 0 0 0-2-5.6"/>',
+};
+const icon = (n, cls) => `<svg class="i${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
 
 // Decimals and unit by value name (the part after the device or sensor id)
 const FMT = {p: [1, 'kW'], s: [1, 'kVA'], q: [1, 'kVAr'], pf: [2, ''], f: [2, 'Hz'], v1: [1, 'V'], v2: [1, 'V'], v3: [1, 'V'],
@@ -130,90 +205,221 @@ const fmt = (k, v) => { if (v === null || v === undefined) return '–'; const f
 const unitOf = k => (FMT[part(k)] || [0, ''])[1];
 const cleanLabel = lab => lab.replace(/\s*\(C\)\s*$/, ' temperature').replace(/\s*\(%RH\)\s*$/, ' humidity')
   .replace(/\s*\((kW|kVA|Hz|A|V)\)\s*$/, '');
-
 function dewPoint(t, rh) {   // same formula as the alarms (server/app/alarms.py)
   if (t === null || rh === null || rh <= 0) return null;
   const a = 17.62, b = 243.12, g = Math.log(rh / 100) + a * t / (b + t);
   return b * g / (a - g);
 }
-
 function localTime(iso, offH, withDate = true) {
   if (!iso) return '–';
   const s = new Date(Date.parse(iso) + (offH || 0) * 3600e3).toISOString();
   return withDate ? s.slice(0, 16).replace('T', ' ') : s.slice(11, 19);
 }
+// Time axis helpers: "YYYY-MM-DD HH:MM" (hotel time) as a number, no time zone conversion
+const tp = s => { const [d, h] = s.split(' '); const [Y, Mo, Da] = d.split('-').map(Number); const [hh, mm] = (h || '0:0').split(':').map(Number);
+  return Date.UTC(Y, Mo - 1, Da, hh, mm); };
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fdate = ms => { const d = new Date(ms); return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONS[d.getUTCMonth()]}`; };
+const fhm = ms => new Date(ms).toISOString().slice(11, 16);
+const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
 
+// ------------------------------------------------------------------ mockup: the server's answers come from FX
+if (MOCK) {
+  const J = (body, status = 200) => Promise.resolve({ok: status < 400, status, json: async () => JSON.parse(JSON.stringify(body))});
+  const since = days => isoDay(tp(FX.history.now.slice(0, 10) + ' 00:00') - (days - 1) * 864e5);
+  window.fetch = (url, opt = {}) => {
+    const u = String(url); let m;
+    if ((opt.method || 'GET') === 'POST') {
+      toast('Mockup: nothing was sent');
+      if (/\/registers\/[^/]+\/check$/.test(u)) { const csv = JSON.parse(opt.body).csv; return J({ok: true, errors: [], warnings: [], rows: csvToRows(csv), csv}); }
+      if (/\/(registers|meter-settings)\//.test(u)) return J({ok: true, version: (FX.registers.platform?.version || 0) + 1});
+      if (/\/cancel$/.test(u)) return J({ok: true, cancelled: false});
+      return J({ok: true, offer: {version: FX.versions.latest || '0.0.0'}});
+    }
+    if (u === '/api/v1/status') return J(FX.status);
+    if (u === '/api/v1/admin/me') return J(FX.me);
+    if (u === '/api/v1/admin/github/releases') return J(FX.github);
+    if (/^\/api\/v1\/admin\/fw\//.test(u)) return J(FX.fw);
+    if (/^\/api\/v1\/admin\/registers\//.test(u)) return J(FX.registers);
+    if (/^\/api\/v1\/live\/[a-z0-9-]+$/.test(u)) return J(FX.live);
+    if (/^\/api\/v1\/alarms\//.test(u)) return J(FX.alarms);
+    if (/^\/api\/v1\/versions\//.test(u)) return J(FX.versions);
+    if ((m = u.match(/^\/api\/v1\/history\/[a-z0-9-]+\/day\/(\d{4}-\d{2}-\d{2})$/))) {
+      const ks = Object.keys(FX.days).sort(), k = FX.days[m[1]] ? m[1] : ks[0];   // days not saved show the oldest saved day
+      return J({...FX.days[k], day: m[1]});
+    }
+    if ((m = u.match(/^\/api\/v1\/history\/[a-z0-9-]+\?days=(\d+)$/))) { const f = since(+m[1]); return J({...FX.history, from: f + ' 00:00', hours: FX.history.hours.filter(r => r.t >= f)}); }
+    if ((m = u.match(/^\/api\/v1\/weather\/[a-z0-9-]+\/log\?days=(\d+)/))) { const f = since(+m[1]);
+      return J({...FX.wxlog, hours: FX.wxlog.hours.filter(r => r.t >= f), days: FX.wxlog.days.filter(d => d.date >= f)}); }
+    if (/^\/api\/v1\/weather\/[a-z0-9-]+$/.test(u)) return J(FX.weather);
+    if ((m = u.match(/^\/api\/v1\/quality\/[a-z0-9-]+\/day\/(\d{4}-\d{2}-\d{2})$/))) {
+      const ks = Object.keys(FX.qdays).sort(), k = FX.qdays[m[1]] ? m[1] : ks[0];   // days not saved show the oldest saved day
+      return J({...FX.qdays[k], day: m[1]});
+    }
+    if ((m = u.match(/^\/api\/v1\/quality\/[a-z0-9-]+\?days=(\d+)$/))) { const f = since(+m[1]);
+      return J({...FX.quality, from: f + ' 00:00', hours: FX.quality.hours.filter(r => r.t >= f), events: FX.quality.events.filter(e => e.local_time >= f)}); }
+    return J({ok: false, error: 'not in the mockup'}, 404);
+  };
+}
+const getJ = async url => (await fetch(url, {cache: 'no-store'})).json();
+
+// ------------------------------------------------------------------ navigation, View as, chrome
+// grp: the group label starts at this item. admin: only for logins in ADMIN_USERS. global: not tied to a site.
+const VIEWS = [
+  {id: 'now', name: 'Live now', short: 'Live', ic: 'gauge', note: 'every 15 s'},
+  {id: 'power', name: 'Power', ic: 'zap', grp: 'History', note: 'kW, hour by hour'},
+  {id: 'day', name: 'One day', ic: 'clock', note: 'minute by minute'},
+  {id: 'energy', name: 'Energy per day', short: 'Energy', ic: 'bars', note: 'kWh'},
+  {id: 'week', name: 'This week vs last', short: 'Week', ic: 'swap', note: 'kWh so far'},
+  {id: 'temperature', name: 'Temperature', short: 'Temp.', ic: 'thermo', note: 'room and outdoor'},
+  {id: 'humidity', name: 'Humidity', ic: 'drop', note: 'room and outdoor'},
+  {id: 'quality', name: 'Power quality', short: 'Quality', ic: 'pulse', grp: 'Power quality', note: 'overview, frequency, alarms'},
+  {id: 'voltage', name: 'Voltage', ic: 'plug', note: 'per phase, dips, unbalance'},
+  {id: 'pf', name: 'Power factor', short: 'PF', ic: 'angle', note: 'kvar, kVArh, PLN 0.85'},
+  {id: 'wtoday', name: 'Today', ic: 'sun', grp: 'Weather', note: 'forecast hour by hour'},
+  {id: 'wtomorrow', name: 'Tomorrow', ic: 'cal', note: 'next day forecast'},
+  {id: 'wlog', name: 'Weather log', short: 'Log', ic: 'clip', note: 'actual vs forecast'},
+  {id: 'register', name: 'Meter registers', short: 'Registers', ic: 'list', grp: 'Logger', note: 'see, edit, send the table'},
+  {id: 'versions', name: 'Firmware versions', short: 'Versions', ic: 'chip', note: 'running, history'},
+  {id: 'firmware', name: 'Firmware update', short: 'Update', ic: 'upload', note: 'remote, admins only', admin: true},
+  {id: 'sites', name: 'All sites', short: 'Sites', ic: 'home', grp: 'Platform', note: 'every site and logger', global: true},
+  {id: 'prefs', name: 'Settings', ic: 'sliders', note: 'display, view as', global: true, foot: true},
+];
+let ME = {user: '', admin: false, github: false};   // from /api/v1/admin/me: the Caddy login and whether it is in ADMIN_USERS
+let viewAs = 'admin';
+try { viewAs = localStorage.getItem('arkan-mon.viewas') || 'admin'; } catch (e) {}
+const isAdmin = () => ME.admin && viewAs === 'admin';
+const ROLE_NAME = {admin: 'Admin', viewer: 'Viewer'};
+const ROLE_NOTE = {admin: 'every page, firmware update included', viewer: 'what a login outside ADMIN_USERS sees'};
+const roles = () => ME.admin ? ['admin', 'viewer'] : ['viewer'];
+const role = () => isAdmin() ? 'admin' : 'viewer';
+let view = 'now', span = 14, dayShown = null, PROF = {}, STATUS = '', fwReady = Promise.resolve();
+const visible = () => VIEWS.filter(v => !(v.admin && !isAdmin()) && (site || v.global));
+const known = id => VIEWS.some(v => v.id === id && (site || v.global));
+const SITES = MOCK ? '#sites' : '/live/';   // the list of all sites is its own address on the server
+
+const navLink = v => `<a href="${v.id === 'sites' && site ? SITES : '#' + v.id}" title="${esc(v.name + ': ' + v.note)}"${v.id === view ? ' aria-current="page"' : ''}>${icon(v.ic)}<span class="nl">${esc(v.name)}</span><span class="ns">${esc(v.short || v.name)}</span></a>`;
+const renderFoot = () => { el('sideFoot').innerHTML = `<nav class="snav" aria-label="Settings">${VIEWS.filter(v => v.foot).map(navLink).join('')}</nav><div class="full">${STATUS}${MOCK ? `<span class="chip-demo">${icon('alert', 'sm')}Simulated data</span>` : ''}</div>`; };
+let chromeName = null;
+function renderChrome() {
+  const name = PROF.name || site || 'All sites', cur = VIEWS.find(v => v.id === view) || VIEWS[0];
+  chromeName = PROF.name || null;
+  el('prop').href = SITES;
+  el('prop').innerHTML = site ? `<b>${esc(name)}</b><small>${esc(site)} · all sites</small>` : '<b>All sites</b><small>every site and logger</small>';
+  el('tSite').textContent = name; el('tView').textContent = cur.name;
+  let h = '';
+  for (const v of visible().filter(v => !v.foot)) {
+    if (v.grp) h += `<div class="sep" role="separator"></div><div class="sep-l">${esc(v.grp)}</div>`;
+    h += navLink(v);
+  }
+  el('snav').innerHTML = h;
+  const who = r => `${ROLE_NAME[r]} · ${esc(ME.user || '…')}`;
+  el('sideRole').innerHTML = `<div class="rail"><button class="icon-btn" data-ui-open="roleSheet" aria-label="View as" title="View as: ${who(role())}">${icon('user')}</button></div>
+    <div class="full"><div class="field-row"><label for="roleSel">View as</label><select id="roleSel"${roles().length < 2 ? ' disabled' : ''}>${
+      roles().map(r => `<option value="${r}"${r === role() ? ' selected' : ''}>${who(r)}</option>`).join('')}</select></div></div>`;
+  el('roleList').innerHTML = roleOpts();
+  el('roleHint').textContent = ME.admin ? 'You are logged in as ' + ME.user + ', an admin login. Viewer shows the pages as the other logins see them.'
+    : 'You are logged in as ' + (ME.user || '…') + '. Admin pages need a login listed in ADMIN_USERS on the server.';
+  renderFoot();
+  const tabs = (site ? ['now', 'power', 'energy', 'wtoday'] : ['sites', 'prefs']).map(id => VIEWS.find(v => v.id === id));
+  el('tabbar').innerHTML = tabs.map(v => `<a href="#${v.id}"${v.id === view ? ' aria-current="page"' : ''}><span class="tb-ic">${icon(v.ic)}</span><span>${esc(v.short || v.name)}</span></a>`).join('') +
+    (site ? `<button data-ui-open="moreSheet"${tabs.some(v => v.id === view) ? '' : ' aria-current="page"'}><span class="tb-ic">${icon('dots')}</span><span>More</span></button>` : '');
+  el('moreList').innerHTML = visible().map(v => `<a class="opt" href="#${v.id}" data-ui-close style="text-decoration:none"${v.id === view ? ' aria-pressed="true"' : ''}>${icon(v.ic)}<span>${esc(v.name)}<small>${esc(v.note)}</small></span></a>`).join('');
+}
+const roleOpts = () => roles().map(r => `<button class="opt" data-role="${r}" aria-pressed="${r === role()}"><span class="av">${esc((ME.user || '?').slice(0, 2).toUpperCase())}</span><span>${ROLE_NAME[r]} · ${esc(ME.user)}<small>${ROLE_NOTE[r]}</small></span></button>`).join('');
+function setRole(r) {
+  if (!roles().includes(r) || r === role()) return;
+  viewAs = r;
+  try { localStorage.setItem('arkan-mon.viewas', r); } catch (e) {}
+  if (window.ArkanUI) ArkanUI.closeSheets();
+  toast(`Viewing as ${ROLE_NAME[r]} · ${ME.user}`);
+  show(view);
+}
+document.addEventListener('change', ev => { if (ev.target.id === 'roleSel') setRole(ev.target.value); });
+
+function head(title, sub, tools = '') {
+  return `<div class="page-head"><div><h1>${esc(title)}</h1><div class="sub">${sub}</div></div>${tools ? `<div class="headtools">${tools}</div>` : ''}</div>`;
+}
+const sec = (title, note = '') => `<h2 class="eyebrow sec">${esc(title)}${note ? ` <span>· ${note}</span>` : ''}</h2>`;
+const statTile = (k, v, unit, note = '') => `<div class="kpi"><span class="eyebrow">${esc(k)}</span><div class="big">${v}<small>${esc(unit)}</small></div>${note ? `<div class="sub">${note}</div>` : ''}</div>`;
+const tiles = (items, n = 0) => { const a = items.filter(Boolean); return `<div class="tiles${a.length === 3 ? ' t3' : a.length === 4 ? ' t4' : a.length === 5 ? ' t5' : ''}">${a.join('')}</div>`; };
+const tableCard = (inner, title = '', note = '') => `<section class="card">${title ? `<div class="card-head"><h2>${esc(title)}</h2>${note ? `<span class="muted small">${note}</span>` : ''}</div>` : ''}<div class="tablewrap"><table class="data">${inner}</table></div></section>`;
+const chartCard = (id, title = '') => `<section class="card">${title ? `<div class="card-head"><h2>${esc(title)}</h2></div>` : ''}<div class="chart" id="${id}"></div></section>`;
+const SEV = {critical: 'crit', warning: 'warn', info: 'info'};
+const sevPill = s => `<span class="pill ${SEV[s] || 'neutral'}">${esc(s)}</span>`;
+const segBtn = (attr, on, label, dis = false) => `<button type="button" ${attr} aria-pressed="${on}"${dis ? ' disabled style="opacity:.4;cursor:default"' : ''}>${label}</button>`;
+const spanPicker = () => `<div class="seg" role="group" aria-label="Period">${[7, 14, 31].map(d => segBtn(`data-span="${d}"`, d === span, d + ' days')).join('')}</div>`;
+
+// ------------------------------------------------------------------ Live now
 // Sparkline: one or more series over the last 60 minutes, hover shows the values at that time
 const SPARKS = {};
 let sparkId = 0;
 function spark(series, times, {tall = false, unitKey} = {}) {
   const all = series.flatMap(s => s.pts).filter(v => v !== null);
-  if (all.length < 2) return '<div class="range">History builds up over the next minutes</div>';
+  if (all.length < 2) return '<div class="sub">History builds up over the next minutes</div>';
   let lo = Math.min(...all), hi = Math.max(...all);
   if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
   const n = times.length, H = tall ? 60 : 36, X = i => (n > 1 ? i / (n - 1) * 100 : 50), Y = v => (H - 2) - (v - lo) / (hi - lo) * (H - 4);
   const paths = series.map(s => {
     let d = '';
     s.pts.forEach((v, i) => { if (v !== null) d += `${d && s.pts[i - 1] !== null ? 'L' : 'M'}${X(i).toFixed(2)},${Y(v).toFixed(2)}`; });
-    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+    return `<path d="${d}" style="stroke:${s.color}" vector-effect="non-scaling-stroke"/>`;
   }).join('');
-  const id = 'sp' + (++sparkId);
+  const id = 'sp' + (++sparkId), yk = unitKey || series[0].key, hm = i => esc(String(times[i] || '').slice(0, 5));
   SPARKS[id] = {series, times, unitKey};
-  return `<svg class="spark${tall ? ' tall' : ''}" id="${id}" viewBox="0 0 100 ${H}" preserveAspectRatio="none" role="img" aria-label="last 60 minutes">
-    ${paths}<line class="xh" y1="0" y2="${H}" stroke="#7b8794" stroke-dasharray="2 2" vector-effect="non-scaling-stroke" visibility="hidden"/></svg>`;
+  const grid = [2, H / 2, H - 2].map(y => `<line class="sg" x1="0" x2="100" y1="${y}" y2="${y}" vector-effect="non-scaling-stroke"/>`).join('');
+  return `<div class="spk${tall ? ' tall' : ''}"><div class="spy" aria-hidden="true"><span>${fmt(yk, hi)}</span><span>${fmt(yk, (hi + lo) / 2)}</span><span>${fmt(yk, lo)}</span></div>
+    <svg class="spark${tall ? ' tall' : ''}" id="${id}" viewBox="0 0 100 ${H}" preserveAspectRatio="none" role="img" aria-label="last 60 minutes, ${fmt(yk, lo)} to ${fmt(yk, hi)} ${esc(unitOf(yk))}">
+    ${grid}${paths}<line class="xh" y1="0" y2="${H}" vector-effect="non-scaling-stroke" visibility="hidden"/></svg>
+    <div class="spx" aria-hidden="true"><span>${hm(0)}</span><span>${hm(Math.floor((n - 1) / 2))}</span><span>${hm(n - 1)}</span></div></div>`;
 }
+function showTip(ev, html) {
+  const tip = el('tip'); tip.innerHTML = html; tip.style.display = 'block';
+  tip.style.left = Math.max(4, Math.min(ev.clientX + 14, innerWidth - tip.offsetWidth - 8)) + 'px'; tip.style.top = (ev.clientY + 14) + 'px';
+}
+const hideTip = () => { el('tip').style.display = 'none'; };
 document.addEventListener('mousemove', ev => {
-  if (ev.target.closest && ev.target.closest('svg.chart')) return;   // the history charts have their own tooltip
-  const svg = ev.target.closest && ev.target.closest('svg.spark'), tip = el('tip');
+  if (ev.target.closest && ev.target.closest('.chart')) return;   // the history charts have their own tooltip
+  const svg = ev.target.closest && ev.target.closest('svg.spark');
   document.querySelectorAll('svg.spark .xh').forEach(l => { if (!svg || l.parentNode !== svg) l.setAttribute('visibility', 'hidden'); });
-  if (!svg || !SPARKS[svg.id]) { tip.style.display = 'none'; return; }
+  if (!svg || !SPARKS[svg.id]) { hideTip(); return; }
   const sp = SPARKS[svg.id], r = svg.getBoundingClientRect(), n = sp.times.length;
   const i = Math.max(0, Math.min(n - 1, Math.round((ev.clientX - r.left) / r.width * (n - 1))));
   const xh = svg.querySelector('.xh'), x = n > 1 ? i / (n - 1) * 100 : 50;
   xh.setAttribute('x1', x); xh.setAttribute('x2', x); xh.setAttribute('visibility', 'visible');
-  tip.innerHTML = `<b>${esc(sp.times[i])}</b>` + sp.series.map(s => `<div>${sp.series.length > 1 ? `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:5px"></span>${esc(s.name)}: ` : ''}<b>${fmt(sp.unitKey || s.key, s.pts[i])}</b> ${esc(unitOf(sp.unitKey || s.key))}</div>`).join('');
-  tip.style.display = 'block';
-  tip.style.left = Math.min(ev.clientX + 12, innerWidth - tip.offsetWidth - 8) + 'px';
-  tip.style.top = (ev.clientY + 14) + 'px';
+  showTip(ev, `<b>${esc(sp.times[i])}</b>` + sp.series.map(s => `<div>${sp.series.length > 1 ? `<span class="sq" style="background:${s.color}"></span>${esc(s.name)}: ` : ''}<b>${fmt(sp.unitKey || s.key, s.pts[i])}</b> ${esc(unitOf(sp.unitKey || s.key))}</div>`).join(''));
 });
 
 function card(label, key, v, pts, times, extra = '') {
   const vals = pts.filter(x => x !== null);
-  const range = vals.length > 1 ? `<div class="range">60 min: ${fmt(key, Math.min(...vals))} – ${fmt(key, Math.max(...vals))} ${esc(unitOf(key))}</div>` : '';
-  return `<div class="card"><div class="k">${esc(label)}</div><div class="v">${fmt(key, v)}<small>${esc(unitOf(key))}</small></div>${extra}${range}
+  const range = vals.length > 1 ? `<div class="sub">60 min: ${fmt(key, Math.min(...vals))} – ${fmt(key, Math.max(...vals))} ${esc(unitOf(key))}</div>` : '';
+  return `<div class="kpi"><span class="eyebrow">${esc(label)}</span><div class="big">${fmt(key, v)}<small>${esc(unitOf(key))}</small></div>${extra}${range}
     ${spark([{key, name: label, color: C[0], pts}], times)}</div>`;
 }
-
-function meter(frac, text) {
+function capBar(frac, text) {
   if (frac === null || !isFinite(frac)) return '';
-  const pct = Math.max(0, frac * 100), cls = pct >= 90 ? 'bad' : pct >= 75 ? 'warn' : '';
-  return `<div class="meter"><b class="${cls}" style="width:${Math.min(100, pct).toFixed(1)}%"></b></div><div class="range">${pct.toFixed(0)} % ${esc(text)}</div>`;
+  const pct = Math.max(0, frac * 100), cls = pct >= 90 ? 'crit' : pct >= 75 ? 'warn' : '';
+  return `<div><div class="capbar"><span class="${cls}" style="width:${Math.min(100, pct).toFixed(1)}%"></span></div><div class="sub">${pct.toFixed(0)} % ${esc(text)}</div></div>`;
 }
 
 async function loadSite() {
   for (const k in SPARKS) delete SPARKS[k];
-  const j = await (await fetch(`/api/v1/live/${site}`, {cache: 'no-store'})).json();
+  const j = await getJ(`/api/v1/live/${site}`);
   const prof = j.profile || {}; PROF = prof;
   const labels = prof.labels || {}, off = prof.utc_offset_h ?? 8, sensors = prof.sensors || {};
   const wanted = (prof.live && prof.live.values) || null;
-  const name = prof.name || site;
-  document.title = `Live: ${name}`;
-  el('title').textContent = name;
+  document.title = `Live: ${prof.name || site}`;
   let html = '', worst = null;
 
   // Open alarms first
   const al = j.alarms || [];
-  const icon = {critical: '!', warning: '▲', info: 'i'};
-  if (al.length) {
-    html += '<h2>Open alarms</h2>';
-    for (const a of al) html += `<div class="alarm ${esc(a.severity)}"><div class="ic">${icon[a.severity] || 'i'}</div><div>
-      <div class="t">${esc(a.id)} ${esc(a.name)} <span class="sev ${esc(a.severity)}">${esc(a.severity)}</span></div>
-      <div class="d">since ${localTime(a.since, off)} · worst ${esc(a.worst ?? '–')} ${esc(a.unit)}</div></div></div>`;
-  } else html += '<div style="margin-top:4px;display:inline-block"><span class="okline">✓ No open alarm</span></div>';
-  html += await wxStrip();
+  if (al.length) html += `<section class="card mb-16"><div class="card-head"><h2>Open alarms</h2><span class="pill ${al.some(a => a.severity === 'critical') ? 'crit' : 'warn'}">${al.length} open</span></div><ul class="alist">${
+    al.map(a => `<li><span class="ai ${SEV[a.severity] || 'info'}">${icon(a.severity === 'info' ? 'info' : 'alert')}</span>
+      <div><b>${esc(a.id)} ${esc(a.name)}</b><small>since ${localTime(a.since, off)} · worst ${esc(a.worst ?? '–')} ${esc(a.unit)}</small></div>${sevPill(a.severity)}</li>`).join('')}</ul></section>`;
+  html += `<div class="inline">${al.length ? '' : `<span class="state good">${icon('check')}No open alarm</span>`}${await wxStrip()}</div>`;
 
   const devs = Object.keys(j.devices || {});
-  if (!devs.length) html += '<h2>Now</h2><div class="empty">No live data for this site (logger offline or not installed yet).</div>';
+  if (!devs.length) html += sec('Now') + '<section class="card"><div class="empty">No live data for this site (logger offline or not installed yet).</div></section>';
 
   for (const dev of devs) {
     const d = j.devices[dev], vals = d.last.values || {}, sys = d.last.sys || {};
@@ -226,18 +432,18 @@ async function loadSite() {
     const has = k => keys.includes(k);
     const L = (k, dflt) => cleanLabel(labels[k] || dflt || k);
     const meters = [...new Set(keys.map(k => k.split('_')[0]).filter(p => /^EM\d+$/.test(p)))];
-    if (devs.length > 1) html += `<h2 style="font-size:.9rem;color:var(--ink)">${esc(dev)}</h2>`;
+    if (devs.length > 1) html += `<h2 class="sec" style="font-size:17px">${esc(dev)}</h2>`;
 
     for (const M of meters) {
       // Power: the headline values
-      let g = '';
-      if (has(`${M}_p`)) { used.add(`${M}_p`); g += card(L(`${M}_p`, 'Total power'), `${M}_p`, V(`${M}_p`), H(`${M}_p`), times); }
+      const g = [];
+      if (has(`${M}_p`)) { used.add(`${M}_p`); g.push(card(L(`${M}_p`, 'Total power'), `${M}_p`, V(`${M}_p`), H(`${M}_p`), times)); }
       if (has(`${M}_s`)) { used.add(`${M}_s`);
-        g += card(L(`${M}_s`, 'Apparent power'), `${M}_s`, V(`${M}_s`), H(`${M}_s`), times,
-          prof.contracted_kva ? meter(V(`${M}_s`) / prof.contracted_kva, `of the ${prof.contracted_kva} kVA PLN contract`) : ''); }
+        g.push(card(L(`${M}_s`, 'Apparent power'), `${M}_s`, V(`${M}_s`), H(`${M}_s`), times,
+          prof.contracted_kva ? capBar(V(`${M}_s`) / prof.contracted_kva, `of the ${prof.contracted_kva} kVA PLN contract`) : '')); }
       for (const [k, dl] of [['pf', 'Power factor'], ['f', 'Frequency']])
-        if (has(`${M}_${k}`)) { used.add(`${M}_${k}`); g += card(L(`${M}_${k}`, dl), `${M}_${k}`, V(`${M}_${k}`), H(`${M}_${k}`), times); }
-      if (g) html += `<h2>Power${meters.length > 1 ? ' · ' + esc(M) : ''}</h2><div class="grid">${g}</div>`;
+        if (has(`${M}_${k}`)) { used.add(`${M}_${k}`); g.push(card(L(`${M}_${k}`, dl), `${M}_${k}`, V(`${M}_${k}`), H(`${M}_${k}`), times)); }
+      if (g.length) html += sec('Power' + (meters.length > 1 ? ' · ' + M : '')) + tiles(g);
 
       // Per phase: voltage and current, three lines in one card each
       let ph = '';
@@ -247,158 +453,113 @@ async function loadSite() {
         ks.forEach(k => used.add(k));
         const cur = ks.map(V);
         let rows = `<div></div><div class="h">L1</div><div class="h">L2</div><div class="h">L3</div><div class="l">now</div>` +
-          cur.map((v, n) => `<div class="n"><span class="sw" style="background:${C[n]}"></span>${fmt(ks[n], v)}</div>`).join('');
+          cur.map((v, n) => `<div class="n"><span class="swl" style="background:${C[n]}"></span>${fmt(ks[n], v)}</div>`).join('');
         const hist = ks.map(H);
         rows += `<div class="l">60 min</div>` + hist.map((h, n) => { const x = h.filter(v => v !== null);
           return `<div class="h">${x.length ? fmt(ks[n], Math.min(...x)) + '–' + fmt(ks[n], Math.max(...x)) : '–'}</div>`; }).join('');
-        let extra = '';
+        let extra = '', note = '';
         if (q === 'i') {   // against the PLN per-phase limit (contract kVA / 3 / contract voltage), else the breaker
           const mx = Math.max(...cur.filter(v => v !== null));
           const pln = prof.contracted_kva && prof.contract_v_ln ? prof.contracted_kva * 1000 / 3 / prof.contract_v_ln : null;
-          if (pln) extra = meter(mx / pln, `of the ${pln.toFixed(0)} A PLN phase limit (highest phase)`);
-          else if (prof.rated_a) extra = meter(mx / prof.rated_a, `of the ${prof.rated_a} A main breaker (highest phase)`);
+          if (pln) extra = capBar(mx / pln, `of the ${pln.toFixed(0)} A PLN phase limit (highest phase)`);
+          else if (prof.rated_a) extra = capBar(mx / prof.rated_a, `of the ${prof.rated_a} A main breaker (highest phase)`);
         }
-        if (q === 'v' && prof.nominal_v) extra = `<div class="range">nominal ${prof.nominal_v} V</div>`;
-        ph += `<div class="card"><div class="k">${title} (${unitOf(ks[0])})</div><div class="phase">${rows}</div>${extra}
-          ${spark(ks.map((k, n) => ({key: k, name: 'L' + (n + 1), color: C[n], pts: hist[n]})), times, {tall: true})}</div>`;
+        if (q === 'v' && prof.nominal_v) note = `nominal ${prof.nominal_v} V`;
+        ph += `<section class="card"><div class="card-head"><h2>${title} (${unitOf(ks[0])})</h2>${note ? `<span class="muted small">${note}</span>` : ''}</div><div class="phase">${rows}</div>${extra}
+          ${spark(ks.map((k, n) => ({key: k, name: 'L' + (n + 1), color: C[n], pts: hist[n]})), times, {tall: true})}</section>`;
       }
-      if (ph) html += `<h2>Per phase${meters.length > 1 ? ' · ' + esc(M) : ''}</h2><div class="grid wide">${ph}</div>`;
+      if (ph) html += sec('Per phase' + (meters.length > 1 ? ' · ' + M : '')) + `<div class="two">${ph}</div>`;
     }
 
     // Environment: each sensor, then the room-minus-outdoor difference and the outdoor dew point
     const ths = [...new Set(keys.map(k => k.split('_')[0]).filter(p => /^TH\d+$/.test(p)))];
-    let env = '';
+    const env = [];
     for (const S of ths) for (const q of ['t', 'rh']) {
       const k = `${S}_${q}`; if (!has(k)) continue; used.add(k);
-      env += card(L(k, `${S} ${q}`), k, V(k), H(k), times);
+      env.push(card(L(k, `${S} ${q}`), k, V(k), H(k), times));
     }
     if (has('TH1_t') && has('TH2_t')) {
       const diff = d.history.map(h => { const a = num(h.values.TH1_t), b = num(h.values.TH2_t); return a !== null && b !== null ? a - b : null; });
       const now = V('TH1_t') !== null && V('TH2_t') !== null ? V('TH1_t') - V('TH2_t') : null;
-      env += card('Room minus outdoor', 'TH_t', now, diff, times);
+      env.push(card('Room minus outdoor', 'TH_t', now, diff, times));
     }
     if (has('TH2_t') && has('TH2_rh')) {
       const dp = d.history.map(h => dewPoint(num(h.values.TH2_t), num(h.values.TH2_rh)));
-      env += card('Outdoor dew point', 'TH_t', dewPoint(V('TH2_t'), V('TH2_rh')), dp, times,
-        V('TH1_t') !== null ? `<div class="range">electrical room is ${(V('TH1_t') - dewPoint(V('TH2_t'), V('TH2_rh'))).toFixed(1)} °C above it</div>` : '');
+      env.push(card('Outdoor dew point', 'TH_t', dewPoint(V('TH2_t'), V('TH2_rh')), dp, times,
+        V('TH1_t') !== null ? `<div class="sub">electrical room is ${(V('TH1_t') - dewPoint(V('TH2_t'), V('TH2_rh'))).toFixed(1)} °C above it</div>` : ''));
     }
-    if (env) html += `<h2>Environment${Object.keys(sensors).length ? ` <span style="text-transform:none;letter-spacing:0">· ${Object.entries(sensors).map(([k, v]) => `${esc(k)} ${esc(v)}`).join(' · ')}</span>` : ''}</h2><div class="grid">${env}</div>`;
+    if (env.length) html += sec('Environment', Object.entries(sensors).map(([k, v]) => `${esc(k)} ${esc(v)}`).join(' · ')) + tiles(env);
 
     // Any other value listed in site.json
     const rest = keys.filter(k => !used.has(k));
-    if (rest.length) html += `<h2>Other values</h2><div class="grid">${rest.map(k => card(L(k), k, V(k), H(k), times)).join('')}</div>`;
+    if (rest.length) html += sec('Other values') + tiles(rest.map(k => card(L(k), k, V(k), H(k), times)));
 
     // The logger itself
     const rssi = num(sys.rssi), q = rssi === null ? '' : rssi >= -60 ? 'good' : rssi >= -70 ? 'fair' : 'weak';
     const up = num(sys.up_s);
-    html += `<h2>Logger</h2><div class="card"><div class="facts">
-      <div>Logger<b>${esc(dev)}</b></div>
-      <div>Last reading (hotel time)<b>${localTime(d.last.ts, off).slice(0, 10)} ${localTime(d.last.ts, off, false)}</b></div>
-      <div>WiFi signal<b>${rssi === null ? '–' : `${rssi} dBm <span class="${q === 'weak' ? 'bad' : ''}" style="font-weight:400">${q}</span>`}</b></div>
-      <div>Upload backlog<b class="${(num(sys.backlog_min) || 0) > 60 ? 'bad' : ''}">${esc(sys.backlog_min ?? '–')} min</b></div>
-      <div>SD card<b>${sys.sd === undefined ? '–' : sys.sd ? 'OK' : '<span class="bad">missing</span>'}</b></div>
-      <div>Firmware<b>${esc(sys.fw ?? '–')}</b></div>
-      ${up !== null ? `<div>Running for<b>${up >= 86400 ? Math.floor(up / 86400) + ' d ' : ''}${Math.floor(up % 86400 / 3600)} h ${Math.floor(up % 3600 / 60)} min</b></div>` : ''}
-    </div></div>`;
+    html += sec('Logger') + `<section class="card"><div class="facts">
+      <div><small>Logger</small><b>${esc(dev)}</b></div>
+      <div><small>Last reading (hotel time)</small><b>${localTime(d.last.ts, off).slice(0, 10)} ${localTime(d.last.ts, off, false)}</b></div>
+      <div><small>WiFi signal</small><b>${rssi === null ? '–' : `${rssi} dBm <span class="dimtxt${q === 'weak' ? ' bad' : ''}">${q}</span>`}</b></div>
+      <div><small>Upload backlog</small><b class="${(num(sys.backlog_min) || 0) > 60 ? 'bad' : ''}">${esc(sys.backlog_min ?? '–')} min</b></div>
+      <div><small>SD card</small><b>${sys.sd === undefined ? '–' : sys.sd ? 'OK' : '<span class="bad">missing</span>'}</b></div>
+      <div><small>Firmware</small><b>${esc(sys.fw ?? '–')}</b></div>
+      ${up !== null ? `<div><small>Running for</small><b>${up >= 86400 ? Math.floor(up / 86400) + ' d ' : ''}${Math.floor(up % 86400 / 3600)} h ${Math.floor(up % 3600 / 60)} min</b></div>` : ''}
+    </div></section>`;
   }
 
   // The alarm log last
   try {
-    const lj = await (await fetch(`/api/v1/alarms/${site}`, {cache: 'no-store'})).json();
+    const lj = await getJ(`/api/v1/alarms/${site}`);
     const rows = lj.log.slice(-20).reverse();
-    html += `<h2>Alarm log · last 20, hotel time</h2>`;
-    if (!rows.length) html += '<div class="card k">Nothing logged yet.</div>';
-    else {
-      html += '<table><tr><th>Time</th><th>Alarm</th><th>State</th><th>Value</th><th class="hide-s">Message</th></tr>';
-      for (const r of rows) {
+    html += sec('Alarm log', 'last 20, hotel time');
+    if (!rows.length) html += '<section class="card"><div class="empty">Nothing logged yet.</div></section>';
+    else html += tableCard('<tr><th>Time</th><th>Alarm</th><th>State</th><th>Value</th><th class="hide-s">Message</th></tr>' + rows.map(r => {
         const c = r.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(x => x.replace(/,$/, '').replace(/^"|"$/g, '').replace(/""/g, '"'));
-        html += `<tr><td>${esc(c[1])}</td><td>${esc(c[3])} ${esc(c[4])} <span class="sev ${esc(c[5])}">${esc(c[5])}</span></td><td>${esc(c[6])}</td>
-          <td>${esc(c[7])} ${c[9] === 'event' ? '' : esc(c[9])}</td><td class="hide-s">${esc(c[11])}</td></tr>`;
-      }
-      html += '</table>';
-    }
+        return `<tr><td>${esc(c[1])}</td><td><span class="mono">${esc(c[3])}</span> ${esc(c[4])} ${sevPill(c[5])}</td><td>${esc(c[6])}</td>
+          <td>${esc(c[7])} ${c[9] === 'event' ? '' : esc(c[9])}</td><td class="hide-s wrap">${esc(c[11])}</td></tr>`; }).join(''));
   } catch (e) {}
-  html += `<div class="foot">Refreshed every ${(prof.live && prof.live.refresh_s) || 15} s. Every snapshot is also saved on the server (7 days). Longer periods: the History pages in the menu.</div>`;
-  if (view === 'now') el('content').innerHTML = html;
+  html += `<div class="foot"><span>Refreshed every ${(prof.live && prof.live.refresh_s) || 15} s. Every snapshot is also saved on the server (7 days). Longer periods: the History pages in the menu.</span></div>`;
 
-  const clock = `Hotel time ${localTime(new Date(Date.now()).toISOString(), off, false).slice(0, 5)}`;
-  el('status').innerHTML = (!devs.length ? '<span class="pill bad"><i></i>No live data</span>'
-    : worst < 60 ? `<span class="pill live"><i></i>Live · updated ${worst} s ago</span>`
-    : `<span class="pill bad"><i></i>No data for ${Math.round(worst / 60)} min</span>`) + `<span>${clock}</span>`;
+  const clock = `<span class="clock">Hotel time ${localTime(new Date(nowMs()).toISOString(), off, false).slice(0, 5)}</span>`;
+  STATUS = !devs.length ? '<span class="live-pill off"><i></i>No live data</span>'
+    : worst < 60 ? `<span class="live-pill"><i></i>Live · updated ${worst} s ago</span>`
+    : `<span class="live-pill off"><i></i>No data for ${Math.round(worst / 60)} min</span>`;
+  if (view === 'now') el('content').innerHTML = head('Live now', `${esc(prof.name || site)} · the logger's readings, refreshed every ${(prof.live && prof.live.refresh_s) || 15} s`, STATUS + clock) + html;
+  if (chromeName !== (prof.name || null)) renderChrome(); else renderFoot();
 }
 
-async function loadAll() {
-  const j = await (await fetch('/api/v1/status', {cache: 'no-store'})).json();
-  document.title = 'Live: all sites';
-  el('title').textContent = 'All sites · Live';
-  let html = '<h2>Sites and loggers</h2><table><tr><th>Site</th><th>Logger</th><th>Power now</th><th>Live</th><th class="hide-s">Last record (UTC)</th><th class="hide-s">Firmware</th></tr>';
+async function sitesView(box) {
+  const j = await getJ('/api/v1/status');
+  let rows = '';
   for (const [s, devs] of Object.entries(j.sites)) {
     let live = {};
-    try { live = (await (await fetch(`/api/v1/live/${s}`, {cache: 'no-store'})).json()).devices || {}; } catch (e) {}
+    try { live = (await getJ(`/api/v1/live/${s}`)).devices || {}; } catch (e) {}
     for (const [dev, d] of Object.entries(devs)) {
       const p = num(live[dev]?.last?.values?.EM01_p);
-      const st = d.live_age_s === null ? '<span class="bad">none</span>'
-        : d.live_age_s < 60 ? `<span class="ok">● ${d.live_age_s} s ago</span>` : `<span class="bad">● ${Math.round(d.live_age_s / 60)} min ago</span>`;
-      html += `<tr><td><a href="/live/${esc(s)}/"><b>${esc(s)}</b></a></td><td>${esc(dev)}</td><td>${p === null ? '–' : p.toFixed(1) + ' kW'}</td>
-        <td>${st}</td><td class="hide-s">${esc(d.last_record || '–')}</td><td class="hide-s"><a href="/live/${esc(s)}/#versions">${esc(d.fw || '–')}</a></td></tr>`;
+      const st = d.live_age_s === null ? '<span class="live-pill idle"><i></i>none</span>'
+        : d.live_age_s < 60 ? `<span class="live-pill"><i></i>${d.live_age_s} s ago</span>` : `<span class="live-pill off"><i></i>${Math.round(d.live_age_s / 60)} min ago</span>`;
+      rows += `<tr><td><a href="${MOCK ? '#now' : `/live/${esc(s)}/`}">${esc(s)}</a></td><td>${esc(dev)}</td><td>${p === null ? '–' : p.toFixed(1) + ' kW'}</td>
+        <td>${st}</td><td class="hide-s">${esc(d.last_record || '–')}</td><td class="hide-s"><a href="${MOCK ? '#versions' : `/live/${esc(s)}/#versions`}">${esc(d.fw || '–')}</a></td></tr>`;
     }
   }
-  el('content').innerHTML = html + '</table><div class="foot">Click a site for its live page. History: <a href="/">Open Energy Dashboard</a>.</div>';
-  el('status').innerHTML = `<span class="pill"><i></i>${esc(j.time.replace('T', ' ').replace('Z', ' UTC'))}</span>`;
+  if (!site) document.title = 'Live: all sites';
+  box.innerHTML = head('All sites', 'Every site and logger on this platform. Click a site for its live page.',
+      `<span class="clock">${esc(j.time.replace('T', ' ').replace('Z', ' UTC'))}</span>`) +
+    tableCard('<tr><th>Site</th><th>Logger</th><th>Power now</th><th>Live</th><th class="hide-s">Last record (UTC)</th><th class="hide-s">Firmware</th></tr>' + rows, 'Sites and loggers') +
+    '<div class="foot"><span>History: the pages of each site.</span></div>';
 }
 
-
-// ------------------------------------------------------------------ site menu and history views
-// The history views read /api/v1/history/<site> (one row per local hour, from the day files) and
-// /api/v1/history/<site>/day/<date> (1-minute power). Times are hotel time, as everywhere on this page.
-const VIEWS = [
-  {id: 'now', name: 'Live now', sub: 'every 15 s', grp: 'Now'},
-  {id: 'power', name: 'Power', sub: 'kW, hour by hour', grp: 'History'},
-  {id: 'day', name: 'One day', sub: 'minute by minute', grp: 'History'},
-  {id: 'energy', name: 'Energy per day', sub: 'kWh', grp: 'History'},
-  {id: 'week', name: 'This week vs last', sub: 'kWh so far', grp: 'History'},
-  {id: 'temperature', name: 'Temperature', sub: 'room and outdoor', grp: 'History'},
-  {id: 'humidity', name: 'Humidity', sub: 'room and outdoor', grp: 'History'},
-  {id: 'quality', name: 'Power quality', sub: 'overview, frequency, alarms', grp: 'Power quality'},
-  {id: 'voltage', name: 'Voltage', sub: 'per phase, dips, unbalance', grp: 'Power quality'},
-  {id: 'pf', name: 'Power factor', sub: 'kvar, kVArh, PLN 0.85', grp: 'Power quality'},
-  {id: 'wtoday', name: 'Today', sub: 'forecast hour by hour', grp: 'Weather'},
-  {id: 'wtomorrow', name: 'Tomorrow', sub: 'next day forecast', grp: 'Weather'},
-  {id: 'wlog', name: 'Weather log', sub: 'actual vs forecast', grp: 'Weather'},
-  {id: 'versions', name: 'Firmware versions', sub: 'running, history', grp: 'Logger'},
-  {id: 'firmware', name: 'Firmware update', sub: 'remote, admins only', grp: 'Logger', admin: true},
-];
-let isAdmin = false, fwReady = Promise.resolve();   // set by fwInit() from /api/v1/admin/me (ADMIN_USERS)
-let view = 'now', span = 14, dayShown = null, PROF = {};
+// ------------------------------------------------------------------ history views
+// /api/v1/history/<site> (one row per local hour, from the day files) and /api/v1/history/<site>/day/<date> (1-minute power).
 const HCACHE = {};
 async function hourly(days) {
   const c = HCACHE[days];
   if (c && Date.now() - c.at < 120e3) return c.j;
-  const j = await (await fetch(`/api/v1/history/${site}?days=${days}`, {cache: 'no-store'})).json();
+  const j = await getJ(`/api/v1/history/${site}?days=${days}`);
   HCACHE[days] = {at: Date.now(), j};
   return j;
 }
-
-function sideMenu() {
-  let h = '', g = '';
-  const reg = `<a href="/live/${esc(site)}/register">Meter registers<small>see, edit, send the table</small></a>`;
-  for (const v of VIEWS) {
-    if (v.admin && !isAdmin) continue;
-    if (v.grp !== g) { h += `<h3>${esc(v.grp)}</h3>` + (v.grp === 'Logger' ? reg : ''); g = v.grp; }
-    h += `<a href="#${v.id}" data-id="${v.id}" class="${v.id === view ? 'on' : ''}">${esc(v.name)}<small>${esc(v.sub)}</small></a>`;
-  }
-  if (g !== 'Logger') h += `<h3>Logger</h3>${reg}`;
-  h += `<h3>Elsewhere</h3><a href="/live/">All sites<small>/live/</small></a><a href="/">Open Energy Dashboard<small>/ (OED)</small></a>`;
-  el('side').innerHTML = h;
-}
-
-// Time axis helpers: "YYYY-MM-DD HH:MM" (hotel time) as a number, no time zone conversion
-const tp = s => { const [d, h] = s.split(' '); const [Y, Mo, Da] = d.split('-').map(Number); const [hh, mm] = (h || '0:0').split(':').map(Number);
-  return Date.UTC(Y, Mo - 1, Da, hh, mm); };
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const fdate = ms => { const d = new Date(ms); return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONS[d.getUTCMonth()]}`; };
-const fhm = ms => new Date(ms).toISOString().slice(11, 16);
-const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
 function nice(lo, hi, n = 5) {
   const sp = hi - lo || 1, s0 = sp / n, p = Math.pow(10, Math.floor(Math.log10(s0)));
   const st = [1, 2, 2.5, 5, 10].map(x => x * p).find(x => x >= s0);
@@ -406,37 +567,36 @@ function nice(lo, hi, n = 5) {
   return t;
 }
 let CW = 900, CH = 320;
-const CM = {l: 50, r: 14, t: 10, b: 34};
-const sizeTo = box => { CW = Math.max(320, Math.round(box.clientWidth - 24)); CH = CW < 600 ? 240 : 320; };
-function showTip(ev, html) {
-  const tip = el('tip'); tip.innerHTML = html; tip.style.display = 'block';
-  tip.style.left = Math.min(ev.clientX + 14, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = (ev.clientY + 14) + 'px';
-}
-const hideTip = () => { el('tip').style.display = 'none'; };
+const CM = {l: 50, r: 14, t: 10, b: 48};
+// The two axis lines and the name of the x axis (the y axis carries its unit, turned, on the left)
+const axes = xName => `<line class="axl" x1="${CM.l}" x2="${CM.l}" y1="${CM.t}" y2="${CH - CM.b}"/><line class="axl" x1="${CM.l}" x2="${CW - CM.r}" y1="${CH - CM.b}" y2="${CH - CM.b}"/>` +
+  `<text class="ax" x="${(CM.l + CW - CM.r) / 2}" y="${CH - 4}" text-anchor="middle">${esc(xName)}</text>`;
+const sizeTo = box => { CW = Math.max(320, Math.round(box.clientWidth)); CH = CW < 600 ? 240 : 320; };
 
 // Line chart, one y axis; series = [{name, color, pts: [[ms, value], ...], width, unit, extra}]
 // refs = [{v, label, color}]: dashed limit lines, labelled at the right; bands = [{name, color, pts: [[ms, low, high], ...]}]:
-// a shaded range drawn under the lines (lowest to highest sample); title(ms): the tooltip's first line; axis: the y axis title (unit).
-function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits = 1, step = 36e5, refs = [], bands = [], title = null, axis = null}) {
+// a shaded range drawn under the lines (lowest to highest sample); title(ms): the tooltip's first line; axis: the y axis title (unit);
+// xName: the name of the x axis when it is not the hotel time.
+function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits = 1, step = 36e5, refs = [], bands = [], title = null, axis = null, xName = null}) {
   sizeTo(box);
   const vals = series.flatMap(s => s.pts.map(p => p[1])).filter(v => v !== null);
   const xs = series.flatMap(s => s.pts.map(p => p[0]));
-  if (vals.length < 2) { box.innerHTML = '<div class="card k">No records for this period.</div>'; return; }
+  if (vals.length < 2) { box.innerHTML = '<div class="empty">No records for this period.</div>'; return; }
   const x0 = Math.min(...xs), x1 = Math.max(...xs) || x0 + 1;
   const ext = vals.concat(bands.flatMap(b => b.pts.flatMap(p => [p[1], p[2]])).filter(v => v !== null), refs.map(r => r.v));
   const lo = Math.min(...ext), yt = nice(yZero ? Math.min(0, lo) : lo, Math.max(...ext)), y0 = yt[0], y1 = yt[yt.length - 1];
   const X = v => CM.l + (v - x0) / ((x1 - x0) || 1) * (CW - CM.l - CM.r), Y = v => CH - CM.b - (v - y0) / ((y1 - y0) || 1) * (CH - CM.t - CM.b);
   const spanD = (x1 - x0) / 864e5;
   let g = '';
-  for (const v of yt) g += `<line class="gl" x1="${CM.l}" x2="${CW - CM.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${CM.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+  for (const v of yt) g += `<line class="grid" x1="${CM.l}" x2="${CW - CM.r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${CM.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
   const nt = Math.max(3, Math.floor(CW / 110));   // about one label per 110 px
   const tick = spanD > 1.5 ? 864e5 * Math.max(1, Math.ceil(spanD / nt)) : 36e5 * Math.max(1, Math.ceil(24 / nt));
   for (let v = Math.ceil(x0 / tick) * tick; v <= x1; v += tick)
-    g += `<line class="gl" x1="${X(v)}" x2="${X(v)}" y1="${CM.t}" y2="${CH - CM.b}"/><text x="${X(v)}" y="${CH - CM.b + 16}" text-anchor="middle">${spanD > 1.5 ? fdate(v) : fhm(v)}</text>`;
+    g += `<line class="grid" x1="${X(v)}" x2="${X(v)}" y1="${CM.t}" y2="${CH - CM.b}"/><text class="ax" x="${X(v)}" y="${CH - CM.b + 16}" text-anchor="middle">${spanD > 1.5 ? fdate(v) : fhm(v)}</text>`;
   const paths = series.map(s => { let d = '', prev = null;
     for (const [t, v] of s.pts) { if (v === null) { prev = null; continue; }
       d += `${prev === null || t - prev > gapMs ? 'M' : 'L'}${X(t).toFixed(1)},${Y(v).toFixed(1)}`; prev = t; }
-    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2}" stroke-linejoin="round"/>`; }).join('');
+    return `<path class="sl" d="${d}" style="stroke:${s.color};stroke-width:${s.width || 2}"/>`; }).join('');
   const shade = bands.map(b => {   // one closed shape per run of points without a gap: along the highs, back along the lows
     const runs = []; let run = [];
     for (const p of b.pts) {
@@ -446,16 +606,17 @@ function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits =
     if (run.length) runs.push(run);
     const d = runs.map(r => 'M' + r.map(p => `${X(p[0]).toFixed(1)},${Y(p[2]).toFixed(1)}`).join('L') + 'L' +
       r.slice().reverse().map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join('L') + 'Z').join('');
-    return `<path d="${d}" fill="${b.color}" stroke="${b.color}" stroke-width="1" stroke-linejoin="round"/>`; }).join('');
-  const lines = refs.map(r => `<line x1="${CM.l}" x2="${CW - CM.r}" y1="${Y(r.v).toFixed(1)}" y2="${Y(r.v).toFixed(1)}" stroke="${r.color || '#b45309'}" stroke-width="1.2" stroke-dasharray="5 4"/>`).join('');
+    return `<path d="${d}" style="fill:${b.color};stroke:${b.color};stroke-width:1;stroke-linejoin:round"/>`; }).join('');
+  const lines = refs.map(r => `<line class="lim" x1="${CM.l}" x2="${CW - CM.r}" y1="${Y(r.v).toFixed(1)}" y2="${Y(r.v).toFixed(1)}"${r.color ? ` style="stroke:${r.color}"` : ''}/>`).join('');
   const labels = refs.filter(r => r.label).map(r => { const y = Y(r.v), ly = y - 4 < CM.t + 10 ? y + 13 : y - 4;   // over the lines
-    return `<text x="${CW - CM.r - 4}" y="${ly.toFixed(1)}" text-anchor="end" font-size="11" fill="#52606d" stroke="#fff" stroke-width="3" paint-order="stroke">${esc(r.label)}</text>`; }).join('');
+    return `<text class="ax liml" x="${CW - CM.r - 4}" y="${ly.toFixed(1)}" text-anchor="end">${esc(r.label)}</text>`; }).join('');
   const keys = [...bands.map(b => `<span><i style="background:${b.color};height:10px"></i>${esc(b.name)}</span>`),
-    ...series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`)];
+    ...series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`),
+    ...(refs.length ? ['<span><i class="limk"></i>Limit of the alarm register</span>'] : [])];
   box.innerHTML = `${keys.length > 1 ? `<div class="legend">${keys.join('')}</div>` : ''}
-    <svg class="chart" viewBox="0 0 ${CW} ${CH}" role="img" aria-label="${esc(series.map(s => s.name).join(', '))}">
-    <g class="ax">${g}<text x="12" y="${(CH - CM.b + CM.t) / 2}" transform="rotate(-90 12 ${(CH - CM.b + CM.t) / 2})" text-anchor="middle">${esc(axis ?? unit)}</text></g>
-    ${shade}${lines}${paths}${labels}<line class="xh" y1="${CM.t}" y2="${CH - CM.b}" stroke="#7b8794" stroke-dasharray="3 3" visibility="hidden"/><g class="dots"></g>
+    <svg viewBox="0 0 ${CW} ${CH}" role="img" aria-label="${esc(series.map(s => s.name).join(', '))}">
+    ${g}<text class="ax" x="12" y="${(CH - CM.b + CM.t) / 2}" transform="rotate(-90 12 ${(CH - CM.b + CM.t) / 2})" text-anchor="middle">${esc(axis ?? unit)}</text>
+    ${axes(xName || (spanD > 1.5 ? 'Day (hotel time)' : 'Hour (hotel time)'))}${shade}${lines}${paths}${labels}<line class="xh" y1="${CM.t}" y2="${CH - CM.b}" visibility="hidden"/><g class="dots"></g>
     <rect x="${CM.l}" y="${CM.t}" width="${CW - CM.l - CM.r}" height="${CH - CM.t - CM.b}" fill="transparent"/></svg>`;
   const svg = box.querySelector('svg'), xh = svg.querySelector('.xh'), dots = svg.querySelector('.dots');
   svg.addEventListener('mousemove', ev => {
@@ -464,7 +625,7 @@ function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits =
     for (const s of series) {
       let best = null; for (const p of s.pts) if (p[1] !== null && (best === null || Math.abs(p[0] - t) < Math.abs(best[0] - t))) best = p;
       if (!best || Math.abs(best[0] - t) > gapMs) continue; ref = ref ?? best[0];
-      dd += `<circle cx="${X(best[0])}" cy="${Y(best[1])}" r="4" fill="${s.color}" stroke="#fff" stroke-width="2"/>`;
+      dd += `<circle cx="${X(best[0])}" cy="${Y(best[1])}" r="4" style="fill:${s.color};stroke:var(--surface);stroke-width:2"/>`;
       rows += `<div>${series.length > 1 ? `<span class="sq" style="background:${s.color}"></span>${esc(s.name)}: ` : ''}<b>${best[1].toFixed(digits)}</b> ${esc(s.unit || unit)}${s.extra ? s.extra(best) : ''}</div>`;
     }
     if (ref === null) { hideTip(); return; }
@@ -477,32 +638,27 @@ function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits =
 }
 
 // Bar chart, one bar per item: [{v, l1, l2, tip, light}]
-function barChart(box, bars, unit) {
+function barChart(box, bars, unit, {xName = 'Day', maxW = 1e9} = {}) {
   sizeTo(box);
-  if (!bars.length) { box.innerHTML = '<div class="card k">No records for this period.</div>'; return; }
+  if (!bars.length) { box.innerHTML = '<div class="empty">No records for this period.</div>'; return; }
   const yt = nice(0, Math.max(...bars.map(b => b.v)) || 1), y1 = yt[yt.length - 1], bw = (CW - CM.l - CM.r) / bars.length;
   const Y = v => CH - CM.b - v / y1 * (CH - CM.t - CM.b);
   let g = '', b = '';
-  for (const v of yt) g += `<line class="gl" x1="${CM.l}" x2="${CW - CM.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${CM.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+  for (const v of yt) g += `<line class="grid" x1="${CM.l}" x2="${CW - CM.r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${CM.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
   bars.forEach((d, i) => {
-    const x = CM.l + i * bw + 1, w = Math.max(2, bw - 2), y = Y(d.v), r = Math.min(4, w / 2, CH - CM.b - y);
-    b += `<path d="M${x},${CH - CM.b}V${y + r}q0,${-r} ${r},${-r}h${w - 2 * r}q${r},0 ${r},${r}V${CH - CM.b}Z" fill="${d.light ? '#9ec5f4' : C[0]}"/>`;
-    if (i % Math.ceil(26 / bw) === 0) b += `<text x="${x + w / 2}" y="${CH - CM.b + 14}" text-anchor="middle" font-size="10.5" fill="#7b8794">${esc(d.l1)}</text><text x="${x + w / 2}" y="${CH - CM.b + 27}" text-anchor="middle" font-size="10.5" fill="#7b8794">${esc(d.l2)}</text>`;
+    const w = Math.max(2, Math.min(bw - 2, maxW)), x = CM.l + i * bw + (bw - w) / 2, y = Y(d.v), r = Math.max(0, Math.min(4, w / 2, CH - CM.b - y));
+    b += `<path d="M${x},${CH - CM.b}V${y + r}q0,${-r} ${r},${-r}h${w - 2 * r}q${r},0 ${r},${r}V${CH - CM.b}Z" style="fill:var(--s1)${d.light ? ';opacity:.45' : ''}"/>`;
+    if (i % Math.ceil(26 / bw) === 0) b += `<text class="ax" x="${x + w / 2}" y="${CH - CM.b + 14}" text-anchor="middle">${esc(d.l1)}</text><text class="ax" x="${x + w / 2}" y="${CH - CM.b + 27}" text-anchor="middle">${esc(d.l2)}</text>`;
     b += `<rect data-i="${i}" x="${CM.l + i * bw}" y="${CM.t}" width="${bw}" height="${CH - CM.t - CM.b}" fill="transparent"/>`;
   });
-  box.innerHTML = `<svg class="chart" viewBox="0 0 ${CW} ${CH + 6}" role="img" aria-label="${esc(unit)} per bar"><g class="ax">${g}
-    <text x="12" y="${CH / 2}" transform="rotate(-90 12 ${CH / 2})" text-anchor="middle">${esc(unit)}</text></g>${b}</svg>`;
+  box.innerHTML = `<svg viewBox="0 0 ${CW} ${CH}" role="img" aria-label="${esc(unit)} per bar">${g}
+    <text class="ax" x="12" y="${(CH - CM.b + CM.t) / 2}" transform="rotate(-90 12 ${(CH - CM.b + CM.t) / 2})" text-anchor="middle">${esc(unit)}</text>${axes(xName)}${b}</svg>`;
   const svg = box.querySelector('svg');
   svg.addEventListener('mousemove', ev => { const i = ev.target.dataset && ev.target.dataset.i; if (i === undefined) return hideTip(); showTip(ev, bars[i].tip); });
   svg.addEventListener('mouseleave', hideTip);
 }
 
-const statTile = (k, v, unit, note = '') => `<div class="card"><div class="k">${esc(k)}</div><div class="v">${v}<small>${esc(unit)}</small></div>${note ? `<div class="range">${note}</div>` : ''}</div>`;
-const spanPicker = () => `<div class="seg">${[7, 14, 31].map(d => `<button data-span="${d}" class="${d === span ? 'on' : ''}">${d} days</button>`).join('')}</div>`;
 const sensorName = k => (PROF.labels?.[k] || k).replace(/\s*\(.*\)\s*$/, '');
-function frame(title, note, tools = '') {
-  return `<div class="vhead"><div><h2 class="vt">${esc(title)}</h2><div class="vn">${note}</div></div>${tools}</div>`;
-}
 function byDay(rows) {   // local date -> {kwh, minutes, peak, peakT, tmin, tmax}
   const d = {};
   for (const r of rows) {
@@ -520,43 +676,46 @@ async function renderHistory() {
   if (WXVIEWS[view]) return WXVIEWS[view](box);
   if (QVIEWS[view]) return QVIEWS[view](box);
   if (view === 'versions') return versionsView(box);
+  if (view === 'sites') return sitesView(box);
+  if (view === 'prefs') return settingsView(box);
+  if (view === 'register') return registerView(box);
   if (view === 'power') {
     const j = await hourly(span);
     const pk = j.hours.filter(r => r.p_max !== undefined).reduce((a, r) => (!a || r.p_max > a.p_max ? r : a), null);
-    box.innerHTML = frame('Power, hour by hour', `Mean kW of each hour and the highest 15-second sample in it. Hotel time, last ${span} days.`, spanPicker()) +
-      `<div class="grid">${statTile('Highest 15-second sample', pk ? pk.p_max.toFixed(1) : '–', 'kW', pk ? `${fdate(tp(pk.t))} ${pk.t.slice(11)}` : '')}
-       ${statTile('Mean over the period', (j.hours.reduce((a, r) => a + (r.p ?? 0), 0) / (j.hours.filter(r => r.p !== undefined).length || 1)).toFixed(1), 'kW')}
-       ${PROF.contracted_kva ? statTile('PLN contract', PROF.contracted_kva, 'kVA', 'apparent power, see Live now') : ''}</div>
-       <div class="card chartbox" id="ch"></div>`;
+    box.innerHTML = head('Power, hour by hour', `Mean kW of each hour and the highest 15-second sample in it. Hotel time, last ${span} days.`, spanPicker()) +
+      tiles([statTile('Highest 15-second sample', pk ? pk.p_max.toFixed(1) : '–', 'kW', pk ? `${fdate(tp(pk.t))} ${pk.t.slice(11)}` : ''),
+       statTile('Mean over the period', (j.hours.reduce((a, r) => a + (r.p ?? 0), 0) / (j.hours.filter(r => r.p !== undefined).length || 1)).toFixed(1), 'kW'),
+       PROF.contracted_kva ? statTile('PLN contract', PROF.contracted_kva, 'kVA', 'apparent power, see Live now') : '']) +
+      `<div class="mt-16">${chartCard('ch')}</div>`;
     lineChart(el('ch'), [{name: 'Mean of the hour', color: C[0], pts: j.hours.map(r => [tp(r.t), r.p ?? null])},
       {name: 'Highest 15-second sample', color: C[1], width: 1.4, pts: j.hours.map(r => [tp(r.t), r.p_max ?? null])}], {unit: 'kW', yZero: true});
   } else if (view === 'day') {
     const j0 = await hourly(Math.max(span, 14)), today = j0.now.slice(0, 10);
     dayShown ??= today;
-    const j = await (await fetch(`/api/v1/history/${site}/day/${dayShown}`, {cache: 'no-store'})).json();
+    const j = await getJ(`/api/v1/history/${site}/day/${dayShown}`);
     const ms = tp(dayShown + ' 00:00'), d = byDay(j0.hours)[dayShown];
     const pts = j.minutes.map(m => [tp(`${dayShown} ${m[0]}`), m[1], m[2], m[3]]);
     const pk = pts.reduce((a, p) => (!a || (p[3] ?? p[1]) > (a[3] ?? a[1]) ? p : a), null);
-    const tools = `<div class="seg"><button data-day="${isoDay(ms - 864e5)}">◀ ${fdate(ms - 864e5)}</button><button class="on">${fdate(ms)}</button>
-      <button data-day="${isoDay(ms + 864e5)}" ${dayShown >= today ? 'disabled' : ''}>${fdate(ms + 864e5)} ▶</button></div>`;
-    box.innerHTML = frame(`One day, minute by minute: ${fdate(ms)}`, 'Total power of every minute (mean of the 15-second samples). Hover for the minute\'s lowest and highest sample.', tools) +
-      `<div class="grid">${statTile(dayShown === today ? 'Energy so far' : 'Energy', d ? d.kwh.toFixed(0) : '–', 'kWh', d && d.minutes < 1430 ? `${(d.minutes / 14.4).toFixed(0)} % of the minutes recorded` : '')}
-        ${statTile('Highest 15-second sample', pk ? (pk[3] ?? pk[1]).toFixed(1) : '–', 'kW', pk ? 'at ' + fhm(pk[0]) : '')}
-        ${statTile('Lowest minute', pts.length ? Math.min(...pts.map(p => p[1])).toFixed(1) : '–', 'kW', 'the base load')}</div>
-       <div class="card chartbox" id="ch"></div>`;
+    const tools = `<div class="seg" role="group" aria-label="Day">${segBtn(`data-day="${isoDay(ms - 864e5)}"`, false, '◀ ' + fdate(ms - 864e5))}${segBtn('', true, fdate(ms))}${
+      segBtn(`data-day="${isoDay(ms + 864e5)}"`, false, fdate(ms + 864e5) + ' ▶', dayShown >= today)}</div>`;
+    box.innerHTML = head(`One day, minute by minute: ${fdate(ms)}`, 'Total power of every minute (mean of the 15-second samples). Hover for the minute\'s lowest and highest sample.', tools) +
+      tiles([statTile(dayShown === today ? 'Energy so far' : 'Energy', d ? d.kwh.toFixed(0) : '–', 'kWh', d && d.minutes < 1430 ? `${(d.minutes / 14.4).toFixed(0)} % of the minutes recorded` : ''),
+        statTile('Highest 15-second sample', pk ? (pk[3] ?? pk[1]).toFixed(1) : '–', 'kW', pk ? 'at ' + fhm(pk[0]) : ''),
+        statTile('Lowest minute', pts.length ? Math.min(...pts.map(p => p[1])).toFixed(1) : '–', 'kW', 'the base load')]) +
+      `<div class="mt-16">${chartCard('ch')}</div>`;
     lineChart(el('ch'), [{name: 'Total power', color: C[0], width: 1.4, pts: pts.map(p => [p[0], p[1]]),
-      extra: b => { const p = pts.find(q => q[0] === b[0]); return p && p[2] !== null ? `<div class="range">samples ${p[2].toFixed(1)} – ${p[3].toFixed(1)} kW</div>` : ''; }}],
+      extra: b => { const p = pts.find(q => q[0] === b[0]); return p && p[2] !== null ? `<div class="dim">samples ${p[2].toFixed(1)} – ${p[3].toFixed(1)} kW</div>` : ''; }}],
       {unit: 'kW', yZero: true, gapMs: 3 * 6e4, step: 6e4});
   } else if (view === 'energy') {
     const j = await hourly(span), days = byDay(j.hours), keys = Object.keys(days).sort(), today = j.now.slice(0, 10);
     const full = keys.filter(k => k !== today && days[k].minutes >= 1430);
     const avg = full.length ? full.reduce((a, k) => a + days[k].kwh, 0) / full.length : null;
     const yest = isoDay(tp(today + ' 00:00') - 864e5);
-    box.innerHTML = frame('Energy per day', `kWh per hotel day (00:00 to 24:00), from the meter's counter. Lighter bars: today, or a day with missing minutes. Last ${span} days.`, spanPicker()) +
-      `<div class="grid">${statTile('Today so far', days[today] ? days[today].kwh.toFixed(0) : '–', 'kWh')}
-        ${statTile('Yesterday', days[yest] ? days[yest].kwh.toFixed(0) : '–', 'kWh')}
-        ${statTile('Mean of the full days', avg === null ? '–' : avg.toFixed(0), 'kWh', `${full.length} full day${full.length === 1 ? '' : 's'}`)}</div>
-       <div class="card chartbox" id="ch"></div>`;
+    box.innerHTML = head('Energy per day', `kWh per hotel day (00:00 to 24:00), from the meter's counter. Lighter bars: today, or a day with missing minutes. Last ${span} days.`, spanPicker()) +
+      tiles([statTile('Today so far', days[today] ? days[today].kwh.toFixed(0) : '–', 'kWh'),
+        statTile('Yesterday', days[yest] ? days[yest].kwh.toFixed(0) : '–', 'kWh'),
+        statTile('Mean of the full days', avg === null ? '–' : avg.toFixed(0), 'kWh', `${full.length} full day${full.length === 1 ? '' : 's'}`)]) +
+      `<div class="mt-16">${chartCard('ch')}</div>`;
     barChart(el('ch'), keys.map(k => { const d = days[k], ms = tp(k + ' 00:00'), part = k === today || d.minutes < 1430;
       return {v: d.kwh, light: part, l1: DAYS[new Date(ms).getUTCDay()], l2: `${new Date(ms).getUTCDate()} ${MONS[new Date(ms).getUTCMonth()]}`,
         tip: `<b>${fdate(ms)}</b>${d.kwh.toFixed(1)} kWh${part ? ` (${k === today ? 'so far' : (d.minutes / 14.4).toFixed(0) + ' % of the minutes'})` : ''}` +
@@ -566,7 +725,7 @@ async function renderHistory() {
     const j = await hourly(15), now = tp(j.now), d0 = tp(j.now.slice(0, 10) + ' 00:00');
     const w0 = d0 - new Date(d0).getUTCDay() * 864e5, lw0 = w0 - 7 * 864e5;
     const el_ = Math.floor((now - w0) / 36e5) * 36e5;   // complete hours only, the same in both weeks
-    if (!el_) { box.innerHTML = frame('This week against last week', 'The week started less than an hour ago: come back after the first full hour.'); return; }
+    if (!el_) { box.innerHTML = head('This week against last week', 'The week started less than an hour ago: come back after the first full hour.'); return; }
     const sum = (a, b) => j.hours.filter(r => tp(r.t) >= a && tp(r.t) < b).reduce((s, r) => s + r.kwh, 0);
     const mins = (a, b) => j.hours.filter(r => tp(r.t) >= a && tp(r.t) < b).reduce((s, r) => s + r.minutes, 0);
     const cur = sum(w0, w0 + el_), last = sum(lw0, lw0 + el_), pct = last ? (cur - last) / last * 100 : null;
@@ -577,46 +736,43 @@ async function renderHistory() {
     const verdict = gaps ? `<div class="verdict bad">Not comparable yet: records cover ${(covL * 100).toFixed(0)} % of last week's hours and ${(covT * 100).toFixed(0)} % of this week's (logger offline or backlog not uploaded)</div>`
       : pct === null ? '' : Math.abs(pct) < 0.5 ? `<div class="verdict">About the same as last week (${pct >= 0 ? '+' : ''}${pct.toFixed(1)} %)</div>`
       : `<div class="verdict ${pct > 0 ? 'bad' : 'ok'}">${pct > 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)} % ${pct > 0 ? 'more' : 'less'} than last week</div>`;
-    box.innerHTML = frame('This week against last week', `Weeks start on Sunday 00:00. The complete hours of this week so far, against the same ${(el_ / 36e5).toFixed(0)} hours of last week.`) +
-      `<div class="card"><div class="cmp">
-        <div><div class="range">${last.toFixed(0)} kWh</div><div class="cbar" style="height:${h(last)}px;background:#86b6ef"></div><div class="k">Last week<br><small>${fdate(lw0)} – ${fdate(lw0 + el_)} ${fhm(lw0 + el_)}</small></div></div>
-        <div><div class="range">${cur.toFixed(0)} kWh</div><div class="cbar" style="height:${h(cur)}px;background:${C[0]}"></div><div class="k">This week so far<br><small>${fdate(w0)} – ${fdate(w0 + el_)} ${fhm(w0 + el_)}</small></div></div>
-       </div>${verdict}</div>
-       <h2>Day by day</h2><table><tr><th>Day</th><th>Last week</th><th>This week</th><th>Change</th></tr>${perDay.map(r => {
+    box.innerHTML = head('This week against last week', `Weeks start on Sunday 00:00. The complete hours of this week so far, against the same ${(el_ / 36e5).toFixed(0)} hours of last week.`) +
+      `<section class="card"><div class="chart" id="ch"></div>${verdict}</section>` + sec('Day by day') +
+      tableCard(`<tr><th>Day</th><th>Last week</th><th>This week</th><th>Change</th></tr>${perDay.map(r => {
          const ch = r.b === null || !r.a ? '' : ((r.b - r.a) / r.a * 100);
          return `<tr><td>${DAYS[r.i]}</td><td>${r.a ? r.a.toFixed(0) + ' kWh' : '–'}</td><td>${r.b === null ? '–' : r.b.toFixed(0) + ' kWh' + (w0 + (r.i + 1) * 864e5 > now ? ' so far' : '')}</td>
-           <td>${ch === '' || w0 + (r.i + 1) * 864e5 > now ? '' : `<span class="${ch > 0.5 ? 'bad' : ch < -0.5 ? 'ok' : ''}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)} %</span>`}</td></tr>`; }).join('')}</table>`;
+           <td>${ch === '' || w0 + (r.i + 1) * 864e5 > now ? '' : `<span class="${ch > 0.5 ? 'bad' : ch < -0.5 ? 'ok' : ''}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)} %</span>`}</td></tr>`; }).join('')}`);
+    const rng = a => `${fdate(a)} – ${fdate(a + el_)} ${fhm(a + el_)}`;
+    barChart(el('ch'), [{v: last, light: true, l1: 'Last week: ' + last.toFixed(0) + ' kWh', l2: rng(lw0), tip: `<b>Last week</b>${last.toFixed(0)} kWh<br>${rng(lw0)}`},
+      {v: cur, l1: 'This week so far: ' + cur.toFixed(0) + ' kWh', l2: rng(w0), tip: `<b>This week so far</b>${cur.toFixed(0)} kWh<br>${rng(w0)}`}], 'kWh', {xName: 'Same hours of each week', maxW: 150});
   } else if (view === 'temperature' || view === 'humidity') {
     const j = await hourly(span), q = view === 'temperature' ? 't' : 'rh', unit = q === 't' ? '°C' : '% RH';
     const ids = [...new Set(j.hours.flatMap(r => Object.keys(r)).filter(k => /^TH\d+_/.test(k)).map(k => k.split('_')[0]))].sort();
-    const series = ids.map((id, n) => ({name: sensorName(`${id}_${q}`), color: C[n] || '#7b8794',
+    const series = ids.map((id, n) => ({name: sensorName(`${id}_${q}`), color: C[n] || QUIET,
       pts: j.hours.map(r => [tp(r.t), r[`${id}_${q}`] ?? null]),
-      extra: b => { const r = j.hours.find(x => tp(x.t) === b[0]); return r && r[`${id}_${q}_min`] !== undefined ? ` <span class="range">(${r[`${id}_${q}_min`].toFixed(q === 't' ? 1 : 0)}–${r[`${id}_${q}_max`].toFixed(q === 't' ? 1 : 0)})</span>` : ''; }}));
-    let tiles = '';
+      extra: b => { const r = j.hours.find(x => tp(x.t) === b[0]); return r && r[`${id}_${q}_min`] !== undefined ? ` <span class="dim">(${r[`${id}_${q}_min`].toFixed(q === 't' ? 1 : 0)}–${r[`${id}_${q}_max`].toFixed(q === 't' ? 1 : 0)})</span>` : ''; }}));
+    const tl = [];
     for (const s of series) { const v = s.pts.map(p => p[1]).filter(x => x !== null);
-      if (v.length) tiles += statTile(`${s.name}: lowest – highest`, `${Math.min(...v).toFixed(q === 't' ? 1 : 0)} – ${Math.max(...v).toFixed(q === 't' ? 1 : 0)}`, unit, 'hourly means'); }
-    box.innerHTML = frame(view === 'temperature' ? 'Temperature' : 'Relative humidity',
+      if (v.length) tl.push(statTile(`${s.name}: lowest – highest`, `${Math.min(...v).toFixed(q === 't' ? 1 : 0)} – ${Math.max(...v).toFixed(q === 't' ? 1 : 0)}`, unit, 'hourly means')); }
+    box.innerHTML = head(view === 'temperature' ? 'Temperature' : 'Relative humidity',
       `Hourly means of the 5-minute readings; hover for the hour's lowest and highest. ${esc(Object.entries(PROF.sensors || {}).map(([k, v]) => `${k}: ${v}`).join(' · '))}. Last ${span} days.`, spanPicker()) +
-      `<div class="grid">${tiles}</div><div class="card chartbox" id="ch"></div>`;
+      `<div class="tiles" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">${tl.join('')}</div><div class="mt-16">${chartCard('ch')}</div>`;
     lineChart(el('ch'), series, {unit, digits: q === 't' ? 1 : 0});
   }
 }
 
 // ------------------------------------------------------------------ weather (server/app/weather.py, docs/WEATHER.md)
-// GET /api/v1/weather/<site>: the last Open-Meteo forecast (fetched every hour by the service), today and tomorrow per hour.
-// GET /api/v1/weather/<site>/log?days=N: the actual weather of each past hour, with the forecast made the day before.
-// Rows are hotel hours "YYYY-MM-DD HH:00" (the hour from HH:00 to HH+1:00), like the history rows: they join on "t".
 let WXC = null, WXL = {};
 async function wxNow() {
   if (WXC && Date.now() - WXC.at < 300e3) return WXC.j;
-  const j = await (await fetch(`/api/v1/weather/${site}`, {cache: 'no-store'})).json();
+  const j = await getJ(`/api/v1/weather/${site}`);
   WXC = {at: Date.now(), j};
   return j;
 }
 async function wxLog(days) {
   const c = WXL[days];
   if (c && Date.now() - c.at < 300e3) return c.j;
-  const j = await (await fetch(`/api/v1/weather/${site}/log?days=${days}`, {cache: 'no-store'})).json();
+  const j = await getJ(`/api/v1/weather/${site}/log?days=${days}`);
   WXL[days] = {at: Date.now(), j};
   return j;
 }
@@ -634,10 +790,10 @@ const wxSource = j => `${esc(j.source || 'Open-Meteo')}, model ${esc(j.model || 
 function wxMissing(j, title) {
   if (j.hours && j.hours.length) return '';
   const how = `docker compose exec ingest python tools/manage.py weather ${esc(site)} --lat -8.xxxx --lon 115.xxxx`;
-  return frame(title, '') + (j.enabled
-    ? `<div class="empty">No forecast fetched yet${j.error ? ': ' + esc(j.error) : ' (the service fetches it within a minute of starting, then every hour)'}.</div>`
-    : `<div class="card">Weather is not set for this site. On the VPS, with the site's position (decimal degrees, south negative):
-       <pre style="white-space:pre-wrap">${how}</pre>See docs/WEATHER.md.</div>`);
+  return head(title, '') + (j.enabled
+    ? `<section class="card"><div class="empty">No forecast fetched yet${j.error ? ': ' + esc(j.error) : ' (the service fetches it within a minute of starting, then every hour)'}.</div></section>`
+    : `<section class="card">Weather is not set for this site. On the VPS, with the site's position (decimal degrees, south negative):
+       <pre>${how}</pre>See docs/WEATHER.md.</section>`);
 }
 async function measuredOutdoor(days) {   // hotel hour -> {t, min, max} of the outdoor sensor, from the day files
   const O = outId(), m = {};
@@ -647,7 +803,7 @@ async function measuredOutdoor(days) {   // hotel hour -> {t, min, max} of the o
 }
 function wxTable(rows, nowT, meas = null) {
   const hr = nowT.slice(0, 13) + ':00';
-  let h = `<table><tr><th>Hour</th><th>Weather</th><th>Temp.</th><th class="hide-s">Feels like</th><th>Rain · chance</th>
+  let h = `<tr><th>Hour</th><th>Weather</th><th>Temp.</th><th class="hide-s">Feels like</th><th>Rain · chance</th>
     <th class="hide-s">Humidity</th><th class="hide-s">Cloud</th><th class="hide-s">Wind</th><th class="hide-s">Sun</th>${meas ? `<th>Measured ${esc(outId())}</th>` : ''}</tr>`;
   for (const r of rows) {
     const cls = r.t < hr ? 'past' : r.t === hr ? 'cur' : '';
@@ -656,13 +812,13 @@ function wxTable(rows, nowT, meas = null) {
       <td class="hide-s">${f1(r.rh_pct, 0)} %</td><td class="hide-s">${f1(r.cloud_pct, 0)} %</td><td class="hide-s">${f1(r.wind_kmh, 0)} km/h ${compass(r.wind_dir)}</td>
       <td class="hide-s">${f1(r.rad_wm2, 0)} W/m²</td>${meas ? `<td>${meas[r.t] ? f1(meas[r.t].t) + ' °C' : ''}</td>` : ''}</tr>`;
   }
-  return h + '</table>';
+  return tableCard(h);
 }
 function rainBars(box, rows, nowT) {
   const hr = nowT.slice(0, 13) + ':00';
   barChart(box, rows.map(r => ({v: r.precip_mm ?? 0, light: r.t < hr, l1: r.t.slice(11, 13), l2: r.precip_prob_pct !== null && r.precip_prob_pct !== undefined ? r.precip_prob_pct + '%' : '',
     tip: `<b>${r.t.slice(11)}–${String(+r.t.slice(11, 13) + 1).padStart(2, '0')}:00</b>${wxIcon(r.code, r.is_day)}${esc(r.condition)}<br>${f1(r.precip_mm, 1)} mm` +
-      (r.precip_prob_pct !== null && r.precip_prob_pct !== undefined ? `, chance ${r.precip_prob_pct} %` : '')})), 'mm');
+      (r.precip_prob_pct !== null && r.precip_prob_pct !== undefined ? `, chance ${r.precip_prob_pct} %` : '')})), 'mm', {xName: 'Hour (hotel time), chance of rain under it'});
 }
 async function wxStrip() {   // one line on "Live now"
   try {
@@ -674,6 +830,7 @@ async function wxStrip() {   // one line on "Live now"
       (t ? `<span>tomorrow ${wxIcon(t.code)}${f1(t.tmin_c, 0)}–${f1(t.tmax_c, 0)} °C</span>` : '') + '</a>';
   } catch (e) { return ''; }
 }
+const wxCharts = `${sec('Temperature')}${chartCard('ch')}${sec('Rain per hour', 'chance under the bar')}${chartCard('ch2')}${sec('Hour by hour')}`;
 
 const WXVIEWS = {
   async wtoday(box) {
@@ -683,18 +840,17 @@ const WXVIEWS = {
     const c = j.current || {}, meas = await measuredOutdoor(2), O = outId();
     const next = rows.find(r => r.t > j.now && ((r.precip_prob_pct ?? 0) >= 50 || (r.precip_mm ?? 0) >= 0.3));
     const lastM = Object.keys(meas).filter(k => k.startsWith(today)).sort().pop();
-    box.innerHTML = frame('Weather today, hour by hour', `Forecast for the hotel's position: ${wxSource(j)}. Past hours in grey. ` +
+    box.innerHTML = head('Weather today, hour by hour', `Forecast for the hotel's position: ${wxSource(j)}. Past hours in grey. ` +
         `Measured: hourly mean of the logger's outdoor sensor (${esc(O)}).`) +
-      `<div class="grid">${statTile('Now · ' + (c.condition || ''), `${wxIcon(c.code, c.is_day)}${f1(c.temp_c)}`, '°C', `feels like ${f1(c.feels_c)} °C · ${f1(c.rh_pct, 0)} % RH · wind ${f1(c.wind_kmh, 0)} km/h`)}
-        ${statTile('Today, lowest – highest', `${f1(d.tmin_c, 0)} – ${f1(d.tmax_c, 0)}`, '°C', `${wxIcon(d.code)}${esc(d.condition || '')}`)}
-        ${statTile('Rain today', f1(d.precip_mm), 'mm', `chance up to ${f1(d.precip_prob_pct, 0)} %${next ? ` · likely from ${next.t.slice(11)}` : ''}`)}
-        ${statTile('Sun', f1(d.sun_kwh_m2), 'kWh/m²', `sunrise ${esc(d.sunrise || '–')} · sunset ${esc(d.sunset || '–')} · UV ${f1(d.uv)}`)}
-        ${lastM ? statTile(`Measured outdoor, ${lastM.slice(11)} hour`, f1(meas[lastM].t), '°C', `forecast for that hour ${f1((rows.find(r => r.t === lastM) || {}).temp_c)} °C`) : ''}</div>
-      <h2>Temperature</h2><div class="card chartbox" id="ch"></div><h2>Rain per hour · chance under the bar</h2><div class="card chartbox" id="ch2"></div>
-      <h2>Hour by hour</h2>${wxTable(rows, j.now, Object.keys(meas).length ? meas : null)}
-      <div class="foot">Weather data: ${esc(j.source)}. Rain and sun of the hour from HH:00 to HH+1:00; temperature, humidity and wind: mean of the hour.</div>`;
+      tiles([statTile('Now · ' + (c.condition || ''), `${wxIcon(c.code, c.is_day)}${f1(c.temp_c)}`, '°C', `feels like ${f1(c.feels_c)} °C · ${f1(c.rh_pct, 0)} % RH · wind ${f1(c.wind_kmh, 0)} km/h`),
+        statTile('Today, lowest – highest', `${f1(d.tmin_c, 0)} – ${f1(d.tmax_c, 0)}`, '°C', `${wxIcon(d.code)}${esc(d.condition || '')}`),
+        statTile('Rain today', f1(d.precip_mm), 'mm', `chance up to ${f1(d.precip_prob_pct, 0)} %${next ? ` · likely from ${next.t.slice(11)}` : ''}`),
+        statTile('Sun', f1(d.sun_kwh_m2), 'kWh/m²', `sunrise ${esc(d.sunrise || '–')} · sunset ${esc(d.sunset || '–')} · UV ${f1(d.uv)}`),
+        lastM ? statTile(`Measured outdoor, ${lastM.slice(11)} hour`, f1(meas[lastM].t), '°C', `forecast for that hour ${f1((rows.find(r => r.t === lastM) || {}).temp_c)} °C`) : '']) +
+      wxCharts + wxTable(rows, j.now, Object.keys(meas).length ? meas : null) +
+      `<div class="foot"><span>Weather data: ${esc(j.source)}. Rain and sun of the hour from HH:00 to HH+1:00; temperature, humidity and wind: mean of the hour.</span></div>`;
     const series = [{name: 'Forecast', color: C[1], pts: rows.map(r => [tp(r.t), r.temp_c])},
-      {name: 'Feels like', color: '#c4cad3', width: 1.4, pts: rows.map(r => [tp(r.t), r.feels_c])}];
+      {name: 'Feels like', color: QUIET, width: 1.4, pts: rows.map(r => [tp(r.t), r.feels_c])}];
     if (Object.keys(meas).length) series.unshift({name: `Measured outdoor (${O})`, color: C[0], pts: rows.map(r => [tp(r.t), meas[r.t] ? meas[r.t].t : null])});
     lineChart(el('ch'), series, {unit: '°C'});
     rainBars(el('ch2'), rows, j.now);
@@ -708,24 +864,23 @@ const WXVIEWS = {
     const diff = d.tmax_c !== undefined && dt.tmax_c !== undefined && d.tmax_c !== null && dt.tmax_c !== null ? d.tmax_c - dt.tmax_c : null;
     const hot = rows.reduce((a, r) => (r.temp_c !== null && (!a || r.temp_c > a.temp_c) ? r : a), null);
     const wet = rows.filter(r => (r.precip_prob_pct ?? 0) >= 50).map(r => r.t.slice(11, 13));
-    box.innerHTML = frame(`Weather tomorrow: ${fdate(tp(tom + ' 00:00'))}`, `Forecast: ${wxSource(j)}. ` +
+    box.innerHTML = head(`Weather tomorrow: ${fdate(tp(tom + ' 00:00'))}`, `Forecast: ${wxSource(j)}. ` +
         `Saved every day at ${String(j.dayahead_hour ?? 18).padStart(2, '0')}:00 hotel time in the day-ahead log, to compare with the actual weather (Weather log).`) +
-      `<div class="grid">${statTile('Tomorrow', `${wxIcon(d.code)}${f1(d.tmin_c, 0)} – ${f1(d.tmax_c, 0)}`, '°C', esc(d.condition || ''))}
-        ${statTile('Highest against today', diff === null ? '–' : (diff >= 0 ? '+' : '') + diff.toFixed(1), '°C', hot ? `warmest hour ${hot.t.slice(11)} (${f1(hot.temp_c)} °C)` : '')}
-        ${statTile('Rain', f1(d.precip_mm), 'mm', `chance up to ${f1(d.precip_prob_pct, 0)} %${wet.length ? ` · likely ${wet[0]}:00–${String(+wet[wet.length - 1] + 1).padStart(2, '0')}:00` : ''}`)}
-        ${statTile('Sun', f1(d.sun_kwh_m2), 'kWh/m²', `sunrise ${esc(d.sunrise || '–')} · sunset ${esc(d.sunset || '–')} · UV ${f1(d.uv)}`)}</div>
-      <h2>Temperature</h2><div class="card chartbox" id="ch"></div><h2>Rain per hour · chance under the bar</h2><div class="card chartbox" id="ch2"></div>
-      <h2>Hour by hour</h2>${wxTable(rows, j.now)}
-      <div class="foot">Weather data: ${esc(j.source)}. A forecast more than a day ahead is less sure: it changes with each update (every hour).</div>`;
+      tiles([statTile('Tomorrow', `${wxIcon(d.code)}${f1(d.tmin_c, 0)} – ${f1(d.tmax_c, 0)}`, '°C', esc(d.condition || '')),
+        statTile('Highest against today', diff === null ? '–' : (diff >= 0 ? '+' : '') + diff.toFixed(1), '°C', hot ? `warmest hour ${hot.t.slice(11)} (${f1(hot.temp_c)} °C)` : ''),
+        statTile('Rain', f1(d.precip_mm), 'mm', `chance up to ${f1(d.precip_prob_pct, 0)} %${wet.length ? ` · likely ${wet[0]}:00–${String(+wet[wet.length - 1] + 1).padStart(2, '0')}:00` : ''}`),
+        statTile('Sun', f1(d.sun_kwh_m2), 'kWh/m²', `sunrise ${esc(d.sunrise || '–')} · sunset ${esc(d.sunset || '–')} · UV ${f1(d.uv)}`)]) +
+      wxCharts + wxTable(rows, j.now) +
+      `<div class="foot"><span>Weather data: ${esc(j.source)}. A forecast more than a day ahead is less sure: it changes with each update (every hour).</span></div>`;
     lineChart(el('ch'), [{name: 'Forecast', color: C[1], pts: rows.map(r => [tp(r.t), r.temp_c])},
-      {name: 'Feels like', color: '#c4cad3', width: 1.4, pts: rows.map(r => [tp(r.t), r.feels_c])}], {unit: '°C'});
+      {name: 'Feels like', color: QUIET, width: 1.4, pts: rows.map(r => [tp(r.t), r.feels_c])}], {unit: '°C'});
     rainBars(el('ch2'), rows, j.now);
   },
 
   async wlog(box) {
     const [lg, j, meas] = await Promise.all([wxLog(span), wxNow(), measuredOutdoor(span)]);
-    if (!lg.hours.length) { box.innerHTML = wxMissing(j, 'Weather log') || frame('Weather log', '') +
-      '<div class="card k">Nothing logged yet: an hour is logged one hour after it ends, and tomorrow\'s forecast once a day.</div>'; return; }
+    if (!lg.hours.length) { box.innerHTML = wxMissing(j, 'Weather log') || head('Weather log', '') +
+      '<section class="card"><div class="empty">Nothing logged yet: an hour is logged one hour after it ends, and tomorrow\'s forecast once a day.</div></section>'; return; }
     let days = {}; try { days = byDay((await hourly(span)).hours); } catch (e) {}
     const O = outId(), both = lg.hours.filter(r => r.temp_c !== null && r.fc_temp_c !== null);
     const mae = both.length ? both.reduce((a, r) => a + Math.abs(r.fc_temp_c - r.temp_c), 0) / both.length : null;
@@ -734,26 +889,26 @@ const WXVIEWS = {
     const sd = sm.length ? sm.reduce((a, r) => a + meas[r.t].t - r.temp_c, 0) / sm.length : null;
     const rainy = lg.days.filter(d => d.precip_mm >= 1).length, fcd = lg.days.filter(d => d.fc_hours >= 20);
     const csv = `/api/v1/weather/${esc(site)}/log?days=${span}&format=csv`;
-    box.innerHTML = frame('Weather log: actual against forecast', `Actual: the weather service's value for each hour that has passed (logged one hour after it ends). ` +
+    box.innerHTML = head('Weather log: actual against forecast', `Actual: the weather service's value for each hour that has passed (logged one hour after it ends). ` +
         `Forecast: what was forecast for that hour the day before, at ${String(j.dayahead_hour ?? 18).padStart(2, '0')}:00. Measured: the logger's outdoor sensor (${esc(O)}). Last ${span} days.`,
-        `<div style="display:flex;gap:8px;align-items:center">${spanPicker()}<a class="seg" style="padding:5px 10px;font-size:.8rem;text-decoration:none" href="${csv}">CSV ↓</a></div>`) +
-      `<div class="grid">${statTile('Hours logged', lg.hours.length, '', `${both.length} with a day-ahead forecast`)}
-        ${statTile('Day-ahead forecast error', mae === null ? '–' : '± ' + mae.toFixed(1), '°C', bias === null ? 'none yet: the first is saved this evening' : `mean of the hours; forecast ${bias >= 0 ? 'warmer' : 'cooler'} by ${Math.abs(bias).toFixed(1)} °C on average`)}
-        ${statTile('Rain days (≥ 1 mm)', rainy, `of ${lg.days.length}`, fcd.length ? `forecast the day before: ${fcd.filter(d => d.fc_precip_mm >= 1).length} of ${fcd.length}` : '')}
-        ${sd === null ? '' : statTile(`Sensor ${O} against the service`, (sd >= 0 ? '+' : '') + sd.toFixed(1), '°C', `mean over ${sm.length} hours (sun or a wall near the sensor shows here)`)}</div>
-      <h2>Temperature</h2><div class="card chartbox" id="ch"></div>
-      <h2>Day by day</h2><table><tr><th>Day</th><th>Weather</th><th>Temp. low – high</th><th>Rain</th><th class="hide-s">Sun</th>
+        `${spanPicker()}<a class="btn small" href="${csv}"${MOCK ? ' data-ui-toast="On the real site this downloads the log as CSV"' : ''}>${icon('down', 'sm')}CSV</a>`) +
+      tiles([statTile('Hours logged', lg.hours.length, '', `${both.length} with a day-ahead forecast`),
+        statTile('Day-ahead forecast error', mae === null ? '–' : '± ' + mae.toFixed(1), '°C', bias === null ? 'none yet: the first is saved this evening' : `mean of the hours; forecast ${bias >= 0 ? 'warmer' : 'cooler'} by ${Math.abs(bias).toFixed(1)} °C on average`),
+        statTile('Rain days (≥ 1 mm)', rainy, `of ${lg.days.length}`, fcd.length ? `forecast the day before: ${fcd.filter(d => d.fc_precip_mm >= 1).length} of ${fcd.length}` : ''),
+        sd === null ? '' : statTile(`Sensor ${O} against the service`, (sd >= 0 ? '+' : '') + sd.toFixed(1), '°C', `mean over ${sm.length} hours (sun or a wall near the sensor shows here)`)]) +
+      sec('Temperature') + chartCard('ch') + sec('Day by day') +
+      tableCard(`<tr><th>Day</th><th>Weather</th><th>Temp. low – high</th><th>Rain</th><th class="hide-s">Sun</th>
         <th>Forecast the day before</th><th class="hide-s">Measured ${esc(O)}</th><th>Energy</th></tr>${lg.days.slice().reverse().map(d => {
           const mm = Object.entries(meas).filter(([k]) => k.startsWith(d.date)).map(([, v]) => v);
           const lo = mm.length ? Math.min(...mm.map(v => v.min ?? v.t)) : null, hi = mm.length ? Math.max(...mm.map(v => v.max ?? v.t)) : null;
           const e = days[d.date];
-          return `<tr><td>${fdate(tp(d.date + ' 00:00'))}${d.hours < 24 ? ` <span class="range">${d.hours} h</span>` : ''}</td><td>${wxIcon(d.code)}${esc(d.condition)}</td>
+          return `<tr><td>${fdate(tp(d.date + ' 00:00'))}${d.hours < 24 ? ` <span class="dimtxt">${d.hours} h</span>` : ''}</td><td>${wxIcon(d.code)}${esc(d.condition)}</td>
             <td>${f1(d.tmin_c)} – ${f1(d.tmax_c)} °C</td><td>${f1(d.precip_mm)} mm</td><td class="hide-s">${f1(d.sun_kwh_m2)} kWh/m²</td>
-            <td>${d.fc_hours ? `${wxIcon(d.fc_code)}${f1(d.fc_tmin_c)} – ${f1(d.fc_tmax_c)} °C, ${f1(d.fc_precip_mm)} mm` : '<span class="range">not saved</span>'}</td>
-            <td class="hide-s">${lo === null ? '–' : `${f1(lo)} – ${f1(hi)} °C`}</td><td>${e ? e.kwh.toFixed(0) + ' kWh' : '–'}</td></tr>`; }).join('')}</table>
-      <div class="foot">Weather data: ${esc(lg.source)}. Low and high are the coolest and warmest hourly means. Files on the server: sites/${esc(site)}/weather/actual-YYYY.csv and dayahead-YYYY.csv.</div>`;
+            <td>${d.fc_hours ? `${wxIcon(d.fc_code)}${f1(d.fc_tmin_c)} – ${f1(d.fc_tmax_c)} °C, ${f1(d.fc_precip_mm)} mm` : '<span class="dimtxt">not saved</span>'}</td>
+            <td class="hide-s">${lo === null ? '–' : `${f1(lo)} – ${f1(hi)} °C`}</td><td>${e ? e.kwh.toFixed(0) + ' kWh' : '–'}</td></tr>`; }).join('')}`) +
+      `<div class="foot"><span>Weather data: ${esc(lg.source)}. Low and high are the coolest and warmest hourly means. Files on the server: sites/${esc(site)}/weather/actual-YYYY.csv and dayahead-YYYY.csv.</span></div>`;
     lineChart(el('ch'), [{name: 'Actual (weather service)', color: C[1], pts: lg.hours.map(r => [tp(r.t), r.temp_c])},
-      {name: 'Forecast the day before', color: '#9aa5b1', width: 1.4, pts: lg.hours.map(r => [tp(r.t), r.fc_temp_c])},
+      {name: 'Forecast the day before', color: QUIET, width: 1.4, pts: lg.hours.map(r => [tp(r.t), r.fc_temp_c])},
       {name: `Measured outdoor (${O})`, color: C[0], width: 1.4, pts: lg.hours.map(r => [tp(r.t), meas[r.t] ? meas[r.t].t : null])}], {unit: '°C'});
   },
 };
@@ -764,12 +919,12 @@ const WXVIEWS = {
 // the limits, dips, swells), the limits of the alarm register and the power quality lines of the alarm log.
 // GET /api/v1/quality/<site>/day/<date>: the 1-minute voltage, frequency and power factor of one hotel day.
 const QCACHE = {}, QCOUNTS = ['vn', 'vok', 'vlow', 'vhigh', 'dips', 'swells', 'lost', 'loaded', 'pf_low'];
-const BAND = '#dfe4ea', PLN_KVARH = 0.62;   // PLN bills the kVArh above 0.62 x kWh (= power factor 0.85) in a month
+const BAND = 'var(--line)', PLN_KVARH = 0.62;   // PLN bills the kVArh above 0.62 x kWh (= power factor 0.85) in a month
 let qDay = null;
 async function qHourly(days) {
   const c = QCACHE[days];
   if (c && Date.now() - c.at < 120e3) return c.j;
-  const j = await (await fetch(`/api/v1/quality/${site}?days=${days}`, {cache: 'no-store'})).json();
+  const j = await getJ(`/api/v1/quality/${site}?days=${days}`);
   QCACHE[days] = {at: Date.now(), j};
   return j;
 }
@@ -828,7 +983,7 @@ function qByDay(H) {
   return Object.fromEntries(Object.entries(g).map(([k, rows]) => [k, qSum(rows)]));
 }
 function noMeter(box, title, note) {
-  box.innerHTML = frame(title, note, spanPicker()) + '<div class="card k">No meter records for this period.</div>';
+  box.innerHTML = head(title, note, spanPicker()) + '<section class="card"><div class="empty">No meter records for this period.</div></section>';
 }
 
 const QVIEWS = {
@@ -839,25 +994,25 @@ const QVIEWS = {
       `against the limits of the alarm register. Hotel time, last ${span} days.`;
     if (t.vlo === null && t.fmin === null) return noMeter(box, title, note);
     const fOut = t.fmin !== null && (t.fmin < nf - L.f_dev.v || t.fmax > nf + L.f_dev.v);
-    let h = frame(title, note, spanPicker()) + `<div class="grid">
-      ${statTile('Voltage within the limits', flag(t.vn && t.vok / t.vn < 0.95, pctOf(t.vok, t.vn)), '%',
-        `minutes with all three phases between ${L.low.v} and ${L.high.v} V (1-minute means) · ${t.vlow} min below, ${t.vhigh} min above`)}
-      ${statTile('Voltage, lowest – highest', `${f1(t.vlo, 0)} – ${f1(t.vhi, 0)}`, 'V',
-        t.vloAt ? `15-second samples · lowest on ${t.vloAt.ph}, ${hourAt(t.vloAt.t)}` : '')}
-      ${statTile('Dips · swells', flag(t.dips + t.swells > 0, `${t.dips} · ${t.swells}`), 'minutes',
+    let h = head(title, note, spanPicker()) + `<div class="tiles qt">${[
+      statTile('Voltage within the limits', flag(t.vn && t.vok / t.vn < 0.95, pctOf(t.vok, t.vn)), '%',
+        `minutes with all three phases between ${L.low.v} and ${L.high.v} V (1-minute means) · ${t.vlow} min below, ${t.vhigh} min above`),
+      statTile('Voltage, lowest – highest', `${f1(t.vlo, 0)} – ${f1(t.vhi, 0)}`, 'V',
+        t.vloAt ? `15-second samples · lowest on ${t.vloAt.ph}, ${hourAt(t.vloAt.t)}` : ''),
+      statTile('Dips · swells', flag(t.dips + t.swells > 0, `${t.dips} · ${t.swells}`), 'minutes',
         `a sample below ${L.dip.v} V (${esc(L.dip.id)}) · above ${L.swell.v} V (${esc(L.swell.id)})` +
-        (t.lost ? ` · <span class="bad">${t.lost} min below ${L.lost.v} V (${esc(L.lost.id)} phase lost)</span>` : ''))}
-      ${statTile('Voltage unbalance', flag(t.vu !== null && +t.vu.toFixed(2) > L.vu.v, f1(t.vu, 2)), '%',
-        `highest hourly mean · limit ${L.vu.v} % (${esc(L.vu.id)}, EN 50160) · mean ${f1(t.vuMean, 2)} %, highest minute ${f1(t.vuMax, 1)} %`)}
-      ${statTile('Frequency, lowest – highest', flag(fOut, `${f1(t.fmin, 2)} – ${f1(t.fmax, 2)}`), 'Hz',
-        `15-second samples · ${esc(L.f_dev.id)} beyond ${nf} ± ${L.f_dev.v} Hz`)}
-      ${statTile('Power factor', flag(under(t.pfE ?? t.pf, L.pf.v), f1(t.pfE ?? t.pf, 2)), '',
-        `${t.pfE !== null ? 'from the kWh and kVArh counters' : 'mean under load'} · ${pctOf(t.pf_low, t.loaded, 0)} % of the loaded time below ${L.pf.v} · <a href="#pf">details</a>`)}
-      ${t.iu !== null ? statTile('Current imbalance', flag(t.iu > L.iu.v, f1(t.iu, 0)), '%',
-        `highest hourly mean · ${esc(L.iu.id)} at ${L.iu.v} %, not below ${j.i_floor_a} A of mean current`) : ''}</div>`;
+        (t.lost ? ` · <span class="bad">${t.lost} min below ${L.lost.v} V (${esc(L.lost.id)} phase lost)</span>` : '')),
+      statTile('Voltage unbalance', flag(t.vu !== null && +t.vu.toFixed(2) > L.vu.v, f1(t.vu, 2)), '%',
+        `highest hourly mean · limit ${L.vu.v} % (${esc(L.vu.id)}, EN 50160) · mean ${f1(t.vuMean, 2)} %, highest minute ${f1(t.vuMax, 1)} %`),
+      statTile('Frequency, lowest – highest', flag(fOut, `${f1(t.fmin, 2)} – ${f1(t.fmax, 2)}`), 'Hz',
+        `15-second samples · ${esc(L.f_dev.id)} beyond ${nf} ± ${L.f_dev.v} Hz`),
+      statTile('Power factor', flag(under(t.pfE ?? t.pf, L.pf.v), f1(t.pfE ?? t.pf, 2)), '',
+        `${t.pfE !== null ? 'from the kWh and kVArh counters' : 'mean under load'} · ${pctOf(t.pf_low, t.loaded, 0)} % of the loaded time below ${L.pf.v} · <a href="#pf">details</a>`),
+      t.iu !== null ? statTile('Current imbalance', flag(t.iu > L.iu.v, f1(t.iu, 0)), '%',
+        `highest hourly mean · ${esc(L.iu.id)} at ${L.iu.v} %, not below ${j.i_floor_a} A of mean current`) : ''].join('')}</div>`;
 
     const days = qByDay(H);
-    h += `<h2>Day by day · click a day for its voltage minute by minute</h2><table><tr><th>Day</th><th class="hide-s">Recorded</th>
+    h += sec('Day by day', 'click a day for its voltage minute by minute') + tableCard(`<tr><th>Day</th><th class="hide-s">Recorded</th>
       <th>Voltage, lowest – highest</th><th>Within the limits</th><th>Dips · swells</th><th class="hide-s">Unbalance</th>
       <th class="hide-s">Frequency</th><th>Power factor</th></tr>` + Object.keys(days).sort().reverse().map(k => {
         const d = days[k], pf = d.pfE ?? d.pf;
@@ -865,21 +1020,21 @@ const QVIEWS = {
           <td class="hide-s">${k === today ? 'so far' : pctOf(d.minutes, 1440, 0) + ' %'}</td>
           <td>${d.vlo === null ? '–' : `${f1(d.vlo, 0)} – ${f1(d.vhi, 0)} V`}</td>
           <td>${d.vn ? flag(d.vok / d.vn < 0.95, pctOf(d.vok, d.vn) + ' %') : '–'}</td>
-          <td>${flag(d.dips + d.swells > 0, `${d.dips} · ${d.swells}`)}${d.lost ? ' <span class="sev critical">phase lost</span>' : ''}</td>
+          <td>${flag(d.dips + d.swells > 0, `${d.dips} · ${d.swells}`)}${d.lost ? ' <span class="pill crit">phase lost</span>' : ''}</td>
           <td class="hide-s">${d.vu === null ? '–' : flag(d.vu > L.vu.v, f1(d.vu, 1) + ' %')}</td>
           <td class="hide-s">${d.fmin === null ? '–' : `${f1(d.fmin, 2)} – ${f1(d.fmax, 2)} Hz`}</td>
-          <td>${pf === null ? '–' : flag(under(pf, L.pf.v), f1(pf, 2))}</td></tr>`; }).join('') + '</table>';
+          <td>${pf === null ? '–' : flag(under(pf, L.pf.v), f1(pf, 2))}</td></tr>`; }).join(''));
 
     const ev = j.events.slice().reverse();
-    h += `<h2>Power quality alarms · ${ev.length ? `${ev.length} line${ev.length === 1 ? '' : 's'}, ` : ''}hotel time</h2>`;
-    h += ev.length ? `<table><tr><th>Time</th><th>Alarm</th><th>State</th><th>Value</th><th class="hide-s">Message</th></tr>${ev.slice(0, 200).map(e =>
-        `<tr><td>${esc(e.local_time)}</td><td>${esc(e.id)} ${esc(e.name)} <span class="sev ${esc(e.severity)}">${esc(e.severity)}</span></td>
-          <td>${esc(e.state)}${e.duration_min ? ` <span class="range">${esc(e.duration_min)} min</span>` : ''}</td>
-          <td>${esc(e.value)} ${e.unit === 'event' ? '' : esc(e.unit)}</td><td class="hide-s">${esc(e.message)}</td></tr>`).join('')}</table>`
-      : '<div class="card k">No power quality alarm in this period.</div>';
-    h += `<h2>Frequency, hour by hour</h2><div class="card chartbox" id="ch"></div>
-      <div class="foot">Limits from the alarm register (docs/alarms/alarms.csv): ${esc(L.low.id)}/${esc(L.high.id)} for a phase's 1-minute mean,
-      ${esc(L.dip.id)}/${esc(L.swell.id)} for a 15-second sample. A 15-second sample catches dips that last, not every short sag.</div>`;
+    h += sec('Power quality alarms', `${ev.length ? `${ev.length} line${ev.length === 1 ? '' : 's'}, ` : ''}hotel time`);
+    h += ev.length ? tableCard(`<tr><th>Time</th><th>Alarm</th><th>State</th><th>Value</th><th class="hide-s">Message</th></tr>${ev.slice(0, 200).map(e =>
+        `<tr><td>${esc(e.local_time)}</td><td><span class="mono">${esc(e.id)}</span> ${esc(e.name)} ${sevPill(e.severity)}</td>
+          <td>${esc(e.state)}${e.duration_min ? ` <span class="dimtxt">${esc(e.duration_min)} min</span>` : ''}</td>
+          <td>${esc(e.value)} ${e.unit === 'event' ? '' : esc(e.unit)}</td><td class="hide-s wrap">${esc(e.message)}</td></tr>`).join('')}`)
+      : '<section class="card"><div class="empty">No power quality alarm in this period.</div></section>';
+    h += sec('Frequency, hour by hour') + chartCard('ch') +
+      `<div class="foot"><span>Limits from the alarm register (docs/alarms/alarms.csv): ${esc(L.low.id)}/${esc(L.high.id)} for a phase's 1-minute mean,
+      ${esc(L.dip.id)}/${esc(L.swell.id)} for a 15-second sample. A 15-second sample catches dips that last, not every short sag.</span></div>`;
     box.innerHTML = h;
     lineChart(el('ch'), [{name: 'Mean of the hour', color: C[0], pts: H.map(r => [tp(r.t), r.f ?? null])}],
       {unit: 'Hz', digits: 2, bands: [{name: 'Lowest – highest 15-second sample', color: BAND, pts: H.map(r => [tp(r.t), r.f_min ?? null, r.f_max ?? null])}],
@@ -892,13 +1047,12 @@ const QVIEWS = {
     const note = `Mean of each phase (L-N) per hour, and in grey the lowest to highest 15-second sample of the hour (any phase). ` +
       `Dashed: the limits of the alarm register. Hotel time, last ${span} days.`;
     if (t.vlo === null) return noMeter(box, title, note);
-    box.innerHTML = frame(title, note, spanPicker()) + `<div class="grid">${t.ph.map((P, n) =>
-        statTile(`L${n + 1}: mean`, f1(P.n ? P.w / P.n : null), 'V', `lowest ${f1(P.lo)} · highest ${f1(P.hi)} V`)).join('')}
-      ${statTile('Voltage unbalance: mean', flag(t.vuMean > L.vu.v, f1(t.vuMean, 2)), '%', `highest hourly mean ${f1(t.vu, 2)} % · limit ${L.vu.v} % (${esc(L.vu.id)})`)}</div>
-      <div class="card chartbox" id="ch"></div>
-      <h2>Voltage unbalance, hour by hour</h2><div class="card chartbox" id="ch2"></div><div id="qday"></div>`;
+    box.innerHTML = head(title, note, spanPicker()) + tiles([...t.ph.map((P, n) =>
+        statTile(`L${n + 1}: mean`, f1(P.n ? P.w / P.n : null), 'V', `lowest ${f1(P.lo)} · highest ${f1(P.hi)} V`)),
+      statTile('Voltage unbalance: mean', flag(t.vuMean > L.vu.v, f1(t.vuMean, 2)), '%', `highest hourly mean ${f1(t.vu, 2)} % · limit ${L.vu.v} % (${esc(L.vu.id)})`)]) +
+      `<div class="mt-16">${chartCard('ch')}</div>` + sec('Voltage unbalance, hour by hour') + chartCard('ch2') + '<div id="qday"></div>';
     const byT = new Map(H.map(r => [tp(r.t), r]));
-    const range = k => b => { const r = byT.get(b[0]); return r && r[`v${k}_min`] !== undefined ? ` <span class="range">(${f1(r[`v${k}_min`])}–${f1(r[`v${k}_max`])})</span>` : ''; };
+    const range = k => b => { const r = byT.get(b[0]); return r && r[`v${k}_min`] !== undefined ? ` <span class="dim">(${f1(r[`v${k}_min`])}–${f1(r[`v${k}_max`])})</span>` : ''; };
     const ext = (r, s, f) => { const v = [1, 2, 3].map(k => r[`v${k}_${s}`]).filter(x => x !== undefined); return v.length ? f(...v) : null; };
     lineChart(el('ch'), [1, 2, 3].map(k => ({name: 'L' + k, color: C[k - 1], pts: H.map(r => [tp(r.t), r[`v${k}`] ?? null]), extra: range(k)})),
       {unit: 'V', axis: 'volts', refs: vRefs(j), bands: [{name: 'Lowest – highest 15-second sample', color: BAND, pts: H.map(r => [tp(r.t), ext(r, 'min', Math.min), ext(r, 'max', Math.max)])}]});
@@ -921,30 +1075,29 @@ const QVIEWS = {
     }
     const excess = t.kwh !== null && t.kvarh !== null ? Math.max(0, t.kvarh - PLN_KVARH * t.kwh) : null;
     const days = qByDay(H);
-    box.innerHTML = frame(title, note, spanPicker()) + `<div class="grid">
-      ${statTile('Power factor of the period', flag(under(t.pfE, lim), f1(t.pfE, 2)), '',
-        t.pfE === null ? 'no kVArh counter in the records' : `${f1(t.kwh, 0)} kWh and ${f1(t.kvarh, 0)} kVArh (meter counters)`)}
-      ${statTile('Mean under load', flag(under(t.pf, lim), f1(t.pf, 2)), '', `lowest 15-second sample ${f1(t.pfmin, 2)}`)}
-      ${statTile(`Time below ${lim}`, flag(t.pf_low > 0, pctOf(t.pf_low, t.loaded)), '%', `${t.pf_low} of ${t.loaded} minutes under load`)}
-      ${statTile('kVArh above 62 % of the kWh', flag(excess > 0, f1(excess, 0)), 'kVArh',
-        excess === null ? 'needs the kWh and kVArh counters' : 'what PLN bills as excess reactive energy (counted per month); 0 while the power factor is 0.85 or more')}
-      ${statTile(`Capacitor to reach ${target}`, cap ? f1(cap.v, 0) : '0', 'kvar',
+    box.innerHTML = head(title, note, spanPicker()) + tiles([
+      statTile('Power factor of the period', flag(under(t.pfE, lim), f1(t.pfE, 2)), '',
+        t.pfE === null ? 'no kVArh counter in the records' : `${f1(t.kwh, 0)} kWh and ${f1(t.kvarh, 0)} kVArh (meter counters)`),
+      statTile('Mean under load', flag(under(t.pf, lim), f1(t.pf, 2)), '', `lowest 15-second sample ${f1(t.pfmin, 2)}`),
+      statTile(`Time below ${lim}`, flag(t.pf_low > 0, pctOf(t.pf_low, t.loaded)), '%', `${t.pf_low} of ${t.loaded} minutes under load`),
+      statTile('kVArh above 62 % of the kWh', flag(excess > 0, f1(excess, 0)), 'kVArh',
+        excess === null ? 'needs the kWh and kVArh counters' : 'what PLN bills as excess reactive energy (counted per month); 0 while the power factor is 0.85 or more'),
+      statTile(`Capacitor to reach ${target}`, cap ? f1(cap.v, 0) : '0', 'kvar',
         cap ? `largest hourly need: ${f1(Math.abs(cap.r.p), 1)} kW at ${f1(cap.r.pf, 2)}, ${hourAt(cap.r.t)} · an indication for an automatic bank, to check on site`
-          : `every hour at ${target} or more`)}</div>
-      <div class="card chartbox" id="ch"></div>
-      <h2>By hour of the day · mean of the period</h2><div class="card chartbox" id="ch3"></div>
-      <h2>Active and reactive power, hour by hour</h2><div class="card chartbox" id="ch2"></div>
-      <h2>Day by day</h2><table><tr><th>Day</th><th>kWh</th><th>kVArh</th><th>Power factor</th><th class="hide-s">Mean under load</th>
+          : `every hour at ${target} or more`)]) +
+      `<div class="mt-16">${chartCard('ch')}</div>` + sec('By hour of the day', 'mean of the period') + chartCard('ch3') +
+      sec('Active and reactive power, hour by hour') + chartCard('ch2') + sec('Day by day') +
+      tableCard(`<tr><th>Day</th><th>kWh</th><th>kVArh</th><th>Power factor</th><th class="hide-s">Mean under load</th>
         <th class="hide-s">Lowest sample</th><th>Below ${lim}</th><th class="hide-s">kVArh above 62 %</th></tr>${Object.keys(days).sort().reverse().map(k => {
           const d = days[k], ex = d.kwh !== null && d.kvarh !== null ? Math.max(0, d.kvarh - PLN_KVARH * d.kwh) : null;
           return `<tr><td>${fdate(tp(k + ' 00:00'))}</td><td>${f1(d.kwh, 0)}</td><td>${f1(d.kvarh, 0)}</td><td>${d.pfE === null ? '–' : flag(under(d.pfE, lim), f1(d.pfE, 2))}</td>
             <td class="hide-s">${f1(d.pf, 2)}</td><td class="hide-s">${f1(d.pfmin, 2)}</td><td>${d.loaded ? flag(d.pf_low > 0, pctOf(d.pf_low, d.loaded, 0) + ' %') : '–'}</td>
-            <td class="hide-s">${ex === null ? '–' : f1(ex, 0)}</td></tr>`; }).join('')}</table>
-      <div class="foot">Power factor of a period = kWh / √(kWh² + kVArh²), from the meter's counters. The sign of the power factor is not used (leading or lagging);
-        no power factor is counted below ${j.pf_load_kw} kW. The capacitor estimate uses hourly means: size a bank with the supplier after a site survey.</div>`;
+            <td class="hide-s">${ex === null ? '–' : f1(ex, 0)}</td></tr>`; }).join('')}`) +
+      `<div class="foot"><span>Power factor of a period = kWh / √(kWh² + kVArh²), from the meter's counters. The sign of the power factor is not used (leading or lagging);
+        no power factor is counted below ${j.pf_load_kw} kW. The capacitor estimate uses hourly means: size a bank with the supplier after a site survey.</span></div>`;
     const byT = new Map(H.map(r => [tp(r.t), r]));
     lineChart(el('ch'), [{name: 'Mean under load', color: C[0], pts: H.map(r => [tp(r.t), r.pf ?? null]),
-        extra: b => { const r = byT.get(b[0]); return r && r.p !== undefined ? ` <span class="range">at ${f1(r.p, 1)} kW</span>` : ''; }},
+        extra: b => { const r = byT.get(b[0]); return r && r.p !== undefined ? ` <span class="dim">at ${f1(r.p, 1)} kW</span>` : ''; }},
       {name: 'Lowest 15-second sample', color: C[1], width: 1.4, pts: H.map(r => [tp(r.t), r.pf_min ?? null])}],
       {unit: 'PF', digits: 2, refs: [{v: lim, label: limName(L.pf, 'low power factor')}]});
     lineChart(el('ch2'), [{name: 'Active power', color: C[0], unit: 'kW', pts: H.map(r => [tp(r.t), r.p ?? null])},
@@ -953,8 +1106,8 @@ const QVIEWS = {
       const p = rows.filter(r => r.p !== undefined); return {hr, pf: s.pf, p: p.length ? p.reduce((a, r) => a + r.p, 0) / p.length : null}; });
     const T0 = Date.UTC(2000, 0, 1), hh = n => String(n).padStart(2, '0') + ':00';
     lineChart(el('ch3'), [{name: 'Mean under load', color: C[0], pts: hod.map(o => [T0 + o.hr * 36e5, o.pf]),
-        extra: b => { const o = hod[Math.round((b[0] - T0) / 36e5)]; return o && o.p !== null ? ` <span class="range">mean ${f1(o.p, 1)} kW</span>` : ''; }}],
-      {unit: 'PF', digits: 2, title: ms => { const n = Math.round((ms - T0) / 36e5); return `${hh(n)}–${hh(n + 1)}, every day`; },
+        extra: b => { const o = hod[Math.round((b[0] - T0) / 36e5)]; return o && o.p !== null ? ` <span class="dim">mean ${f1(o.p, 1)} kW</span>` : ''; }}],
+      {unit: 'PF', digits: 2, xName: 'Hour of the day (hotel time)', title: ms => { const n = Math.round((ms - T0) / 36e5); return `${hh(n)}–${hh(n + 1)}, every day`; },
        refs: [{v: lim, label: limName(L.pf, 'low power factor')}]});
   },
 };
@@ -964,13 +1117,13 @@ async function qDaySection() {   // #voltage: one hotel day, minute by minute (r
   qDay ??= today;
   const box = el('qday');
   if (!box) return;
-  const day = qDay, dj = await (await fetch(`/api/v1/quality/${site}/day/${day}`, {cache: 'no-store'})).json();
+  const day = qDay, dj = await getJ(`/api/v1/quality/${site}/day/${day}`);
   if (el('qday') !== box || day !== qDay) return;   // redrawn (other span, page or day) while this day was loading
   const ci = Object.fromEntries(dj.cols.map((c, i) => [c, i])), R = dj.rows, ms = tp(qDay + ' 00:00');
   const worst = t.vloAt ? t.vloAt.t.slice(0, 10) : null;
-  const tools = `<div style="display:flex;gap:8px;flex-wrap:wrap"><div class="seg"><button data-qday="${isoDay(ms - 864e5)}">◀ ${fdate(ms - 864e5)}</button>
-    <button class="on">${fdate(ms)}</button><button data-qday="${isoDay(ms + 864e5)}" ${qDay >= today ? 'disabled' : ''}>${fdate(ms + 864e5)} ▶</button></div>` +
-    (worst && worst !== qDay ? `<div class="seg"><button data-qday="${worst}">Lowest of the ${span} days: ${fdate(tp(worst + ' 00:00'))}</button></div>` : '') + '</div>';
+  const tools = `<div class="headtools"><div class="seg" role="group" aria-label="Day">${segBtn(`data-qday="${isoDay(ms - 864e5)}"`, false, '◀ ' + fdate(ms - 864e5))}${segBtn('', true, fdate(ms))}${
+      segBtn(`data-qday="${isoDay(ms + 864e5)}"`, false, fdate(ms + 864e5) + ' ▶', qDay >= today)}</div>` +
+    (worst && worst !== qDay ? `<button class="btn small" data-qday="${worst}">Lowest of the ${span} days: ${fdate(tp(worst + ' 00:00'))}</button>` : '') + '</div>';
   let lo = null, hi = null, dips = 0, swells = 0;
   for (const r of R) for (const k of [1, 2, 3]) {
     const a = r[ci[`v${k}_min`]] ?? r[ci[`v${k}`]], b = r[ci[`v${k}_max`]] ?? r[ci[`v${k}`]];
@@ -982,16 +1135,16 @@ async function qDaySection() {   // #voltage: one hotel day, minute by minute (r
     const b = [1, 2, 3].map(k => r[ci[`v${k}_max`]] ?? r[ci[`v${k}`]]).filter(x => x !== null);
     dips += a.length && Math.min(...a) < L.dip.v; swells += b.length && Math.max(...b) > L.swell.v;
   }
-  box.innerHTML = `<div class="vhead" style="margin-top:22px"><div><h2 class="vt">One day, minute by minute: ${fdate(ms)}</h2>
-      <div class="vn">Mean of each phase per minute, and in grey the lowest to highest 15-second sample of the minute. Hover for each phase's range.</div></div>${tools}</div>
-    <div class="grid">${statTile('Lowest 15-second sample', lo ? flag(lo.v < L.dip.v, f1(lo.v)) : '–', 'V', lo ? `L${lo.ph} at ${lo.t}` : '')}
-      ${statTile('Highest 15-second sample', hi ? flag(hi.v > L.swell.v, f1(hi.v)) : '–', 'V', hi ? `L${hi.ph} at ${hi.t}` : '')}
-      ${statTile('Dips · swells', flag(dips + swells > 0, `${dips} · ${swells}`), 'minutes', `below ${L.dip.v} V · above ${L.swell.v} V`)}
-      ${statTile('Minutes recorded', R.length, qDay === today ? 'so far' : 'of 1440', '')}</div>
-    <div class="card chartbox" id="ch4"></div>`;
+  box.innerHTML = `<div class="page-head" style="margin-top:28px"><div><h2 style="font-size:19px;font-weight:800">One day, minute by minute: ${fdate(ms)}</h2>
+      <div class="sub">Mean of each phase per minute, and in grey the lowest to highest 15-second sample of the minute. Hover for each phase's range.</div></div>${tools}</div>` +
+    tiles([statTile('Lowest 15-second sample', lo ? flag(lo.v < L.dip.v, f1(lo.v)) : '–', 'V', lo ? `L${lo.ph} at ${lo.t}` : ''),
+      statTile('Highest 15-second sample', hi ? flag(hi.v > L.swell.v, f1(hi.v)) : '–', 'V', hi ? `L${hi.ph} at ${hi.t}` : ''),
+      statTile('Dips · swells', flag(dips + swells > 0, `${dips} · ${swells}`), 'minutes', `below ${L.dip.v} V · above ${L.swell.v} V`),
+      statTile('Minutes recorded', R.length, qDay === today ? 'so far' : 'of 1440', '')]) +
+    `<div class="mt-16">${chartCard('ch4')}</div>`;
   const pts = k => R.map(r => [tp(`${qDay} ${r[0]}`), r[ci['v' + k]]]);
   const at = new Map(R.map(r => [tp(`${qDay} ${r[0]}`), r]));
-  const range = k => b => { const r = at.get(b[0]); return r && r[ci[`v${k}_min`]] !== null ? ` <span class="range">(${f1(r[ci[`v${k}_min`]])}–${f1(r[ci[`v${k}_max`]])})</span>` : ''; };
+  const range = k => b => { const r = at.get(b[0]); return r && r[ci[`v${k}_min`]] !== null ? ` <span class="dim">(${f1(r[ci[`v${k}_min`]])}–${f1(r[ci[`v${k}_max`]])})</span>` : ''; };
   const ext = (r, s, f) => { const v = [1, 2, 3].map(k => r[ci[`v${k}_${s}`]] ?? r[ci[`v${k}`]]).filter(x => x !== null); return v.length ? f(...v) : null; };
   lineChart(el('ch4'), [1, 2, 3].map(k => ({name: 'L' + k, color: C[k - 1], width: 1.4, pts: pts(k), extra: range(k)})),
     {unit: 'V', axis: 'volts', gapMs: 3 * 6e4, step: 6e4, refs: vRefs(j),
@@ -999,8 +1152,6 @@ async function qDaySection() {   // #voltage: one hotel day, minute by minute (r
 }
 
 // ------------------------------------------------------------------ firmware versions (everyone; sending firmware: #firmware, admins)
-// GET /api/v1/versions/<site>: running firmware per logger, the offer, every firmware change and restart (events.jsonl),
-// the GitHub releases (asked by the server once an hour) and the files stored on the server.
 let vfAll = false;
 const BUILD = {usb: 'USB (native)', uart: 'UART'};
 function bootText(r) {   // the logger's restart reason, in words
@@ -1020,98 +1171,312 @@ function fwEvent(e) {
     case 'ota_offered': return ['Update offered', `<b>${esc(e.version)}</b>${e.source ? ' from ' + esc(e.source) : ''}${by}`];
     case 'ota_cancelled': return ['Offer withdrawn', `${esc(e.version || '')}${by}`];
     case 'ota_failed': return ['Update refused by the logger', `<span class="bad">${esc(e.version)}: kept restarting, went back</span>`];
-    case 'boot': return ['Restart', esc(bootText(e.reason)) + (e.record ? ` <span class="range">record ${esc(e.record.slice(11, 16))} UTC</span>` : '')];
+    case 'boot': return ['Restart', esc(bootText(e.reason)) + (e.record ? ` <span class="dimtxt">record ${esc(e.record.slice(11, 16))} UTC</span>` : '')];
     default: return [esc(e.kind), ''];
   }
 }
 async function versionsView(box) {
-  const j = await (await fetch(`/api/v1/versions/${site}`, {cache: 'no-store'})).json(), off = PROF.utc_offset_h ?? 8;
+  const j = await getJ(`/api/v1/versions/${site}`), off = PROF.utc_offset_h ?? 8;
   const L = j.loggers || [];
-  const badge = d => d.update === 'available' ? `<span class="sev warning">${esc(j.latest)} available</span>`
-    : d.update === 'up_to_date' ? '<span class="sev info">up to date</span>' : '';
-  let h = frame('Firmware versions', 'What each logger runs, since when, what is offered to it, and every firmware change and restart. ' +
-    `Sending a firmware: ${isAdmin ? '<a href="#firmware">Firmware update</a>' : 'Firmware update (logins in ADMIN_USERS)'}. See docs/OTA.md.`);
-  h += `<div class="grid">${statTile('Latest release on GitHub', j.latest ? esc(j.latest) : '–', '',
-      j.latest_published ? 'published ' + localTime(j.latest_published, off).slice(0, 10) : esc(j.releases_error || 'no release with logger files'))}` +
-    L.map(d => statTile(d.device, esc(d.running || '–'), '', `${badge(d)} ${d.env ? esc(BUILD[d.env] || d.env) + ' build' : ''}`)).join('') + '</div>';
-  if (!L.length) h += '<div class="card k" style="margin-top:12px">No logger registered on this site.</div>';
+  const badge = d => d.update === 'available' ? `<span class="pill warn">${esc(j.latest)} available</span>`
+    : d.update === 'up_to_date' ? '<span class="pill good">up to date</span>' : '';
+  let h = head('Firmware versions', 'What each logger runs, since when, what is offered to it, and every firmware change and restart. ' +
+    `Sending a firmware: ${isAdmin() ? '<a href="#firmware">Firmware update</a>' : 'Firmware update (logins in ADMIN_USERS)'}. See docs/OTA.md.`);
+  h += tiles([statTile('Latest release on GitHub', j.latest ? esc(j.latest) : '–', '',
+      j.latest_published ? 'published ' + localTime(j.latest_published, off).slice(0, 10) : esc(j.releases_error || 'no release with logger files')),
+    ...L.map(d => statTile(d.device, esc(d.running || '–'), '', `${badge(d)} ${d.env ? esc(BUILD[d.env] || d.env) + ' build' : ''}`))]);
+  if (!L.length) h += '<section class="card mt-16"><div class="empty">No logger registered on this site.</div></section>';
   for (const d of L) {
-    const o = d.offer, st = {installed: '<span class="ok">installed</span>', waiting: '<span class="warn">waiting for the logger</span>',
+    const o = d.offer, st = {installed: '<span class="ok">installed</span>', waiting: '<span class="warnc">waiting for the logger</span>',
       rolled_back: '<span class="bad">refused: the logger went back</span>', not_newer: 'not newer than the running one'}[d.state] || '';
-    h += `<h2>${esc(d.device)}${d.disabled ? ' · <span class="bad">disabled</span>' : ''}</h2><div class="card"><div class="facts">
-      <div>Running<b>${esc(d.running || '–')}</b></div>
-      <div>Build<b>${esc(BUILD[d.env] || d.env || '–')}</b></div>
-      <div>Running it since (hotel time)<b>${d.since ? localTime(d.since, off) : '–'}</b></div>
-      <div>Last restart<b>${d.last_boot ? localTime(d.last_boot.ts, off) : '–'}</b>${d.last_boot ? `<span class="range">${esc(bootText(d.last_boot.reason))}</span>` : ''}</div>
-      <div>Last report from the logger<b>${d.reported ? localTime(d.reported, off) : '–'}</b></div>
-      <div>Remote update<b>${d.ota_on === '0' ? '<span class="bad">off (ota_on=0)</span>' : d.reported ? 'on' : '–'}</b></div>
-      <div>Offered<b>${o ? esc(o.version) : 'nothing'}</b>${o ? `<span class="range">${st}${o.scope === 'default' || d.scope === 'default' ? ', to every logger' : ''}${o.by ? ', by ' + esc(o.by) : ''}</span>` : ''}</div>
-      <div>Refused versions<b>${d.failed.length ? `<span class="bad">${d.failed.map(esc).join(', ')}</span>` : 'none'}</b></div>
-      <div>Data format, settings, registers<b>${d.reported ? `${esc(d.schema ?? '–')} · v${esc(d.cfg_version ?? '–')} · v${esc(d.reg_version ?? '–')}` : '–'}</b><span class="range">${esc(d.reg_source || '')}</span></div>
-      <div>Registered on the server<b>${d.added ? localTime(d.added, off).slice(0, 10) : '–'}</b></div>
-    </div></div>`;
+    h += sec(d.device + (d.disabled ? ' · disabled' : '')) + `<section class="card"><div class="facts">
+      <div><small>Running</small><b>${esc(d.running || '–')}</b></div>
+      <div><small>Build</small><b>${esc(BUILD[d.env] || d.env || '–')}</b></div>
+      <div><small>Running it since (hotel time)</small><b>${d.since ? localTime(d.since, off) : '–'}</b></div>
+      <div><small>Last restart</small><b>${d.last_boot ? localTime(d.last_boot.ts, off) : '–'}</b>${d.last_boot ? `<span class="note">${esc(bootText(d.last_boot.reason))}</span>` : ''}</div>
+      <div><small>Last report from the logger</small><b>${d.reported ? localTime(d.reported, off) : '–'}</b></div>
+      <div><small>Remote update</small><b>${d.ota_on === '0' ? '<span class="bad">off (ota_on=0)</span>' : d.reported ? 'on' : '–'}</b></div>
+      <div><small>Offered</small><b>${o ? esc(o.version) : 'nothing'}</b>${o ? `<span class="note">${st}${o.scope === 'default' || d.scope === 'default' ? ', to every logger' : ''}${o.by ? ', by ' + esc(o.by) : ''}</span>` : ''}</div>
+      <div><small>Refused versions</small><b>${d.failed.length ? `<span class="bad">${d.failed.map(esc).join(', ')}</span>` : 'none'}</b></div>
+      <div><small>Data format, settings, registers</small><b>${d.reported ? `${esc(d.schema ?? '–')} · v${esc(d.cfg_version ?? '–')} · v${esc(d.reg_version ?? '–')}` : '–'}</b><span class="note">${esc(d.reg_source || '')}</span></div>
+      <div><small>Registered on the server</small><b>${d.added ? localTime(d.added, off).slice(0, 10) : '–'}</b></div>
+    </div></section>`;
   }
   const rows = L.flatMap(d => d.history.map(e => ({...e, device: d.device}))).filter(e => vfAll || e.kind !== 'boot' || /ota/.test(e.reason || ''))
     .sort((a, b) => (a.ts < b.ts ? 1 : -1));
-  h += `<div class="vhead" style="margin-top:22px"><h2 style="margin:0">History · hotel time</h2><div class="seg">
-      <button data-vf="fw" class="${vfAll ? '' : 'on'}">Firmware only</button><button data-vf="all" class="${vfAll ? 'on' : ''}">With every restart</button></div></div>`;
-  h += rows.length ? `<table><tr><th>Time</th>${L.length > 1 ? '<th>Logger</th>' : ''}<th>Event</th><th>Detail</th></tr>${rows.slice(0, 300).map(e => {
+  h += `<div class="spread" style="margin:24px 2px 10px"><h2 class="eyebrow">History <span style="text-transform:none;letter-spacing:0;font-weight:500">· hotel time</span></h2><div class="seg" role="group" aria-label="History filter">
+      ${segBtn('data-vf="fw"', !vfAll, 'Firmware only')}${segBtn('data-vf="all"', vfAll, 'With every restart')}</div></div>`;
+  h += rows.length ? tableCard(`<tr><th>Time</th>${L.length > 1 ? '<th>Logger</th>' : ''}<th>Event</th><th>Detail</th></tr>${rows.slice(0, 300).map(e => {
       const [what, det] = fwEvent(e);
-      return `<tr><td>${localTime(e.ts, off)}</td>${L.length > 1 ? `<td>${esc(e.device)}</td>` : ''}<td>${what}</td><td>${det}</td></tr>`; }).join('')}</table>`
-    : '<div class="card k">Nothing recorded yet.</div>';
+      return `<tr><td>${localTime(e.ts, off)}</td>${L.length > 1 ? `<td>${esc(e.device)}</td>` : ''}<td>${what}</td><td class="wrap">${det}</td></tr>`; }).join('')}`)
+    : '<section class="card"><div class="empty">Nothing recorded yet.</div></section>';
   const runs = {}; for (const d of L) if (d.running) (runs[d.running] ??= []).push(d.device);
-  h += `<h2>Releases on GitHub${j.releases_error ? ` · <span class="bad" style="text-transform:none;letter-spacing:0">${esc(j.releases_error)}</span>` : ''}</h2>`;
-  h += (j.releases || []).length ? `<table><tr><th>Version</th><th>Published</th><th class="hide-s">Files</th><th>Running on</th></tr>${j.releases.map(r => {
+  h += sec('Releases on GitHub', j.releases_error ? `<span class="bad">${esc(j.releases_error)}</span>` : '');
+  h += (j.releases || []).length ? tableCard(`<tr><th>Version</th><th>Published</th><th class="hide-s">Files</th><th>Running on</th></tr>${j.releases.map(r => {
       const v = String(r.tag || '').replace(/^fw-v/, '');
-      return `<tr><td><b>${esc(v)}</b>${r.prerelease ? ' <span class="sev">pre-release</span>' : ''}</td><td>${r.published ? localTime(r.published, off).slice(0, 10) : '–'}</td>
-        <td class="hide-s">${r.assets.map(a => esc(a.name)).join(', ')}</td><td>${(runs[v] || []).map(esc).join(', ')}</td></tr>`; }).join('')}</table>`
-    : '<div class="card k">None listed.</div>';
-  h += `<h2>Firmware files on the server</h2>` + ((j.files || []).length ? `<table><tr><th>File</th><th>Version</th><th>Build</th><th>Size</th></tr>${j.files.map(f =>
-      `<tr><td>${esc(f.file)}</td><td>${esc(f.version)}</td><td>${esc(BUILD[f.env] || f.env)}</td><td>${Math.round(f.size / 1024)} kB</td></tr>`).join('')}</table>`
-    : '<div class="card k">None yet (sent from GitHub or uploaded on Firmware update).</div>');
-  box.innerHTML = h + '<div class="foot">From the server\'s records: devices.json, each logger\'s events.jsonl and settings-reported.json. GitHub is asked at most once an hour.</div>';
+      return `<tr><td><b>${esc(v)}</b>${r.prerelease ? ' <span class="pill neutral">pre-release</span>' : ''}</td><td>${r.published ? localTime(r.published, off).slice(0, 10) : '–'}</td>
+        <td class="hide-s wrap">${r.assets.map(a => esc(a.name)).join(', ')}</td><td>${(runs[v] || []).map(esc).join(', ')}</td></tr>`; }).join('')}`)
+    : '<section class="card"><div class="empty">None listed.</div></section>';
+  h += sec('Firmware files on the server') + ((j.files || []).length ? tableCard(`<tr><th>File</th><th>Version</th><th>Build</th><th>Size</th></tr>${j.files.map(f =>
+      `<tr><td>${esc(f.file)}</td><td>${esc(f.version)}</td><td>${esc(BUILD[f.env] || f.env)}</td><td>${Math.round(f.size / 1024)} kB</td></tr>`).join('')}`)
+    : '<section class="card"><div class="empty">None yet (sent from GitHub or uploaded on Firmware update).</div></section>');
+  box.innerHTML = h + '<div class="foot"><span>From the server\'s records: devices.json, each logger\'s events.jsonl and settings-reported.json. GitHub is asked at most once an hour.</span></div>';
 }
 
-let shown = 0;   // the latest show(): an older one still loading never writes its error over it
-async function show(id) {
-  view = VIEWS.some(v => v.id === id) ? id : 'now';
-  document.querySelectorAll('#side a[data-id]').forEach(a => a.classList.toggle('on', a.dataset.id === view));
-  el('fw').hidden = true;
-  if (view === 'firmware') {   // the panel lives in #fw, out of reach of the 15 s refresh of #content
-    el('content').innerHTML = '';
-    await fwReady;
-    if (view !== 'firmware') return;
-    if (isAdmin) el('fw').hidden = false;
-    else el('content').innerHTML = '<div class="empty">Firmware update is only for the logins listed in ADMIN_USERS on the server (docs/OTA.md).</div>';
-    return;
-  }
-  if (view === 'now') { el('content').innerHTML = ''; return tick(); }
-  el('content').innerHTML = '<div class="card k">Loading…</div>';
-  const n = ++shown;
-  try { await renderHistory(); }
-  catch (e) { console.error(e); if (n === shown) el('content').innerHTML = `<div class="empty">Could not read the ${WXVIEWS[view] ? 'weather' : QVIEWS[view] ? 'power quality' : view === 'versions' ? 'firmware versions' : 'history'} from the server.</div>`; }
+// ------------------------------------------------------------------ Settings: display (the kit's settings), View as, the site
+const dseg = (k, label, items) => `<div class="field-row"><label id="st-${k}">${label}</label><div class="seg" role="group" aria-labelledby="st-${k}">${
+  items.map(i => `<button type="button" data-ui-setting="${k}" data-value="${i[0]}" aria-pressed="${(window.ArkanUI ? ArkanUI.get(k) : '') === i[0]}">${i[1]}</button>`).join('')}</div></div>`;
+function settingsView(box) {
+  const p = PROF, sens = Object.entries(p.sensors || {});
+  box.innerHTML = head('Settings', site ? 'Display, who is logged in and the site details' : 'Display and who is logged in') +
+    `<div class="two"><section class="card"><div class="card-head"><h2>Display</h2></div><div class="stack" style="gap:14px">
+      ${dseg('theme', 'Mode', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast']])}
+      ${dseg('density', 'Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']])}
+      ${dseg('size', 'Text size', [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']])}
+      ${dseg('motion', 'Motion', [['full', 'Full'], ['reduce', 'Reduced']])}
+      <p class="muted small">Saved in this browser only. System follows the device setting.</p>
+      <div><button class="btn" id="resetDisplay">Reset display settings</button></div></div></section>
+    <section class="card"><div class="card-head"><h2>Logged in</h2></div><div class="stack" style="gap:14px">
+      <dl class="dl" style="padding:0;border:0"><dt>Login</dt><dd>${esc(ME.user || '–')}</dd><dt>Rights</dt><dd>${ME.admin ? 'Admin: listed in ADMIN_USERS on the server' : 'Viewer: not in ADMIN_USERS'}</dd></dl>
+      <div class="field-row"><label>View as</label><div>${roleOpts()}</div></div>
+      <p class="muted small">${ME.admin ? 'Viewer shows the pages as a login outside ADMIN_USERS sees them: Firmware update is hidden. It changes this browser only, not your rights.'
+        : 'Admin pages (Firmware update) need a login listed in ADMIN_USERS on the server.'} Logins are the shared Arkan logins, managed on the server.</p></div></section></div>
+${site ? `<section class="card mt-16"><div class="card-head"><h2>Site</h2><span class="muted small">from site.json on the server, read only</span></div><dl class="dl" style="padding:0;border:0">
+      <dt>Name</dt><dd>${esc(p.name || site)} <span class="mono muted">${esc(site)}</span></dd>
+      <dt>Time zone</dt><dd>${esc(p.timezone || '–')} (UTC${(p.utc_offset_h ?? 0) >= 0 ? '+' : ''}${esc(p.utc_offset_h ?? '–')})</dd>
+      <dt>PLN contract</dt><dd>${p.contracted_kva ? esc(p.contracted_kva) + ' kVA' : '–'}${p.contract_v_ln ? `, ${esc(p.contract_v_ln)} V per phase` : ''}</dd>
+      <dt>Main breaker</dt><dd>${p.rated_a ? esc(p.rated_a) + ' A' : '–'}</dd>
+      <dt>Nominal voltage</dt><dd>${p.nominal_v ? esc(p.nominal_v) + ' V' : '–'}</dd>
+      ${sens.map(([k, v]) => `<dt>Sensor ${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}
+      <dt>Live refresh</dt><dd>every ${esc((p.live && p.live.refresh_s) || 15)} s</dd></dl></section>` : ''}`;
+  el('resetDisplay').onclick = () => { ['theme', 'density', 'size', 'motion'].forEach(k => ArkanUI.set(k, {theme: 'system', density: 'comfortable', size: 'normal', motion: 'full'}[k])); toast('Display settings reset'); };
 }
-document.addEventListener('click', ev => {
-  const b = ev.target.closest('button[data-span],button[data-day],button[data-vf],[data-qday]');
-  if (!b) return;
-  if (b.dataset.qday) {   // a day of the power quality pages: a link opens #voltage on it, a button redraws the day only
-    qDay = b.dataset.qday;
-    if (b.tagName === 'A' || !el('qday')) return;
-    return qDaySection().catch(() => { el('qday').innerHTML = '<div class="empty">Could not read that day from the server.</div>'; });
-  }
-  if (b.dataset.vf) vfAll = b.dataset.vf === 'all';
-  if (b.dataset.span) span = +b.dataset.span;
-  if (b.dataset.day) dayShown = b.dataset.day;
-  show(view);
-});
-addEventListener('hashchange', () => show(location.hash.slice(1)));
-let resizeT; addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (site && view !== 'now' && view !== 'firmware') renderHistory().catch(() => {}); }, 300); });
 
-// ---------------------------------------------------------------- firmware update (ADMIN_USERS only)
+// ------------------------------------------------------------------ meter registers (was /live/<site>/register)
+let RV = null, device = null, TYPES = ['u16', 's16', 'u32', 's32', 'u32sw', 's32sw', 'f32', 'f32sw'], AGGS = ['mean', 'last', 'minmax'];
+const BAUDS = ['1200', '2400', '4800', '9600', '19200', '38400', '57600', '115200'], FORMATS = ['8N1', '8E1', '8O1', '8N2'];
+const fmtTime = t => t ? String(t).replace('T', ' ').replace('Z', '') : '-';
+async function api(method, path, body) {
+  const r = await fetch(path, {method, cache: 'no-store', headers: body ? {'Content-Type': 'application/json'} : {}, body: body ? JSON.stringify(body) : undefined});
+  let j = null;
+  try { j = await r.json(); } catch (e) { j = {ok: false, error: `HTTP ${r.status}`}; }
+  j._status = r.status;
+  return j;
+}
+const hex = a => '0x' + Number(a).toString(16).toUpperCase().padStart(4, '0');
+function rowsToCsv(rows) {
+  return 'name,fc,addr,type,scale,ct,agg\n' + rows.map(r =>
+    [r.name, r.fc, typeof r.addr === 'number' ? hex(r.addr) : r.addr, r.type, r.scale, r.ct ? 1 : 0, r.agg].join(',')).join('\n') + '\n';
+}
+function csvToRows(text) {   // loose: the server does the real check
+  const rows = [];
+  for (let line of text.replace(/^﻿/, '').split(/\r?\n/)) {
+    line = line.trim();
+    if (!line || line.startsWith('#') || /^name\s*,/i.test(line)) continue;
+    const f = line.split(',').map(x => x.trim());
+    rows.push({name: f[0] || '', fc: f[1] || '3', addr: f[2] || '', type: (f[3] || 'u16').toLowerCase(), scale: f[4] || '1', ct: f[5] === '1', agg: (f[6] || 'mean').toLowerCase()});
+  }
+  return rows;
+}
+const opts = (list, cur) => (list.includes(cur) ? list : [cur, ...list]).map(v => `<option${v === cur ? ' selected' : ''}>${esc(v)}</option>`).join('');
+function setRows(rows) {
+  el('regs').tBodies[0].innerHTML = rows.map(r => `<tr>
+    <td class="n"></td>
+    <td><input type="text" data-k="name" value="${esc(r.name)}" maxlength="7" aria-label="name"></td>
+    <td><select data-k="fc" aria-label="fc">${opts(['3', '4'], String(r.fc))}</select></td>
+    <td><input type="text" data-k="addr" value="${esc(typeof r.addr === 'number' ? hex(r.addr) : r.addr)}" aria-label="addr"></td>
+    <td><select data-k="type" aria-label="type">${opts(TYPES, r.type)}</select></td>
+    <td><input type="text" data-k="scale" value="${esc(r.scale)}" aria-label="scale"></td>
+    <td><input type="checkbox" data-k="ct"${r.ct ? ' checked' : ''} aria-label="ct"></td>
+    <td><select data-k="agg" aria-label="agg">${opts(AGGS, r.agg)}</select></td>
+    <td><button class="btn small" data-act="up" title="Move up">&uarr;</button> <button class="btn small danger" data-act="del" title="Delete">&times;</button></td></tr>`).join('');
+  refreshMarks();
+}
+function getRows() {
+  return [...el('regs').tBodies[0].rows].map(tr => {
+    const g = k => tr.querySelector(`[data-k="${k}"]`);
+    return {name: g('name').value.trim(), fc: g('fc').value, addr: g('addr').value.trim(), type: g('type').value, scale: g('scale').value.trim(), ct: g('ct').checked, agg: g('agg').value};
+  });
+}
+function sameRow(a, b) {
+  const n = x => typeof x === 'number' ? x : Number(x);
+  return a && b && String(a.fc) === String(b.fc) && n(a.addr) === n(b.addr) && a.type === b.type &&
+    Math.abs(n(a.scale) - n(b.scale)) <= Math.abs(n(b.scale)) * 1e-5 && !!a.ct === !!b.ct && a.agg === b.agg;
+}
+function refreshMarks() {
+  const onLogger = {};
+  for (const r of (RV?.reported?.rows || [])) onLogger[r.name] = r;
+  const trs = [...el('regs').tBodies[0].rows];
+  getRows().forEach((r, i) => {
+    const tr = trs[i];
+    tr.cells[0].textContent = i + 1;
+    const l = onLogger[r.name.toLowerCase()];
+    tr.className = !RV?.reported?.rows?.length ? '' : !l ? 'new' : sameRow(r, l) ? '' : 'changed';
+  });
+  el('count').textContent = `${trs.length} of ${RV?.max_regs || 32} values`;
+}
+const msg = (id, cls, text) => { el(id).innerHTML = text ? `<div class="banner ${cls}" style="margin:8px 0">${esc(text)}</div>` : ''; };
+function showCheck(j, prefix) {
+  let h = '';
+  if (prefix) h += `<div class="banner good" style="margin:8px 0">${esc(prefix)}</div>`;
+  if (j.errors?.length) h += `<div class="banner crit" style="margin:8px 0">Errors (nothing can be sent until they are fixed):\n${esc(j.errors.join('\n'))}</div>`;
+  if (j.warnings?.length) h += `<div class="banner warn" style="margin:8px 0">Warnings:\n${esc(j.warnings.join('\n'))}</div>`;
+  if (j.ok && !j.errors?.length && !j.warnings?.length) h += '<div class="banner good" style="margin:8px 0">Table OK.</div>';
+  if (!j.ok && !j.errors) h += `<div class="banner crit" style="margin:8px 0">${esc(j.error || 'failed')}</div>`;
+  el('result').innerHTML = h;
+}
+async function regCheck(prefix) {
+  const j = await api('POST', `/api/v1/admin/registers/${device}/check`, {csv: rowsToCsv(getRows())});
+  showCheck(j, prefix);
+  return j;
+}
+const RSTATES = {
+  none: ['neutral', 'No table sent from here', 'The logger uses its own table (SD card file or built-in).'],
+  waiting: ['warn', 'Waiting for the logger', 'The logger has not taken the last version yet.'],
+  applied: ['good', 'Applied', 'The logger reports the table that was sent.'],
+  differs: ['crit', 'Differs', 'The logger took the version but now reports another table (SD card changed or edited by hand?). Send again if needed.'],
+  refused: ['crit', 'Refused by the logger', ''],
+  unsupported: ['crit', 'Firmware too old', 'This logger\'s firmware cannot take a register table remotely: it needs 0.4.0 or later (OTA).'],
+};
+function regRender(fillEditor) {
+  const v = RV, rep = v.reported, p = v.platform, st = RSTATES[v.state] || RSTATES.none;
+  el('rstate').innerHTML = `<span class="pill ${st[0]}">${esc(st[1])}</span> <span class="muted small">${esc(v.state === 'refused' ? `Reason: ${rep?.reg_error || '?'}` : st[2])}</span>`;
+  el('onLogger').innerHTML = rep ? `<dt>On the logger</dt><dd>reported ${esc(fmtTime(rep.received))} UTC</dd><dt>Firmware</dt><dd>${esc(rep.fw)}</dd>
+    <dt>Table</dt><dd>${rep.reg_source === 'sd' ? 'SD card /config/registers.csv' : rep.reg_source === 'builtin' ? 'built-in (firmware)' : '?'}, ${rep.rows.length} values</dd>
+    <dt>Version applied</dt><dd>${esc(rep.reg_version ?? '-')}</dd>
+    <dt>Meters</dt><dd>${esc(rep.settings.meters)} ${esc(rep.settings.mb_baud)} ${esc(rep.settings.mb_format)}, ct_mult ${esc(rep.settings.ct_mult)}</dd>`
+    : '<dt>On the logger</dt><dd>not reported yet (it reports after each boot)</dd>';
+  el('asked').innerHTML = p ? `<dt>Last sent</dt><dd>version ${esc(p.version)}, ${esc(fmtTime(p.updated))} UTC</dd><dt>By</dt><dd>${esc(p.by || '-')}</dd>
+    <dt>What</dt><dd>${p.builtin ? 'back to the built-in table' : 'register table'}</dd><dt>Comment</dt><dd>${esc(p.comment || '-')}</dd>` : '<dt>Last sent</dt><dd>nothing</dd>';
+  if (v.config?.settings) {
+    const pend = Object.entries(v.config.settings).filter(([k]) => ['meters', 'mb_baud', 'mb_format', 'ct_mult'].includes(k));
+    el('settingsInfo').textContent = pend.length ? `Asked so far (settings version ${v.config.version}): ` + pend.map(([k, x]) => `${k}=${x}`).join(', ') : '';
+  }
+  if (fillEditor) {
+    const s = rep?.settings || {};
+    for (const k of ['meters', 'mb_baud', 'mb_format', 'ct_mult']) if (s[k] != null) el('s_' + k).value = s[k];
+    if (p && !p.builtin && p.csv && v.state !== 'applied') setRows(csvToRows(p.csv));
+    else if (rep?.rows?.length) setRows(rep.rows);
+    else setRows([]);
+  } else refreshMarks();
+  el('hist').tBodies[0].innerHTML = v.history.map((h, i) => `<tr><td>${esc(h.version)}</td><td>${esc(fmtTime(h.updated))}</td>
+    <td>${esc(h.by || '-')}</td><td>${h.builtin ? 'built-in table' : `${csvToRows(h.csv || '').length} values`}</td>
+    <td class="wrap">${esc(h.comment || '')}</td><td>${h.builtin ? '' : `<button class="btn small" data-h="${i}">Load into the editor</button>`}</td></tr>`).join('')
+    || '<tr><td colspan="6" class="muted">Nothing sent yet.</td></tr>';
+  el('stdNames').textContent = (v.standard || []).join(' ');
+}
+async function regLoad(fillEditor) {
+  const j = await api('GET', `/api/v1/admin/registers/${device}`);
+  if (j._status !== 200 || j.site !== site) { el('regApp').hidden = true; el('pick').hidden = false;
+    el('pick').textContent = j._status === 200 ? `${device} is not a logger of ${site}.` : (j.error || 'Not found'); return; }
+  RV = j; TYPES = j.types || TYPES; AGGS = j.aggs || AGGS;
+  el('regApp').hidden = false;
+  regRender(fillEditor);
+}
+async function registerView(box) {
+  const s = await api('GET', '/api/v1/status'), devs = Object.keys((s.sites || {})[site] || {});
+  device = devs.includes(device) ? device : devs[0];
+  box.innerHTML = head(`Meter registers${device ? ': ' + device : ''}`, 'The Modbus register table the logger reads from the meter: see it, edit it and send it to the logger.',
+      (devs.length > 1 ? `<select id="devsel" aria-label="Logger" style="width:auto">${devs.map(d => `<option${d === device ? ' selected' : ''}>${esc(d)}</option>`).join('')}</select>` : '') +
+      '<button class="btn small" id="reload">Refresh</button>') +
+    `<section class="card" id="pick" hidden></section><div id="regApp" hidden>
+    <section class="card"><div class="inline" id="rstate" style="margin-bottom:10px"></div><div class="two"><dl class="dl" style="padding:0;border:0" id="onLogger"></dl><dl class="dl" style="padding:0;border:0" id="asked"></dl></div></section>
+    ${sec('Register table')}<section class="card">
+      <div class="bar" style="margin-top:0"><span class="muted small">Load:</span>
+        <button class="btn small" id="loadLogger">Table on the logger</button><button class="btn small" id="loadAsked">Last sent</button>
+        <button class="btn small" id="importBtn">Import CSV file...</button><input type="file" id="importFile" accept=".csv,.txt,text/csv,text/plain" hidden>
+        <button class="btn small" id="exportBtn">Download CSV</button><button class="btn small" id="textBtn">Edit as text</button></div>
+      <div id="textBox" hidden><textarea class="csv" id="csvText" spellcheck="false"></textarea>
+        <div class="bar"><button class="btn small" id="textApply">Use this text</button>
+          <span class="muted small">One line per value: name,fc,addr,type,scale,ct,agg. Lines starting with # are ignored.</span></div></div>
+      <div class="tablewrap"><table class="data regs" id="regs"><thead><tr><th></th><th>name</th><th>fc</th><th>addr</th><th>type</th><th>scale</th><th>ct</th><th>agg</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="bar"><button class="btn small" id="addRow">+ Add a line</button><span class="muted small" id="count"></span>
+        <span class="muted small"><span class="sw warn"></span> differs from the table on the logger · <span class="sw good"></span> not on the logger</span></div>
+      <div id="result"></div>
+      <div class="bar"><input type="text" id="comment" placeholder="Why (e.g. current scale fixed after the LCD check)" style="flex:1;min-width:220px">
+        <button class="btn" id="checkBtn">Check</button><button class="btn primary" id="sendBtn">Send to the logger</button><button class="btn danger" id="builtinBtn">Back to the built-in table</button></div>
+      <details class="tbl help"><summary>What the columns mean</summary>
+        <p><b>name</b>: column suffix, the record column is <code>EM01_&lt;name&gt;</code>. 1 to 7 characters, a-z and 0-9.
+        Keep the standard names (<span id="stdNames"></span>): the alarms, the daily report and the OED export look for them.<br>
+        <b>fc</b>: 3 = holding registers, 4 = input registers. <b>addr</b>: 0-based address, <code>0x0018</code> or <code>24</code> (PLC number 40025 with fc 3 = <code>0x0018</code>).<br>
+        <b>type</b>: <code>u16 s16</code> (one register), <code>u32 s32 f32</code> (two registers, high word first), <code>u32sw s32sw f32sw</code> (low word first).<br>
+        <b>scale</b>: raw value x scale = value in V, A, Hz, kW, kvar, kVA, kWh, kvarh (a meter in W needs 0.001).<br>
+        <b>ct</b>: also multiplied by the logger's <code>ct_mult</code> (meters that give secondary values).<br>
+        <b>agg</b>: <code>minmax</code> = mean + <code>_min</code> + <code>_max</code> columns, <code>mean</code>, <code>last</code> for energy counters.</p>
+        <p>How it reaches the logger: the logger asks for a new table every <code>rcfg_check_m</code> minutes (15 by default) or at once with the console command <code>config</code>.
+        It checks the table, writes <code>/config/registers.csv</code> on its SD card (the previous file is kept as <code>registers.bak</code>) and restarts.
+        The columns of that day's records change, so the platform starts a <code>_2</code> day file.</p></details></section>
+    ${sec('Meter link settings')}<section class="card"><div class="fgrid c2">
+        <div class="field"><label for="s_meters">meters (id:Modbus address, comma separated)</label><input type="text" id="s_meters" placeholder="EM01:1"></div>
+        <div class="field"><label for="s_mb_baud">mb_baud</label><select id="s_mb_baud"></select></div>
+        <div class="field"><label for="s_mb_format">mb_format</label><select id="s_mb_format"></select></div>
+        <div class="field"><label for="s_ct_mult">ct_mult (1 unless the meter gives secondary values)</label><input type="text" id="s_ct_mult" placeholder="1"></div></div>
+      <div class="bar"><button class="btn" id="settingsBtn">Send these settings</button><span class="muted small" id="settingsInfo"></span></div><div id="settingsResult"></div></section>
+    ${sec('History')}<section class="card"><div class="tablewrap"><table class="data" id="hist"><thead><tr><th>Version</th><th>Sent (UTC)</th><th>By</th><th>What</th><th>Comment</th><th></th></tr></thead><tbody></tbody></table></div></section></div>`;
+  if (!device) { el('pick').hidden = false; el('pick').textContent = `No logger registered for ${site}.`; return; }
+  const regs = el('regs');
+  regs.addEventListener('input', refreshMarks); regs.addEventListener('change', refreshMarks);
+  regs.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const tr = b.closest('tr');
+    if (b.dataset.act === 'del') tr.remove();
+    if (b.dataset.act === 'up' && tr.previousElementSibling) tr.parentNode.insertBefore(tr, tr.previousElementSibling);
+    refreshMarks(); });
+  el('addRow').onclick = () => setRows([...getRows(), {name: '', fc: '3', addr: '0x0000', type: 'u16', scale: '1', ct: false, agg: 'minmax'}]);
+  el('loadLogger').onclick = () => { if (!RV?.reported?.rows?.length) return msg('result', 'warn', 'The logger has not reported a table yet.');
+    setRows(RV.reported.rows); msg('result', 'good', 'Loaded the table the logger reported.'); };
+  el('loadAsked').onclick = () => { const p = RV?.platform;
+    if (!p || p.builtin || !p.csv) return msg('result', 'warn', 'No table sent yet (or the last one sent was "back to built-in").');
+    setRows(csvToRows(p.csv)); msg('result', 'good', `Loaded version ${p.version}.`); };
+  el('importBtn').onclick = () => el('importFile').click();
+  el('importFile').onchange = async e => { const f = e.target.files[0]; if (!f) return;
+    if (f.size > 65536) return msg('result', 'crit', 'File too large for a register table.');
+    setRows(csvToRows(await f.text())); e.target.value = ''; await regCheck(`Imported ${f.name}.`); };
+  el('exportBtn').onclick = () => { const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([rowsToCsv(getRows())], {type: 'text/csv'})); a.download = `registers-${device}.csv`; a.click(); URL.revokeObjectURL(a.href); };
+  el('textBtn').onclick = () => { const b = el('textBox'); b.hidden = !b.hidden; if (!b.hidden) el('csvText').value = rowsToCsv(getRows()); };
+  el('textApply').onclick = async () => { setRows(csvToRows(el('csvText').value)); await regCheck(); };
+  el('checkBtn').onclick = () => regCheck();
+  el('sendBtn').onclick = async () => {
+    const j = await regCheck();
+    if (!j.ok) return;
+    if (!ask(`Send this table (${j.rows.length} values) to ${device}?` + (j.warnings.length ? `\n\nThere are ${j.warnings.length} warning(s): read them first.` : '') +
+      `\n\nThe logger takes it at its next check (every ${RV?.reported?.settings?.rcfg_check_m || 15} min, or "config" on its console), writes it to its SD card and restarts. Its record columns change from then on.`)) return;
+    const r = await api('POST', `/api/v1/admin/registers/${device}`, {csv: j.csv, comment: el('comment').value});
+    if (!r.ok) return showCheck(r);
+    showCheck(r, `Version ${r.version} saved: waiting for the logger.`);
+    el('comment').value = ''; regLoad(false);
+  };
+  el('builtinBtn').onclick = async () => {
+    if (!ask(`Tell ${device} to delete /config/registers.csv (kept as registers.bak) and use the table built into its firmware?`)) return;
+    const r = await api('POST', `/api/v1/admin/registers/${device}`, {builtin: true, comment: el('comment').value});
+    if (!r.ok) return msg('result', 'crit', r.error || 'failed');
+    msg('result', 'good', `Version ${r.version} saved (built-in table): waiting for the logger.`); regLoad(false);
+  };
+  // An empty first choice: nothing is sent for a field left on it (the logger may not have reported yet).
+  el('s_mb_baud').innerHTML = '<option value="">(unchanged)</option>' + BAUDS.map(b => `<option>${b}</option>`).join('');
+  el('s_mb_format').innerHTML = '<option value="">(unchanged)</option>' + FORMATS.map(b => `<option>${b}</option>`).join('');
+  el('settingsBtn').onclick = async () => {
+    const cur = RV?.reported?.settings || {}, body = {}, changes = [];
+    for (const k of ['meters', 'mb_baud', 'mb_format', 'ct_mult']) { const v = el('s_' + k).value.trim();
+      if (v && v !== String(cur[k] ?? '')) { body[k] = v; changes.push(`${k}: ${cur[k] ?? '?'} -> ${v}`); } }
+    if (!changes.length) return msg('settingsResult', 'warn', 'Nothing changed from what the logger reported.');
+    if (!ask(`Send to ${device}?\n\n${changes.join('\n')}\n\nThe logger applies them at its next check and restarts.`)) return;
+    const r = await api('POST', `/api/v1/admin/meter-settings/${device}`, body);
+    if (!r.ok) return msg('settingsResult', 'crit', (r.errors || [r.error]).join('\n'));
+    msg('settingsResult', 'good', `Settings version ${r.version} saved: waiting for the logger.`); regLoad(false);
+  };
+  el('hist').addEventListener('click', e => { const b = e.target.closest('button[data-h]'); if (!b) return;
+    const h = RV.history[Number(b.dataset.h)];
+    setRows(csvToRows(h.csv || '')); msg('result', 'good', `Loaded version ${h.version} into the editor. "Send to the logger" makes it a new version.`);
+    el('regs').scrollIntoView({behavior: 'smooth', block: 'start'}); });
+  el('reload').onclick = () => regLoad(false);
+  if (el('devsel')) el('devsel').onchange = e => { device = e.target.value; show('register'); };
+  await regLoad(true);
+}
+
+// ------------------------------------------------------------------ firmware update (ADMIN_USERS only)
 const fwState = {};   // device -> last view from the server
 const fwPost = (url, body, json) => fetch(url, {method: 'POST', cache: 'no-store', body,
   headers: {'X-Requested-With': 'arkan', 'Content-Type': json ? 'application/json' : 'application/octet-stream'}});
-
 function fwStatusHtml(v, off) {
   let h = `Running <b>${esc(v.running || 'unknown')}</b>${v.env ? ` (${esc(v.env)} build)` : ''}. `;
   const o = v.offer;
@@ -1120,7 +1485,7 @@ function fwStatusHtml(v, off) {
     const who = `${o.scope === 'default' ? 'to every logger' : 'to this logger'}${o.by ? ' by ' + esc(o.by) : ''}, ${localTime(o.published, off)}`;
     const what = `<b>${esc(o.version)}</b> (${esc(o.source || o.file)}) offered ${who}`;
     h += {installed: `<span class="ok">${what}: installed.</span>`,
-          waiting: `<span class="warn">${what}: waiting for the logger (within a minute if it is online, else at its next check).</span>`,
+          waiting: `<span class="warnc">${what}: waiting for the logger (within a minute if it is online, else at its next check).</span>`,
           rolled_back: `<span class="bad">${what}: the logger kept restarting on it and went back to ${esc(v.running)}. Not offered again.</span>`,
           not_newer: `${what}: not newer than the running version, nothing to do.`}[v.state] || what;
   }
@@ -1133,48 +1498,41 @@ function fwStatusHtml(v, off) {
   }
   return h;
 }
-
 async function fwRefresh(dev, off) {
   const r = await fetch(`/api/v1/admin/fw/${encodeURIComponent(dev)}`, {cache: 'no-store'});
   if (!r.ok) return;
   const v = await r.json();
   fwState[dev] = v;
   el(`fws-${dev}`).innerHTML = fwStatusHtml(v, off);
-  el(`fwsum-${dev}`).textContent = `Firmware update: ${dev} (running ${v.running || 'unknown'}${v.state === 'waiting' ? ', update waiting' : ''})`;
+  el(`fwsum-${dev}`).textContent = `${dev} · running ${v.running || 'unknown'}${v.state === 'waiting' ? ', update waiting' : ''}`;
   const sel = el(`fwfile-${dev}`);
   if (!sel.dataset.done) {
-    sel.innerHTML = v.files.length ? v.files.map(f => `<option value="${esc(f.file)}">${esc(f.file)} (${Math.round(f.size / 1024)} kB)</option>`).join('')
-                                   : '<option value="">none yet</option>';
+    sel.innerHTML = v.files.length ? v.files.map(f => `<option value="${esc(f.file)}">${esc(f.file)} (${Math.round(f.size / 1024)} kB)</option>`).join('') : '<option value="">none yet</option>';
     sel.dataset.done = 1;
   }
 }
-
 async function fwGithub(devs) {
   let rel = [], err = '';
-  try {
-    const r = await fetch('/api/v1/admin/github/releases', {cache: 'no-store'});
-    const j = await r.json();
-    if (r.ok) rel = j.releases; else err = j.error;
-  } catch (e) { err = 'server not reachable'; }
+  try { const r = await fetch('/api/v1/admin/github/releases', {cache: 'no-store'}); const j = await r.json(); if (r.ok) rel = j.releases; else err = j.error; }
+  catch (e) { err = 'server not reachable'; }
   for (const dev of devs) {
     const sel = el(`fwgh-${dev}`), env = fwState[dev]?.env || 'usb';
     if (err || !rel.length) { sel.innerHTML = `<option value="">${esc(err || 'no release with a logger-*.bin file')}</option>`; continue; }
-    let opts = '', picked = false;
+    let o = '', picked = false;
     for (const x of rel) for (const a of x.assets) {
       const aEnv = (a.name.match(/^logger-([a-z0-9]+)-\d/) || [, 'usb'])[1];
       const pick = !picked && aEnv === env;
       picked = picked || pick;
-      opts += `<option value="${a.id}"${pick ? ' selected' : ''}>${esc(x.tag)}: ${esc(a.name)}${x.prerelease ? ' (pre-release)' : ''}</option>`;
+      o += `<option value="${a.id}"${pick ? ' selected' : ''}>${esc(x.tag)}: ${esc(a.name)}${x.prerelease ? ' (pre-release)' : ''}</option>`;
     }
-    sel.innerHTML = opts;
+    sel.innerHTML = o;
   }
 }
-
 async function fwAction(dev, kind, off) {
-  const msg = el(`fwmsg-${dev}`), force = el(`fwforce-${dev}`).checked;
+  const m = el(`fwmsg-${dev}`), force = el(`fwforce-${dev}`).checked;
   let label, call;
   if (kind === 'cancel') {
-    if (!confirm(`Withdraw the firmware offered to ${dev}?`)) return;
+    if (!ask(`Withdraw the firmware offered to ${dev}?`)) return;
     call = () => fwPost(`/api/v1/admin/fw/${dev}/cancel`, '{}', true);
   } else {
     if (kind === 'github') {
@@ -1184,7 +1542,7 @@ async function fwAction(dev, kind, off) {
       call = () => fwPost(`/api/v1/admin/fw/${dev}/github`, JSON.stringify({asset_id: +id, force}), true);
     } else if (kind === 'upload') {
       const f = el(`fwup-${dev}`).files[0];
-      if (!f) { msg.innerHTML = '<span class="bad">Choose a .bin file first.</span>'; return; }
+      if (!f) { m.innerHTML = '<div class="banner crit" style="margin:8px 0 0">Choose a .bin file first.</div>'; return; }
       label = f.name;
       call = () => fwPost(`/api/v1/admin/fw/${dev}/upload?force=${force ? 1 : 0}&name=${encodeURIComponent(f.name)}`, f, false);
     } else {
@@ -1193,68 +1551,105 @@ async function fwAction(dev, kind, off) {
       label = file;
       call = () => fwPost(`/api/v1/admin/fw/${dev}/offer`, JSON.stringify({file, force}), true);
     }
-    if (!confirm(`Send ${label} to ${dev}?\n\nThe logger installs it and restarts (about 30 s without readings, nothing is lost: the SD card keeps recording). If the new firmware keeps restarting, it goes back to the current one by itself.`)) return;
+    if (!ask(`Send ${label} to ${dev}?\n\nThe logger installs it and restarts (about 30 s without readings, nothing is lost: the SD card keeps recording). If the new firmware keeps restarting, it goes back to the current one by itself.`)) return;
   }
-  msg.textContent = 'Working...';
+  m.textContent = 'Working...';
   try {
     const r = await call();
     const j = await r.json();
-    msg.innerHTML = r.ok ? `<span class="ok">${kind === 'cancel' ? (j.cancelled ? 'Offer withdrawn.' : 'Nothing was offered to this logger.') : `Firmware ${esc(j.offer.version)} offered to ${esc(dev)}.`}</span>`
-                         : `<span class="bad">${esc(j.error || 'HTTP ' + r.status)}</span>`;
+    m.innerHTML = r.ok ? `<div class="banner good" style="margin:8px 0 0">${kind === 'cancel' ? (j.cancelled ? 'Offer withdrawn.' : 'Nothing was offered to this logger.') : `Firmware ${esc(j.offer.version)} offered to ${esc(dev)}.`}</div>`
+                       : `<div class="banner crit" style="margin:8px 0 0">${esc(j.error || 'HTTP ' + r.status)}</div>`;
     if (r.ok) el(`fwfile-${dev}`).dataset.done = '';
-  } catch (e) { msg.innerHTML = '<span class="bad">Server not reachable.</span>'; }
+  } catch (e) { m.innerHTML = '<div class="banner crit" style="margin:8px 0 0">Server not reachable.</div>'; }
   fwRefresh(dev, off);
 }
-
 async function fwInit() {
-  let me;
-  try { me = await (await fetch('/api/v1/admin/me', {cache: 'no-store'})).json(); } catch (e) { return; }
-  if (!me.admin) return;
-  const st = await (await fetch('/api/v1/status', {cache: 'no-store'})).json();
+  try { ME = await getJ('/api/v1/admin/me'); } catch (e) { return; }
+  renderChrome();
+  if (!ME.admin || !site) return;
+  const st = await getJ('/api/v1/status');
   const devs = Object.keys((st.sites || {})[site] || {});
   if (!devs.length) return;
-  isAdmin = true;
-  sideMenu();
-  const off = (await (await fetch(`/api/v1/live/${site}`, {cache: 'no-store'})).json()).profile?.utc_offset_h ?? 8;
-  let h = `${frame('Firmware update', 'Send a firmware to one logger: from a GitHub release, a .bin file, or a file already on the server. '
-    + 'The logger restarts once; a firmware that keeps restarting goes back to the previous one by itself. See docs/OTA.md.')}`;
+  const off = (await getJ(`/api/v1/live/${site}`)).profile?.utc_offset_h ?? 8;
+  let h = head('Firmware update', 'Send a firmware to one logger: from a GitHub release, a .bin file, or a file already on the server. '
+    + 'The logger restarts once; a firmware that keeps restarting goes back to the previous one by itself. See docs/OTA.md.', '<span class="pill info">Admin only</span>');
   for (const dev of devs) {
     const d = esc(dev);
-    h += `<details class="fw"${devs.length === 1 ? ' open' : ''}><summary id="fwsum-${d}">Firmware update: ${d}</summary>
-      <div id="fws-${d}">Loading...</div>
-      <div class="row"><b>From a GitHub release</b><select id="fwgh-${d}"><option value="">${me.github ? 'loading...' : 'FW_GITHUB_REPO not set on the server'}</option></select>
-        <button data-dev="${d}" data-act="github">Send to ${d}</button></div>
-      <div class="row"><b>From a file on this computer</b><input type="file" id="fwup-${d}" accept=".bin">
-        <button data-dev="${d}" data-act="upload">Upload and send to ${d}</button></div>
-      <div class="row"><b>Already on the server</b><select id="fwfile-${d}"></select>
-        <button data-dev="${d}" data-act="offer">Send to ${d}</button></div>
-      <div class="row"><label><input type="checkbox" id="fwforce-${d}"> force: allow an older version or the other build variant</label>
-        <button data-dev="${d}" data-act="cancel">Withdraw the offer</button></div>
-      <div class="msg" id="fwmsg-${d}"></div></details>`;
+    h += `<section class="card mb-16"><div class="card-head"><h2 id="fwsum-${d}">${d}</h2></div>
+      <div class="fwstat" id="fws-${d}">Loading...</div>
+      <div class="fwrow"><b>From a GitHub release</b><select id="fwgh-${d}" aria-label="GitHub release"><option value="">${ME.github ? 'loading...' : 'FW_GITHUB_REPO not set on the server'}</option></select>
+        <button class="btn primary" data-dev="${d}" data-act="github">Send to ${d}</button></div>
+      <div class="fwrow"><b>From a file on this computer</b><input type="file" id="fwup-${d}" accept=".bin" aria-label="Firmware file">
+        <button class="btn" data-dev="${d}" data-act="upload">Upload and send to ${d}</button></div>
+      <div class="fwrow"><b>Already on the server</b><select id="fwfile-${d}" aria-label="File on the server"></select>
+        <button class="btn" data-dev="${d}" data-act="offer">Send to ${d}</button></div>
+      <div class="fwrow"><b>Options</b><label class="check" style="padding:0"><input type="checkbox" id="fwforce-${d}"> force: allow an older version or the other build variant</label>
+        <button class="btn danger" data-dev="${d}" data-act="cancel">Withdraw the offer</button></div>
+      <div id="fwmsg-${d}"></div></section>`;
   }
   el('fw').innerHTML = h;
-  el('fw').addEventListener('click', ev => {
-    const b = ev.target.closest('button[data-act]');
-    if (b) fwAction(b.dataset.dev, b.dataset.act, off);
-  });
+  el('fw').addEventListener('click', ev => { const b = ev.target.closest('button[data-act]'); if (b) fwAction(b.dataset.dev, b.dataset.act, off); });
   await Promise.all(devs.map(dev => fwRefresh(dev, off)));
-  if (me.github) fwGithub(devs);
+  if (ME.github) fwGithub(devs);
   setInterval(() => devs.forEach(dev => fwRefresh(dev, off)), 30000);
 }
 
+// ------------------------------------------------------------------ page
+let shown = 0;   // the latest show(): an older one still loading never writes its error over it
+const LABEL = {quality: 'power quality', voltage: 'power quality', pf: 'power quality', versions: 'firmware versions', register: 'register table', sites: 'list of sites'};
+async function show(id) {
+  view = known(id) ? id : site ? 'now' : 'sites';
+  renderChrome();
+  el('fw').hidden = true;
+  scrollTo(0, 0);
+  if (view === 'firmware') {   // the panel lives in #fw, out of reach of the 15 s refresh of #content
+    el('content').innerHTML = '';
+    await fwReady;
+    if (view !== 'firmware') return;
+    if (isAdmin()) el('fw').hidden = false;
+    else el('content').innerHTML = head('Firmware update', '') + '<section class="card"><div class="empty">Firmware update is only for the logins listed in ADMIN_USERS on the server (docs/OTA.md).</div></section>';
+    return;
+  }
+  if (view === 'now') { el('content').innerHTML = ''; return tick(); }
+  el('content').innerHTML = '<section class="card"><div class="empty">Loading…</div></section>';
+  const n = ++shown;
+  try { await renderHistory(); }
+  catch (e) { console.error(e); if (n === shown) el('content').innerHTML = `<section class="card"><div class="empty">Could not read the ${WXVIEWS[view] ? 'weather' : LABEL[view] || 'history'} from the server.</div></section>`; }
+}
+document.addEventListener('click', ev => {
+  const r = ev.target.closest('button[data-role]');
+  if (r) return setRole(r.dataset.role);
+  const b = ev.target.closest('button[data-span],button[data-day],button[data-vf],[data-qday]');
+  if (!b || b.disabled) return;
+  if (b.dataset.qday) {   // a day of the power quality pages: a link opens #voltage on it, a button redraws the day only
+    qDay = b.dataset.qday;
+    if (b.tagName === 'A' || !el('qday')) return;
+    return qDaySection().catch(() => { el('qday').innerHTML = '<section class="card"><div class="empty">Could not read that day from the server.</div></section>'; });
+  }
+  if (b.dataset.vf) vfAll = b.dataset.vf === 'all';
+  if (b.dataset.span) span = +b.dataset.span;
+  if (b.dataset.day) dayShown = b.dataset.day;
+  show(view);
+});
+addEventListener('hashchange', () => show(location.hash.slice(1)));
+const STATIC = ['now', 'firmware', 'prefs', 'register'];   // not redrawn by a resize or the 5-minute refresh
+let resizeT; addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!STATIC.includes(view)) renderHistory().catch(() => {}); }, 300); });
+
 async function tick() {
-  try { await (site ? loadSite() : loadAll()); }
-  catch (e) { el('status').innerHTML = '<span class="pill bad"><i></i>Server not reachable</span>'; }
+  try { await loadSite(); }
+  catch (e) { console.error(e); STATUS = '<span class="live-pill off"><i></i>Server not reachable</span>'; renderChrome(); }
 }
-if (site) {   // the live call also brings the site profile (names, sensors, contract) the history pages use
-  fwReady = fwInit().catch(() => {});
-  view = VIEWS.some(v => v.id === location.hash.slice(1)) ? location.hash.slice(1) : 'now';
-  sideMenu();
-  if (view === 'now') tick(); else tick().finally(() => show(view));
+if (MOCK) el('mocknote').hidden = false;
+fwReady = fwInit().catch(() => {});
+view = known(location.hash.slice(1)) ? location.hash.slice(1) : site ? 'now' : 'sites';
+renderChrome();
+const redraw = () => renderHistory().catch(() => {});   // in place: no "Loading" and no jump to the top
+if (!site) { show(view); setInterval(() => { if (view === 'sites' && !document.hidden) redraw(); }, 15000); }
+else {   // the live call also brings the site profile (names, sensors, contract) the other pages use
+  if (view === 'now') tick(); else tick().finally(() => fwReady).finally(() => show(view));
+  setInterval(tick, 15000);
+  setInterval(() => { if (!STATIC.includes(view) && !document.hidden) { delete HCACHE[span]; delete QCACHE[span]; WXC = null; WXL = {}; redraw(); } }, 300e3);
 }
-else { el('wrap').classList.add('solo'); tick(); }
-setInterval(tick, 15000);
-setInterval(() => { if (site && view !== 'now' && view !== 'firmware' && !document.hidden) { delete HCACHE[span]; delete QCACHE[span]; WXC = null; WXL = {}; show(view); } }, 300e3);
 </script>
 </body>
 </html>

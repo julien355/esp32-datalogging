@@ -298,6 +298,13 @@ class ToolsAndHttpTest(unittest.TestCase):
         code, body = self.req("GET", "/live/adab/")
         self.assertEqual(code, 200)
         self.assertIn("<title>Live</title>", body)
+        self.assertIn('href="/live/_ui/arkan-ui.css"', body)                # the Arkan UI kit, served beside the page
+        for name, mark in (("arkan-ui.css", "--brand"), ("arkan-ui.js", "ArkanUI")):
+            code, body = self.req("GET", f"/live/_ui/{name}")
+            self.assertEqual(code, 200)
+            self.assertIn(mark, body)
+        self.assertEqual(self.req("GET", "/live/_ui/server.py")[0], 404)
+        self.assertEqual(self.req("GET", "/live/")[0], 200)
 
     def test_live_saved_and_restored(self):
         # every snapshot is saved in the data folder: another dashboard reads the same data, a restart keeps it
@@ -591,9 +598,9 @@ class ToolsAndHttpTest(unittest.TestCase):
         good = "name,fc,addr,type,scale,ct,agg\nv1,3,0x0000,u16,0.1,0,minmax\ne,3,24,U32,0.01,0,last\n"
         code, _ = self.req("GET", "/api/v1/registers", token=self.token)
         self.assertEqual(code, 204)                                         # nothing sent yet
-        code, body = self.req("GET", "/live/adab/register")
+        code, body = self.req("GET", "/live/adab/register")                 # now a page of the site: /live/adab/#register
         self.assertEqual(code, 200)
-        self.assertIn("<title>Meter registers</title>", body)
+        self.assertIn("function registerView", body)
         self.assertEqual(self.req("GET", "/live/adab/register/")[0], 200)
         self.assertEqual(self.req("GET", "/registers/LOG-0001/")[0], 404)
         code, body = self.req("GET", "/api/v1/admin/registers/LOG-0001")

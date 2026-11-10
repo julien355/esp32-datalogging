@@ -48,8 +48,9 @@ Default for Adab:
 - After a restart or an update the 60 minutes are read back from the saved snapshots: the page is full at once.
 - The live alarms (A04 phase lost, A07 frequency) are checked on the snapshots, so they react within 15 to 30 s.
 
-**Live page `/live/<site>/`** (layout of the dashboard mockup, `docs/mockup/`, approved 8 November 2026):
-- A navy header: site name, a status pill ("Live · updated 4 s ago", or "No data for 2 min" in red), the hotel time, and links to **All sites** and **Open Energy Dashboard**.
+**Live page `/live/<site>/`** (content of the dashboard mockup approved 8 November 2026; since service 0.7.0 in the Arkan design of the CMMS, `docs/mockup/arkan/`):
+- A side bar: the Arkan logo, the site (a link to **All sites**), **View as** (who is logged in: `Admin · <login>` for a login in `ADMIN_USERS`, `Viewer · <login>` otherwise; an admin can look at the pages as a viewer), the menu, and at the bottom **Settings** (`#prefs`: light, dark or high contrast, density, text size, motion, saved in the browser; who is logged in; the site details) with the status pill ("Live · updated 4 s ago", or "No data for 2 min" in red). An icon rail on a tablet, bottom tabs and a **More** list on a phone.
+- Every chart shows both axes with their scales; the small charts of the cards cover the last 60 minutes.
 - The open alarms first (severity icon, label and colour), or "No open alarm".
 - **Power:** total kW, kVA with a bar against the PLN contract (`contracted_kva`), power factor, frequency.
 - **Per phase:** one card for the three voltages and one for the three currents, each with a 3-line sparkline (L1 blue, L2 orange, L3 green); the current card has a bar against the PLN per-phase limit (`contracted_kva` / 3 / `contract_v_ln`, 125 A at Adab).
@@ -99,7 +100,7 @@ Default for Adab:
 
 | Menu | Address | What it is | Who |
 |---|---|---|---|
-| Meter registers | `/live/<site>/register` (`?device=LOG-0002` if the site has several loggers) | the meter register table the logger reads: see, edit, import, check and send it, history of versions, and the meter link settings (`meters`, `mb_baud`, `mb_format`, `ct_mult`). Firmware 0.4.0 or later. Steps: [`meter/README.md`](meter/README.md#changing-the-register-table) | everyone with the Arkan login |
+| Meter registers | `#register` (a list of the loggers at the top right if the site has several; the old address `/live/<site>/register` leads here) | the meter register table the logger reads: see, edit, import, check and send it, history of versions, and the meter link settings (`meters`, `mb_baud`, `mb_format`, `ct_mult`). Firmware 0.4.0 or later. Steps: [`meter/README.md`](meter/README.md#changing-the-register-table) | everyone with the Arkan login |
 | Firmware versions | `#versions` | each logger's running firmware and build, since when, last restart and why, what is offered and its state, versions refused; the history of every firmware change, offer and (optional) restart; the GitHub releases and which logger runs each; the firmware files on the server. Read only. Data: `GET /api/v1/versions/<site>` | everyone with the Arkan login |
 | Firmware update | `#firmware` | one panel per logger: send a GitHub release, a `.bin` file or a stored file to that logger, status and recent events. [`OTA.md`](OTA.md) | only the logins in `ADMIN_USERS` (`server/.env`); the menu entry is hidden for the others |
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds docs/mockup/arkan/index.html: page.html with the Arkan UI kit, the logo and fixtures.json put inside.
+"""Builds docs/mockup/arkan/index.html: the real page (server/app/live.html) with the Arkan UI kit and fixtures.json put inside.
 
     python3 docs/mockup/arkan/build.py
 
@@ -18,21 +18,16 @@ def read(name):
 
 
 def main():
-    page = read("page.html")
+    app = os.path.join(HERE, "..", "..", "..", "server", "app")
+    page = read(os.path.join(app, "live.html"))
     fx = json.dumps(json.loads(read("fixtures.json")), separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
-    brand = read("brand-text.html").strip().replace("O&amp;M · CMMS", "Monitoring")
-    if "Monitoring" not in brand:
-        sys.exit("brand-text.html: the product label was not found")
-    parts = {"/*__KIT_CSS__*/": (read("arkan-ui.css"), 1), "/*__KIT_JS__*/": (read("arkan-ui.js"), 1),
-             "<!--__MARK__-->": (read("brand-mark.html").strip(), 2), "<!--__BRANDTXT__-->": (brand, 1),
-             "/*__FIXTURES__*/null": (fx, 1)}
-    for key, (text, n) in parts.items():
-        if page.count(key) != n:
-            sys.exit(f"page.html: expected {n} x {key}, found {page.count(key)}")
-        if key == "<!--__MARK__-->":   # drawn twice (side bar, top bar): the gradient ids of the second copy get their own names
-            if "m1-" not in text:
-                sys.exit("brand-mark.html: gradient ids m1-* not found")
-            page = page.replace(key, text, 1).replace(key, text.replace("m1-", "m2-"), 1)
+    parts = {'<link rel="stylesheet" href="/live/_ui/arkan-ui.css">': "<style>" + read(os.path.join(app, "arkan-ui", "arkan-ui.css")) + "</style>",
+             '<script src="/live/_ui/arkan-ui.js"></script>': "<script>" + read(os.path.join(app, "arkan-ui", "arkan-ui.js")) + "</script>",
+             "<title>Live</title>": "<title>Arkan Monitoring: design mockup</title>",
+             "/*__FIXTURES__*/null": fx}
+    for key, text in parts.items():
+        if page.count(key) != 1:
+            sys.exit(f"live.html: expected 1 x {key}, found {page.count(key)}")
         page = page.replace(key, text)
     out = os.path.join(HERE, "index.html")
     with open(out, "w", encoding="utf-8") as f:
