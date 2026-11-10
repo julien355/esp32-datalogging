@@ -2,7 +2,7 @@
 
 How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: firmware `0.5.1`** (section W, below, the loggers only): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0` and firmware `0.5.0`** (section M): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
-**Status, 10 November 2026:** `v0.7.1` is to install (section L), then `v0.8.0` and firmware `0.5.0` (section M), then firmware `0.5.1` (section W; it contains 0.5.0, see W2). `v0.7.0` was tagged but not installed: going from `v0.6.0` straight to `v0.7.1` is fine, then do the N4 browser checks too. Before them: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
+**Status, 10 November 2026:** sections L and M are merged into the default branch (pull request #9, merge commit `bc2bb84`), not yet tagged or installed. The general update, from `v0.6.0` straight to `v0.8.0` and firmware `0.5.0`, step by step: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md#7-general-update-to-do-now-in-order-10-november-2026) section 7. After it: firmware `0.5.1` (section W, pull request #13; it contains 0.5.0, see W2). `v0.7.0` was tagged but not installed: going from `v0.6.0` straight to `v0.7.1` or `v0.8.0` is fine, then do the N4 browser checks too. Before them: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
 
@@ -156,7 +156,7 @@ CI makes the release **Logger firmware 0.5.1** with its four files. It stops if 
 
 ### W4. The loggers
 
-- **`LOG-0001`**, the bench logger flashed in W2, already runs 0.5.1. A logger ignores an offer of the version it runs, so there is nothing to send to it. **Firmware versions** (<https://arkan-monitoring.duckdns.org/live/adab/#versions>) shows `0.5.1`, and the alarm log has **A35**, marked as flashed by hand.
+- **`LOG-0001`**, the bench logger flashed in W2, already runs 0.5.1 from the cable: the panel refuses it (`LOG-0001 runs 0.5.1: 0.5.1 is not newer`), and the logger would ignore it anyway. Nothing to send. **Firmware versions** (<https://arkan-monitoring.duckdns.org/live/adab/#versions>) shows `0.5.1`, and the alarm log has **A35**, marked as flashed by hand.
 - **Any other logger:** from **Firmware update** on the site page ([`OTA.md`](OTA.md)), **From a GitHub release**, `logger-0.5.1.bin`, **Send to ...**. Within a minute the logger restarts once; **A35** in the alarm log after 10 minutes; **Firmware versions** shows `0.5.1`. Then set its second network by hand if it moves between two sites.
 
 ---
@@ -181,7 +181,7 @@ CI makes the release **Logger firmware 0.5.1** with its four files. It stops if 
 ### M1. On GitHub: merge, then tag
 
 1. Merge the pull request into the default branch once CI is green (jobs `firmware`, `server`, `tools`). It brings `v0.7.1` (section L), the history pages (#8) and this release together: tag `v0.7.1` first (L1), then `v0.8.0`.
-2. On the PC, as in N1: `git checkout ccr-a52c0421-oygp4n`, `git pull`, `git log -1 --oneline` (the merge commit), then `git tag v0.8.0` and `git push origin v0.8.0`.
+2. On the PC, as in N1: `git checkout ccr-a52c0421-oygp4n`, `git pull`, then `git log -1 --oneline bc2bb84` (the merge commit of #9), `git tag v0.8.0 bc2bb84` and `git push origin v0.8.0`. Name the commit: documentation commits came after the merge, so `git tag v0.8.0` alone would tag the wrong one ([`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md) section 7, step 1).
 3. **Not yet** the `fw-v0.5.0` tag: it comes after the bench test (M5).
 
 ### M2 to M4. The VPS
@@ -236,7 +236,7 @@ pio device monitor -p COM4 -b 115200 -f esp32_exception_decoder -f time -f log2f
 
 2. **Watch 10 minutes.** Expected: `firmware 0.5.0` at the boot, then no restart. `status` shows the line `Meter EM01 (id 1): ...`: with a meter (or `tools/modbus_sim/`) on the RS485 port, `answering since ...`; with nothing on the port, `NO ANSWER for n reads, since ...: timeout: ...`. On the site page the line `Meter EM01 · Modbus ...` follows within 15 s, without `from the live values`. Disconnect the meter (or stop the simulator): the line goes red within 15 s; reconnect: green again.
 3. **Only then:** tag `fw-v0.5.0` on the commit of `v0.8.0`: `git tag fw-v0.5.0 v0.8.0`, check `git log -1 --oneline fw-v0.5.0` shows the merge commit, then `git push origin fw-v0.5.0`. CI makes the release **Logger firmware 0.5.0** (it stops if the tag and `FW_VERSION` differ).
-4. **Send it to `LOG-0001`** from **Firmware update** on the site page ([`OTA.md`](OTA.md)): **From a GitHub release**, `logger-0.5.0.bin`, **Send to LOG-0001**. Within a minute the logger restarts once; **A35** in the alarm log after 10 minutes; **Firmware versions** shows `0.5.0`.
+4. **Send it to the other loggers** from **Firmware update** on the site page ([`OTA.md`](OTA.md)): **From a GitHub release**, `logger-0.5.0.bin`, then **Send to** in that logger's panel. Within a minute the logger restarts once; **A35** in the alarm log after 10 minutes; **Firmware versions** shows `0.5.0`. `LOG-0001` is the bench logger of step 1: it already runs 0.5.0 from the cable, and the panel refuses it (`LOG-0001 runs 0.5.0: 0.5.0 is not newer`). Today it is the only logger, so there is nothing to send.
 
 ---
 
@@ -607,7 +607,7 @@ Nothing in this release.
 
 ### A1. On GitHub: merge, then tag
 
-The pull request "Release v0.6.0" was merged into the default branch once CI was green (jobs `firmware`, `server`, `tools`): merge commit `309d57a`. Tagged `v0.6.0` on 10 November, pushed from the PC ([`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md) section 7, step 1). Its `/health` answers `"version": "0.6.0"`. No `fw-v` tag comes with it (firmware: A0).
+The pull request "Release v0.6.0" was merged into the default branch once CI was green (jobs `firmware`, `server`, `tools`): merge commit `309d57a`. Tagged `v0.6.0` on 10 November, pushed from the PC ([`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md) section 8, step 1). Its `/health` answers `"version": "0.6.0"`. No `fw-v` tag comes with it (firmware: A0).
 
 ### A2. Before: where you start from
 
