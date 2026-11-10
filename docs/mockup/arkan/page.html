@@ -148,6 +148,8 @@ const QUIET = 'var(--s4)';
 const num = x => { const v = parseFloat(x); return isFinite(v) ? v : null; };
 const nowMs = () => MOCK ? Date.parse(FX.time) : Date.now();
 const toast = msg => window.ArkanUI && ArkanUI.toast(msg);
+// The mockup may run in a frame where confirm() is refused: there it goes ahead (nothing is sent anyway).
+const ask = text => MOCK ? true : confirm(text);
 
 const IC = {
  gauge:'<path d="M12 14.5 16 10"/><path d="M4 18a9 9 0 1 1 16 0z"/>',
@@ -253,7 +255,7 @@ const VIEWS = [
   {id: 'versions', name: 'Firmware versions', short: 'Versions', ic: 'chip', note: 'running, history'},
   {id: 'firmware', name: 'Firmware update', short: 'Update', ic: 'upload', note: 'remote, admins only', admin: true},
   {id: 'sites', name: 'All sites', short: 'Sites', ic: 'home', grp: 'Platform', note: 'every site and logger', global: true},
-  {id: 'settings', name: 'Settings', ic: 'sliders', note: 'display, view as', global: true, foot: true},
+  {id: 'prefs', name: 'Settings', ic: 'sliders', note: 'display, view as', global: true, foot: true},
 ];
 let ME = {user: '', admin: false, github: false};   // from /api/v1/admin/me: the Caddy login and whether it is in ADMIN_USERS
 let viewAs = 'admin';
@@ -615,7 +617,7 @@ async function renderHistory() {
   if (WXVIEWS[view]) return WXVIEWS[view](box);
   if (view === 'versions') return versionsView(box);
   if (view === 'sites') return sitesView(box);
-  if (view === 'settings') return settingsView(box);
+  if (view === 'prefs') return settingsView(box);
   if (view === 'register') return registerView(box);
   if (view === 'power') {
     const j = await hourly(span);
@@ -1138,7 +1140,7 @@ async function registerView(box) {
   el('sendBtn').onclick = async () => {
     const j = await regCheck();
     if (!j.ok) return;
-    if (!confirm(`Send this table (${j.rows.length} values) to ${device}?` + (j.warnings.length ? `\n\nThere are ${j.warnings.length} warning(s): read them first.` : '') +
+    if (!ask(`Send this table (${j.rows.length} values) to ${device}?` + (j.warnings.length ? `\n\nThere are ${j.warnings.length} warning(s): read them first.` : '') +
       `\n\nThe logger takes it at its next check (every ${RV?.reported?.settings?.rcfg_check_m || 15} min, or "config" on its console), writes it to its SD card and restarts. Its record columns change from then on.`)) return;
     const r = await api('POST', `/api/v1/admin/registers/${device}`, {csv: j.csv, comment: el('comment').value});
     if (!r.ok) return showCheck(r);
@@ -1146,7 +1148,7 @@ async function registerView(box) {
     el('comment').value = ''; regLoad(false);
   };
   el('builtinBtn').onclick = async () => {
-    if (!confirm(`Tell ${device} to delete /config/registers.csv (kept as registers.bak) and use the table built into its firmware?`)) return;
+    if (!ask(`Tell ${device} to delete /config/registers.csv (kept as registers.bak) and use the table built into its firmware?`)) return;
     const r = await api('POST', `/api/v1/admin/registers/${device}`, {builtin: true, comment: el('comment').value});
     if (!r.ok) return msg('result', 'crit', r.error || 'failed');
     msg('result', 'good', `Version ${r.version} saved (built-in table): waiting for the logger.`); regLoad(false);
@@ -1159,7 +1161,7 @@ async function registerView(box) {
     for (const k of ['meters', 'mb_baud', 'mb_format', 'ct_mult']) { const v = el('s_' + k).value.trim();
       if (v && v !== String(cur[k] ?? '')) { body[k] = v; changes.push(`${k}: ${cur[k] ?? '?'} -> ${v}`); } }
     if (!changes.length) return msg('settingsResult', 'warn', 'Nothing changed from what the logger reported.');
-    if (!confirm(`Send to ${device}?\n\n${changes.join('\n')}\n\nThe logger applies them at its next check and restarts.`)) return;
+    if (!ask(`Send to ${device}?\n\n${changes.join('\n')}\n\nThe logger applies them at its next check and restarts.`)) return;
     const r = await api('POST', `/api/v1/admin/meter-settings/${device}`, body);
     if (!r.ok) return msg('settingsResult', 'crit', (r.errors || [r.error]).join('\n'));
     msg('settingsResult', 'good', `Settings version ${r.version} saved: waiting for the logger.`); regLoad(false);
@@ -1232,7 +1234,7 @@ async function fwAction(dev, kind, off) {
   const m = el(`fwmsg-${dev}`), force = el(`fwforce-${dev}`).checked;
   let label, call;
   if (kind === 'cancel') {
-    if (!confirm(`Withdraw the firmware offered to ${dev}?`)) return;
+    if (!ask(`Withdraw the firmware offered to ${dev}?`)) return;
     call = () => fwPost(`/api/v1/admin/fw/${dev}/cancel`, '{}', true);
   } else {
     if (kind === 'github') {
@@ -1251,7 +1253,7 @@ async function fwAction(dev, kind, off) {
       label = file;
       call = () => fwPost(`/api/v1/admin/fw/${dev}/offer`, JSON.stringify({file, force}), true);
     }
-    if (!confirm(`Send ${label} to ${dev}?\n\nThe logger installs it and restarts (about 30 s without readings, nothing is lost: the SD card keeps recording). If the new firmware keeps restarting, it goes back to the current one by itself.`)) return;
+    if (!ask(`Send ${label} to ${dev}?\n\nThe logger installs it and restarts (about 30 s without readings, nothing is lost: the SD card keeps recording). If the new firmware keeps restarting, it goes back to the current one by itself.`)) return;
   }
   m.textContent = 'Working...';
   try {
@@ -1325,7 +1327,7 @@ document.addEventListener('click', ev => {
   show(view);
 });
 addEventListener('hashchange', () => show(location.hash.slice(1)));
-const STATIC = ['now', 'firmware', 'settings', 'register'];   // not redrawn by a resize or the 5-minute refresh
+const STATIC = ['now', 'firmware', 'prefs', 'register'];   // not redrawn by a resize or the 5-minute refresh
 let resizeT; addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!STATIC.includes(view)) renderHistory().catch(() => {}); }, 300); });
 
 async function tick() {
