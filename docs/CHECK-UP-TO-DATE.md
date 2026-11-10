@@ -13,13 +13,13 @@ And before pushing a tag, check which commit it points to: `git log -1 --oneline
 | **VPS** | `hermes-vps`, folder `/opt/arkan-monitoring` (a git clone, at a tag). Data: `/srv/arkan-monitoring/data` | The newest `v…` tag |
 | **Logger** | `LOG-0001`, site `adab` | The newest `fw-v…` release that is not marked pre-release |
 
-**Latest, 10 November 2026:** code `v0.8.0` and firmware `0.5.0` (the Modbus link of each meter, the history pages with two dates and a CSV: [`UPDATING.md`](UPDATING.md) section M), after `v0.7.1` (logins for this platform only, a login limited to one site; it includes `v0.7.0`, the site page in the Arkan design: section L). All of it is merged into the default branch: pull request #9, merge commit `bc2bb84` (it closed #8, #10 and #11 as merged). **Not yet done:** the tags `v0.7.1` (on `ce96ffb`) and `v0.8.0` (on `bc2bb84`), the VPS update, the bench test and the tag `fw-v0.5.0`: the general update, [section 7](#7-general-update-to-do-now-in-order-10-november-2026). Before it: the VPS runs `v0.6.0` (commit `309d57a`); `LOG-0001` runs firmware `0.4.1` (release `fw-v0.4.1`, same commit); `0.4.0` is marked withdrawn (pre-release), never send it.
+**Latest, 10 November 2026:** code `v0.8.0` (the Modbus link of each meter, the history pages with two dates and a CSV: [`UPDATING.md`](UPDATING.md) section M), after `v0.7.1` (logins for this platform only, a login limited to one site; it includes `v0.7.0`, the site page in the Arkan design: section L). Firmware `0.5.1` (two WiFi networks of equal rank: section W), which includes `0.5.0` (the Modbus link: section M). All of it is merged into the default branch: pull request #9, merge commit `bc2bb84` (it closed #8, #10 and #11 as merged), then #13, merge commit `a4b6812`. **Not yet done:** the tags `v0.7.1` (on `ce96ffb`) and `v0.8.0` (on `bc2bb84`), the VPS update, the bench test and the tag `fw-v0.5.1` (on `a4b6812`). `fw-v0.5.0` is skipped: 0.5.1 contains it. All of that is the general update, [section 7](#7-general-update-to-do-now-in-order-10-november-2026). Before it: the VPS runs `v0.6.0` (commit `309d57a`); `LOG-0001` runs firmware `0.4.1` (release `fw-v0.4.1`, same commit); `0.4.0` is marked withdrawn (pre-release), never send it.
 
 ## 2. GitHub (browser, 1 minute)
 
 1. <https://github.com/julien355/esp32-datalogging/tags>: the newest `v…` tag is what the VPS must run; the newest `fw-v…` is the logger firmware. Tags named `archive/…` are old branches kept for reference (section 6).
 2. <https://github.com/julien355/esp32-datalogging/actions>: the newest run on `ccr-a52c0421-oygp4n` is green.
-3. <https://github.com/julien355/esp32-datalogging/branches>: only the default branch, plus branches of work in progress (today `claude/great-bell-00lrct`, the firmware with two WiFi networks, which comes as `0.5.1` in pull request #13, and the branch of #13, `claude/fervent-heisenberg-3gi5iq`, until it is merged).
+3. <https://github.com/julien355/esp32-datalogging/branches>: only the default branch, plus branches of work in progress (none after section 7, step 2).
 
 ## 3. Our computer (PowerShell)
 
@@ -82,7 +82,7 @@ Older? Update with [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 2, and the releas
 
 In the browser (Arkan login): <https://arkan-monitoring.duckdns.org/live/adab/#versions>
 
-**Expected:** `LOG-0001` runs the newest `fw-v…` release (today `0.4.1`; `0.5.0` once released after its bench test, [`UPDATING.md`](UPDATING.md) M5), and its last record is a few minutes old.
+**Expected:** `LOG-0001` runs the newest `fw-v…` release (today `0.4.1`; `0.5.1` once released after its bench test, [section 7](#7-general-update-to-do-now-in-order-10-november-2026) steps 5 and 6), and its last record is a few minutes old.
 
 Or on the VPS:
 
@@ -121,9 +121,11 @@ ls -d /opt/arkan-monitoring*
 
 ## 7. General update: to do now, in order (10 November 2026)
 
-**What it brings.** The VPS goes from `v0.6.0` to `v0.8.0` in one update. That includes `v0.7.0` (the site page in the Arkan design), `v0.7.1` (logins for this platform only, a technician's login limited to Adab), the history pages with two dates and a CSV of the original records, and the Modbus link of each meter at the top of the open alarms. `LOG-0001` goes from firmware `0.4.1` to `0.5.0` (the logger sends the Modbus link of each meter). What each part needs: [`UPDATING.md`](UPDATING.md) sections M, L and N. The commands, the same for every release: [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md).
+**What it brings.** The VPS goes from `v0.6.0` to `v0.8.0` in one update. That includes `v0.7.0` (the site page in the Arkan design), `v0.7.1` (logins for this platform only, a technician's login limited to Adab), the history pages with two dates and a CSV of the original records, and the Modbus link of each meter at the top of the open alarms. `LOG-0001` goes from firmware `0.4.1` straight to `0.5.1`, with one bench test and one release. 0.5.1 holds 0.5.0 (the logger sends the Modbus link of each meter) and adds two WiFi networks of equal rank (the logger joins whichever of `wifi_ssid` and `wifi_ssid2` is in range). `fw-v0.5.0` is never tagged. What each part needs: [`UPDATING.md`](UPDATING.md) sections W, M, L and N. The commands, the same for every release: [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md).
 
-**Already done (cloud session, 10 November):** pull request #9 merged into the default branch, merge commit `bc2bb84`. It closed #8 (custom dates and CSV), #10 (Modbus link) and #11 (technician logins) as merged. Checked before the merge: CI green, 43 server tests and 35 simulator tests pass, and both firmware builds pass. A local service with two sites and a login limited to one site answered `302` or `403` on every page and API path of the other site, CSV download included. It showed the meter link sent by a simulated 0.5.0 logger.
+**Already done (cloud session, 10 November):**
+- Pull request #9 merged into the default branch, merge commit `bc2bb84`. It closed #8 (custom dates and CSV), #10 (Modbus link) and #11 (technician logins) as merged. Checked before the merge: CI green, 43 server tests and 35 simulator tests pass, and both firmware builds pass. A local service with two sites and a login limited to one site answered `302` or `403` on every page and API path of the other site, CSV download included. It showed the meter link sent by a simulated 0.5.0 logger.
+- Pull request #13 (firmware 0.5.1, the two WiFi networks) merged, merge commit `a4b6812`. CI green, and after the merge the same tests pass and both firmware builds pass as 0.5.1. No VPS change.
 
 A cloud session cannot push tags or delete branches (GitHub access refuses it), and cannot reach the PC, the VPS or the logger. These steps are yours. Tick each one when its **Done when** is true.
 
@@ -133,14 +135,12 @@ A cloud session cannot push tags or delete branches (GitHub access refuses it), 
 | 2 | Archive the merged branches | PC | 2 min |
 | 3 | Update the VPS from `v0.6.0` to `v0.8.0` | VPS (owner approves the restart and the Caddy reload) | 30 min |
 | 4 | The technician's login | VPS (owner) | 10 min |
-| 5 | Bench test firmware 0.5.0 on `LOG-0001` by cable | PC + logger on USB | 20 min |
-| 6 | Release firmware 0.5.0 (`fw-v0.5.0`) | PC | 5 min |
+| 5 | Bench test firmware 0.5.1 on `LOG-0001` by cable (the Modbus link, then the two WiFi networks with a phone hotspot) | PC + logger on USB + phone | 45 min |
+| 6 | Release firmware 0.5.1 (`fw-v0.5.1`) | PC | 5 min |
 | 7 | Archive the old VPS copy (left from section 8) | VPS (owner) | 2 min |
 | 8 | Final check: sections 2 to 5 | all | 5 min |
 
 Step 2 after step 1. Steps 4 and 5 after step 3, in any order. Step 6 only after step 5 passed.
-
-**Not in this update:** `claude/great-bell-00lrct`, a firmware change that adds two WiFi networks of equal rank (the logger joins whichever of `wifi_ssid` and `wifi_ssid2` is in range). It is reviewed and comes as firmware `0.5.1` in pull request #13, on top of 0.5.0; its bench test and the tag `fw-v0.5.1` come after this update ([`UPDATING.md`](UPDATING.md) section W). Its branch has one commit more than its archive tag (`d1a03fa` after `ffb7cbd`), so keep the branch: do not delete it in step 2, nor until #13 is merged.
 
 ### Step 1. Push the tags `v0.7.1` and `v0.8.0` (PC, PowerShell)
 
@@ -200,16 +200,36 @@ git push origin v0.7.1 v0.8.0
 
 ### Step 2. Archive the merged branches (PC, PowerShell)
 
-Each branch becomes a tag `archive/<name>`, then the branch is deleted (section 6). All six are merged. The last one is the branch of the cloud session that wrote this section.
+Each branch becomes a tag `archive/<name>`, then the branch is deleted (section 6). All seven are merged. `claude/exciting-ritchie-a4bjtk` is the branch of the cloud session that wrote this section, and `claude/fervent-heisenberg-3gi5iq` is the branch of #13.
 
 ```powershell
-$old = "claude/affectionate-knuth-l6n5pf","claude/amazing-carson-q6z1lv","claude/compassionate-lovelace-aiyvag","claude/relaxed-cerf-lz6nmi","claude/dreamy-euler-duxu9o","claude/exciting-ritchie-a4bjtk"
+$old = "claude/affectionate-knuth-l6n5pf","claude/amazing-carson-q6z1lv","claude/compassionate-lovelace-aiyvag","claude/relaxed-cerf-lz6nmi","claude/dreamy-euler-duxu9o","claude/exciting-ritchie-a4bjtk","claude/fervent-heisenberg-3gi5iq"
 foreach ($b in $old) { git tag "archive/$b" "origin/$b"; git push origin "archive/$b"; if ($LASTEXITCODE -eq 0) { git push origin --delete $b } }
 ```
 
 **Expected:** for each name, `* [new tag] archive/...`, then `- [deleted] ...`.
 
-**Done when:** <https://github.com/julien355/esp32-datalogging/branches> shows only `ccr-a52c0421-oygp4n` and `claude/great-bell-00lrct` (plus `claude/fervent-heisenberg-3gi5iq` while pull request #13 is open).
+`claude/great-bell-00lrct` already has an archive tag from the morning, but it points to its first commit (`ffb7cbd`). Its last commit, `d1a03fa`, is now in #13 as a copy, so the branch can go too. Keep its last commit under a second tag name; the first tag stays as it is:
+
+```powershell
+git tag archive/claude/great-bell-00lrct-d1a03fa origin/claude/great-bell-00lrct
+```
+
+```powershell
+git log -1 --oneline archive/claude/great-bell-00lrct-d1a03fa
+```
+
+**Expected:** `d1a03fa Firmware: two WiFi networks of equal rank, joins the one in range`. Anything else: `git tag -d archive/claude/great-bell-00lrct-d1a03fa` and stop.
+
+```powershell
+git push origin archive/claude/great-bell-00lrct-d1a03fa
+```
+
+```powershell
+git push origin --delete claude/great-bell-00lrct
+```
+
+**Done when:** <https://github.com/julien355/esp32-datalogging/branches> shows only `ccr-a52c0421-oygp4n`.
 
 ### Step 3. Update the VPS from `v0.6.0` to `v0.8.0` (`ssh hermes-vps`)
 
@@ -261,59 +281,109 @@ The value of `USER_SITES` (empty since step 3) becomes `tech-adab:adab`.
 
 **Done when:** `curl -s -u tech-adab https://arkan-monitoring.duckdns.org/api/v1/admin/me` shows `"sites": ["adab"]`, and in a private window as `tech-adab`, `https://arkan-monitoring.duckdns.org/live/` lands on the Adab page with no **All sites** in the menu.
 
-### Step 5. Bench test firmware 0.5.0 on `LOG-0001` by cable (PC, logger on USB)
+### Step 5. Bench test firmware 0.5.1 on `LOG-0001` by cable (PC, logger on USB, phone)
 
-After step 3, so that the site page can show the meter line the logger sends. Follow [`UPDATING.md`](UPDATING.md) M5, steps 1 and 2: `git checkout -B release-0.5.0 v0.8.0`, `pio run -e logger -t upload`, then the serial monitor. [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 3 explains each command and what to do when it fails. Before the upload:
+Do this after step 3, so that the site page can show the meter line the logger sends. One bench test covers both firmware changes:
+- the Modbus link, from 0.5.0: [`UPDATING.md`](UPDATING.md) M5, step 2;
+- the two WiFi networks, from 0.5.1: [`UPDATING.md`](UPDATING.md) W2.
+
+[`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 3 explains each command and what to do when it fails.
+
+You need a **phone hotspot** (2.4 GHz; on an iPhone, turn on "Maximise Compatibility") and the **office WiFi password**, because `show` does not display secrets.
+
+**5.1 Flash 0.5.1 by cable**, on the merge commit of #13:
+
+```powershell
+cd C:\dev\esp32-datalogging
+```
+
+```powershell
+git fetch origin
+```
+
+```powershell
+git checkout -B release-0.5.1 a4b6812
+```
 
 ```powershell
 git log -1 --oneline
 ```
 
-**Expected:** the `bc2bb84` line. Write it in the record sheet.
+**Expected:** `a4b6812 Firmware 0.5.1: two WiFi networks of equal rank, joins the one in range (#13)`. Write it in the record sheet.
 
 ```powershell
 Select-String '#define FW_VERSION' firmware\include\config.h
 ```
 
-**Expected:** `#define FW_VERSION "0.5.0"`.
+**Expected:** `#define FW_VERSION "0.5.1"`.
 
-**Watch 10 minutes.** Expected:
-- `firmware 0.5.0` at the boot, and no restart;
-- `status` shows `up 600 s` or more, `Uploads: ok n, failed 0`, and a line `Meter EM01 (id 1): ...`. What that line says depends on what is on the RS485 port:
+```powershell
+cd firmware
+```
+
+```powershell
+pio run -e logger -t upload
+```
+
+```powershell
+pio device monitor -p COM4 -b 115200 -f esp32_exception_decoder -f time -f log2file
+```
+
+**5.2 One network, 10 minutes**, as on site today. Expected:
+- `firmware 0.5.1` at the boot, then `WiFi connected to "<office network>"`, and no restart;
+- `status` shows `up 600 s` or more, `WiFi: up, <office network> ...`, `Uploads: ok n, failed 0`, and a line `Meter EM01 (id 1): ...`. What that line says depends on what is on the RS485 port:
   - the meter simulator on a USB-RS485 adapter ([tutorial 4](tutorials/4-MODBUS-REGISTERS.md)): `answering since ...`;
   - nothing on the port: `NO ANSWER for n reads ...: timeout: ...` (alarm A03 is open, as with 0.4.1);
   - the RS485 pins not set: `RS485 pins not set (pin_rs_tx / pin_rs_rx)`.
 - On the site page, the meter line follows within 15 s, **without** "from the live values".
 
-If it restarted: stop. Keep the `log2file` file, and do not do step 6. Flash 0.4.1 again: [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 3.2 with `fw-v0.4.1`, then 3.3.
+**5.3 Two networks, with the phone hotspot:** [`UPDATING.md`](UPDATING.md) W2, point 3 (the table, lines a to f), then point 4 (the settings back to one network, as on site). Throughout, there must be no restart you did not ask for: after your `reboot`, the first line of `status` says `boot sw:console`, never `task_wdt` or `panic`.
 
-Then bring the PC folder back to the default branch: `git checkout ccr-a52c0421-oygp4n`.
+While the logger is offline, do not type the console command `wifi` (a scan of the networks): `status` already says which networks were in range. In rare cases, two scans at the same moment can restart the logger.
 
-**Done when:** 10 minutes without a restart, uploads `failed 0`, and the meter line both on the console and on the site page.
+If anything fails or the logger restarts: stop. Keep the `log2file` file, and do not do step 6. Flash 0.4.1 again: [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 3.2 with `fw-v0.4.1`, then 3.3.
 
-### Step 6. Release firmware 0.5.0 (PC)
-
-Only after step 5 passed. The firmware of `v0.8.0` is the one you flashed in step 5.
+Then bring the PC folder back to the default branch:
 
 ```powershell
-git tag fw-v0.5.0 bc2bb84
+cd C:\dev\esp32-datalogging
 ```
 
 ```powershell
-git log -1 --oneline fw-v0.5.0
+git checkout ccr-a52c0421-oygp4n
 ```
 
-**Expected:** the `bc2bb84` line, with `(tag: fw-v0.5.0, tag: v0.8.0)`. Anything else: `git tag -d fw-v0.5.0` and stop.
+**Done when:**
+- 10 minutes on one network without a restart, and uploads `failed 0`;
+- the meter line, both on the console and on the site page;
+- lines a to f of the W2 table as expected;
+- the settings back to one network.
+
+### Step 6. Release firmware 0.5.1 (PC)
+
+Only after step 5 passed, and on the commit you flashed in step 5.
 
 ```powershell
-git push origin fw-v0.5.0
+git tag fw-v0.5.1 a4b6812
 ```
 
-CI builds the firmware and makes the release **Logger firmware 0.5.0**. It stops if the tag and `FW_VERSION` differ.
+```powershell
+git log -1 --oneline fw-v0.5.1
+```
 
-`LOG-0001` already runs 0.5.0 from the cable in step 5, so there is nothing to send it. The **Firmware update** panel would refuse anyway (`LOG-0001 runs 0.5.0: 0.5.0 is not newer`). The release is for the next loggers, over the air ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 4).
+**Expected:** the `a4b6812` line, with `tag: fw-v0.5.1`. Anything else: `git tag -d fw-v0.5.1` and stop.
 
-**Done when:** <https://github.com/julien355/esp32-datalogging/releases> shows **Logger firmware 0.5.0** with four files: `logger-0.5.0.bin`, `logger-uart-0.5.0.bin`, `bootloader-0.5.0.bin`, `partitions-0.5.0.bin`.
+```powershell
+git push origin fw-v0.5.1
+```
+
+CI builds the firmware and makes the release **Logger firmware 0.5.1**. It stops if the tag and `FW_VERSION` differ.
+
+There is no `fw-v0.5.0`: 0.5.1 contains it, and version numbers are never reused, so 0.5.0 simply has no release.
+
+`LOG-0001` already runs 0.5.1 from the cable in step 5, so there is nothing to send it. The **Firmware update** panel would refuse anyway (`LOG-0001 runs 0.5.1: 0.5.1 is not newer`). The release is for the next loggers, sent over the air ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 4). For a logger that moves between two sites, also type in its second network by hand ([`UPDATING.md`](UPDATING.md) W4).
+
+**Done when:** <https://github.com/julien355/esp32-datalogging/releases> shows **Logger firmware 0.5.1** with four files (`logger-0.5.1.bin`, `logger-uart-0.5.1.bin`, `bootloader-0.5.1.bin`, `partitions-0.5.1.bin`), and **Firmware versions** (<https://arkan-monitoring.duckdns.org/live/adab/#versions>) shows `LOG-0001` on `0.5.1`.
 
 ### Step 7. Archive the old VPS copy (owner)
 
@@ -324,11 +394,11 @@ Section 6, the part marked **VPS (owner)**: archive `/opt/arkan-monitoring.hand-
 ### Step 8. Final check
 
 Run sections 2 to 5 of this guide. Expected:
-- the newest tags are `v0.8.0` and `fw-v0.5.0`, and the newest run on the **Actions** page is green;
-- the branches are those of step 2;
+- the newest tags are `v0.8.0` and `fw-v0.5.1`, and the newest run on the **Actions** page is green;
+- the only branch is the default branch (step 2);
 - the PC folder is clean on the default branch;
 - the VPS runs `v0.8.0` (`/health` answers `0.8.0`);
-- `LOG-0001` runs `fw 0.5.0` with a fresh last record.
+- `LOG-0001` runs `fw 0.5.1` with a fresh last record.
 
 Then write the new state in the status lines: section 1 of this file, the top of [`UPDATING.md`](UPDATING.md), and [`tutorials/README.md`](tutorials/README.md). Commit and push them the same day.
 
