@@ -34,7 +34,7 @@ static volatile bool forceUpload = false, forceOta = false, hintOta = false;
 static uint32_t lastUploadTry = 0, lastOta = 0, authBlockedUntil = 0, liveBlockedUntil = 0;
 static uint32_t nextWifiAttempt = 0, lastStackReset = 0;
 static int wifiAttempts = 0, uploadFailRun = 0, rejectRun = 0, liveFailRun = 0;
-static String wifiSeen = "not scanned";   // configured networks in range at the last scan (log, status)
+static String wifiSeen = "not scanned yet";   // configured networks in range at the last scan (log, status)
 static uint32_t lastLiveSeq = 0;
 static String lastUploadError = "none yet";
 
@@ -73,6 +73,8 @@ static bool connectAvailable(const String &s1, const String &s2) {
     wifiSeen = "not scanned (setup portal open)";   // a scan would empty the portal's network list
   } else {
     WiFi.disconnect(false, false);   // stop any connection attempt still running, or the scan is refused
+    // Active scan, 100 to 150 ms per channel: about 2 s. The WiFi library gives up after 10 s, well
+    // within the 60 s task watchdog. Returns WIFI_SCAN_RUNNING while another scan (console "wifi") runs.
     int n = WiFi.scanNetworks(false, false, false, 150);
     for (int i = 0; i < n; i++) {
       String s = WiFi.SSID(i);
@@ -80,11 +82,12 @@ static bool connectAvailable(const String &s1, const String &s2) {
       if (s2.length() && s == s2) seen2 = true;
     }
     WiFi.scanDelete();
-    wifiSeen = n < 0 ? String("scan failed")
-               : seen1 && seen2 ? "\"" + s1 + "\" and \"" + s2 + "\""
-               : seen1 ? "\"" + s1 + "\""
-               : seen2 ? "\"" + s2 + "\""
-                       : String("none of the two (") + n + " other networks)";
+    wifiSeen = n == WIFI_SCAN_RUNNING ? String("not scanned (another scan running)")
+               : n < 0                ? String("scan failed")
+               : seen1 && seen2       ? "\"" + s1 + "\" and \"" + s2 + "\""
+               : seen1                ? "\"" + s1 + "\""
+               : seen2                ? "\"" + s2 + "\""
+                                      : String("none of the configured networks (") + n + " other networks seen)";
   }
   bool any = seen1 || seen2;
   if (s1.length() && (seen1 || !any) && tryConnect(s1, cfg::get("wifi_pass"))) return true;
@@ -464,6 +467,7 @@ static void task(void *) {
       st.wifiDownSince = millis();
       st.ip[0] = 0;
       nextWifiAttempt = millis() + 2000;
+      wifiSeen = "not scanned yet";   // the last scan is from before this connection
       evlog("WiFi lost (status %d)", WiFi.status());
     }
     if (!up) {

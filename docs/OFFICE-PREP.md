@@ -153,7 +153,7 @@ docker compose exec ingest python tools/manage.py daily adab
 
 ## 4. Before leaving for the site
 - [ ] Verified pins in the settings (and reported, so they become firmware defaults)
-- [ ] `wifi_ssid` / `wifi_pass` of the **hotel staff network** set (console or portal); the office network as `wifi_ssid2` is useless on site: clear it, or set the 4G router if there is one
+- [ ] `wifi_ssid` / `wifi_pass` of the **hotel staff network** set (console or portal); the office network as `wifi_ssid2` is useless on site: clear it (`unset wifi_ssid2`, `unset wifi_pass2`), or, if the logger moves between two sites, set the other site's network there (firmware 0.5.1: it joins whichever of the two is in range)
 - [ ] `portal_pass` = the logger's own setup WiFi password from `manage.py add-device` (in the password manager)
 - [ ] **A small hole in the box lid over the BOOT button**, labelled "Setup: hold 3 s" (reachable with the box closed, owner 7 November 2026)
 - [ ] Site profile on the VPS: 82.5 kVA, 200 A, 230 V in `site.json` (`add-site ... --contracted-kva 82.5 --rated-a 200`), so A08, A29 and A37 work

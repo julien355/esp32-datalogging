@@ -1,10 +1,165 @@
 # Updating the VPS and the loggers
 
-How a new version of this repository reaches `hermes-vps` and the loggers. **Next release: VPS `v0.8.0` and firmware `0.5.0`** (section M, below): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
+How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: firmware `0.5.1`** (section W, below, the loggers only): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0` and firmware `0.5.0`** (section M): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
-**Status, 10 November 2026:** `v0.7.1` is to install (section L), then `v0.8.0` and firmware `0.5.0` (section M). `v0.7.0` was tagged but not installed: going from `v0.6.0` straight to `v0.7.1` is fine, then do the N4 browser checks too. Before them: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
+**Status, 10 November 2026:** `v0.7.1` is to install (section L), then `v0.8.0` and firmware `0.5.0` (section M), then firmware `0.5.1` (section W; it contains 0.5.0, see W2). `v0.7.0` was tagged but not installed: going from `v0.6.0` straight to `v0.7.1` is fine, then do the N4 browser checks too. Before them: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
+
+## W. Firmware 0.5.1: two WiFi networks of equal rank, joins the one in range
+
+### W0. What is in it
+
+| Part | What changed | What it needs |
+|---|---|---|
+| Firmware **0.5.1** | `wifi_ssid` and `wifi_ssid2` are two networks of equal rank, for a logger moved between two sites, each with its own network. Before, `wifi_ssid2` was a backup, tried every other round. Each reconnection round now **scans first** (about 2 s) and tries only the configured network(s) in range, `wifi_ssid` first if both are. If the scan sees neither (hidden network, missed beacon, setup portal open), it tries both. **Once connected it stays on that network** until the link drops: it does not move back. [`FIRMWARE.md`](FIRMWARE.md) 2.4 and 3 | Bench test by cable (W2), then the tag `fw-v0.5.1` (W3) and the **Firmware update** panel (W4) |
+| Status and event log | `status`: `WiFi: down for n s, in range at the last scan: ...`. Event log: `WiFi: connection failed (attempt n, status s, in range: ...), next try in n s`. At the boot, with both networks set: `WiFi: networks "<first>" and "<second>": joins the one in range, stays on it until the link drops`. `...` is the network(s) seen by name, `none of the configured networks (n other networks seen)`, `not scanned (setup portal open)`, `not scanned yet` or `scan failed` | Nothing |
+| One network only (`LOG-0001` today) | Works as in 0.5.0: the network is tried every round, seen or not. The only changes are the 2 s scan before each attempt and the `in range` text | Nothing |
+| Settings | No new key. `wifi_ssid2` and `wifi_pass2` are typed on the logger only (console, setup portal or `/config/settings.txt`), never from the VPS. No network name or password is built into the firmware | Set the second network by hand where a logger moves between two sites ([`FIRMWARE.md`](FIRMWARE.md#3-all-settings)) |
+| 0.5.0 | Included (section M): the Modbus link of each meter | See W2 if the bench logger still runs 0.4.1 |
+| VPS, records | No change: no VPS tag. `CSV_SCHEMA` stays 3 | Nothing |
+
+### W1. On GitHub: merge
+
+1. Merge pull request #PRNUM into the default branch once CI is green (jobs `firmware`, `server`, `tools`). The VPS does not change: no `v0.x` tag.
+2. **Not yet** the `fw-v0.5.1` tag: it comes after the bench test (W3).
+
+### W2. Bench test by cable
+
+Bench first, as in section 5 and M5. 0.5.1 contains 0.5.0. If the bench logger still runs 0.4.1 and `fw-v0.5.0` is not tagged yet, you can go straight to 0.5.1: do the M5 step 2 checks (the `Meter EM01` line) in this bench test too. The `fw-v0.5.0` tag is then not needed.
+
+You need a **phone hotspot** (2.4 GHz; on an iPhone, turn on "Maximise Compatibility") and the **office WiFi password**: `show` does not display secrets.
+
+1. **Flash 0.5.1 by cable** on the merge commit, from the PC:
+
+```powershell
+cd C:\dev\esp32-datalogging
+```
+
+```powershell
+git checkout ccr-a52c0421-oygp4n
+```
+
+```powershell
+git pull
+```
+
+```powershell
+git log -1 --oneline
+```
+
+**Expected:** `<commit> Firmware 0.5.1: two WiFi networks of equal rank, joins the one in range (#PRNUM)`, the merge commit of pull request #PRNUM. Write the commit (its first 7 characters) on the record sheet: the tag goes on **this** commit (W3). If the first line is a later merge, find the line of #PRNUM with `git log --oneline -10`.
+
+```powershell
+Select-String '#define FW_VERSION' firmware\include\config.h
+```
+
+**Expected:** `#define FW_VERSION "0.5.1"`.
+
+```powershell
+cd firmware
+```
+
+```powershell
+pio run -e logger -t upload
+```
+
+```powershell
+pio device monitor -p COM4 -b 115200 -f esp32_exception_decoder -f time -f log2file
+```
+
+2. **One network, 10 minutes**, as on site today. Expected: `firmware 0.5.1` at the boot, `WiFi connected to "<office network>"`, then no restart. `status`: `WiFi: up, <office network> ...`, `Uploads: ok n, failed 0`.
+3. **Two networks.** Make the hotspot the first network and the office the second, so that switching the hotspot off makes the logger move:
+
+```
+set wifi_ssid <hotspot name>
+```
+
+```
+set wifi_pass <hotspot password>
+```
+
+```
+set wifi_ssid2 <office network name>
+```
+
+```
+set wifi_pass2 <office network password>
+```
+
+```
+reboot
+```
+
+Then, for each line, `status` and `tail /log/<YYYY-MM>.log 20`:
+
+| Do | Expected |
+|---|---|
+| a. Both on, after the reboot | `WiFi: networks "<hotspot name>" and "<office network name>": joins the one in range, stays on it until the link drops`, then `WiFi connected to "<hotspot name>"` (both in range: `wifi_ssid` first) |
+| b. Switch the hotspot off | `WiFi lost`, then within about 30 s `WiFi connected to "<office network name>" ... (after n s offline)`. `status`: `WiFi: up, <office network name>` |
+| c. Switch the hotspot on again, wait 5 min | It stays on the office network: `status` still shows `WiFi: up, <office network name>` |
+| d. Switch the hotspot off, `set wifi_ssid2 NOT-HERE`, `reboot` | Neither network in range: `WiFi: connection failed (attempt 1, status n, in range: none of the configured networks (n other networks seen)), next try in 10 s`. `status`: `WiFi: down for n s, in range at the last scan: none of the configured networks (...)`. The `Last record` line still moves every minute |
+| e. Still offline: hold **BOOT** 3 s (setup portal), open http://192.168.4.1 | After the next try (a few minutes at most), the status box shows `in range at the last scan: not scanned (setup portal open)`. The list of WiFi networks seen is still filled (reload once if it says `scanning`). Then tap **Close the setup WiFi** |
+| f. Switch the hotspot on | It joins the hotspot at the next try (the back-off reached by then: 10, 20, 40, 80, 160 s, then every 5 min) |
+
+Throughout, no restart that you did not ask for: the first line of `status` says `boot sw:console` after your `reboot`, never `task_wdt` or `panic`.
+
+4. **Put the settings back**, one network as on site:
+
+```
+set wifi_ssid <office network name>
+```
+
+```
+set wifi_pass <office network password>
+```
+
+```
+unset wifi_ssid2
+```
+
+```
+unset wifi_pass2
+```
+
+```
+reboot
+```
+
+**Expected:** `WiFi connected to "<office network name>"`, no `networks ... and ...` line at the boot. `status`: `WiFi: up, <office network name>`. Then put the PC folder back ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 3.5).
+
+If anything above fails: keep the `log2file` file, do not tag, and flash the previous release again ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 3.2 with its `fw-v` tag, then 3.3).
+
+### W3. Tag `fw-v0.5.1` on the merge commit of #PRNUM
+
+Only after W2 has passed. On the PC:
+
+```powershell
+cd C:\dev\esp32-datalogging
+```
+
+```powershell
+git tag fw-v0.5.1 <commit written down in W2>
+```
+
+```powershell
+git log -1 --oneline fw-v0.5.1
+```
+
+**Expected:** `<commit> (tag: fw-v0.5.1, ...) Firmware 0.5.1: two WiFi networks of equal rank, joins the one in range (#PRNUM)`. Anything else: `git tag -d fw-v0.5.1` and stop.
+
+```powershell
+git push origin fw-v0.5.1
+```
+
+CI makes the release **Logger firmware 0.5.1** with its four files. It stops if the tag and `FW_VERSION` differ ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 4.1).
+
+### W4. The loggers
+
+- **`LOG-0001`**, the bench logger flashed in W2, already runs 0.5.1. A logger ignores an offer of the version it runs, so there is nothing to send to it. **Firmware versions** (<https://arkan-monitoring.duckdns.org/live/adab/#versions>) shows `0.5.1`, and the alarm log has **A35**, marked as flashed by hand.
+- **Any other logger:** from **Firmware update** on the site page ([`OTA.md`](OTA.md)), **From a GitHub release**, `logger-0.5.1.bin`, **Send to ...**. Within a minute the logger restarts once; **A35** in the alarm log after 10 minutes; **Firmware versions** shows `0.5.1`. Then set its second network by hand if it moves between two sites.
+
+---
 
 ## M. Release v0.8.0 and firmware 0.5.0: the Modbus link of each meter
 

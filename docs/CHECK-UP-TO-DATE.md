@@ -168,7 +168,7 @@ git push origin v0.6.0
 
 **Expected:** `* [new tag] v0.6.0 -> v0.6.0`.
 
-Archive the old branches: each one becomes a tag `archive/<name>`, then the branch is deleted. All are merged except `claude/great-bell-00lrct`, the unreleased "WiFi backup network as a real fallback" firmware change, kept in its archive tag for later.
+Archive the old branches: each one becomes a tag `archive/<name>`, then the branch is deleted. All are merged except `claude/great-bell-00lrct`, the unreleased "WiFi backup network as a real fallback" firmware change, kept in its archive tag for later. Later the same day it got a second commit (`d1a03fa`, two WiFi networks of equal rank) that is **not** in the archive tag (the tag points at `ffb7cbd`): keep the branch. Both commits are released as firmware 0.5.1 ([`UPDATING.md`](UPDATING.md) section W); once that is merged and tagged, the branch can be archived like the others.
 
 ```powershell
 $old = "ccr-169a541e-mdp7e0","ccr-a844a0a4-8zsp0n","claude/charming-johnson-y2gfhc","claude/clever-ptolemy-f4va3r","claude/fervent-newton-gta7t9","claude/festive-maxwell-s545g8","claude/great-bell-00lrct","claude/great-brahmagupta-9uvj1m","claude/lucid-gauss-ng8n5i","claude/practical-cori-ji7fop","fix-from-pc","claude/clever-noether-vlaqge"
