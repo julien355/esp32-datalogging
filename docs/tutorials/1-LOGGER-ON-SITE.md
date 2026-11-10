@@ -709,7 +709,7 @@ From [`../OFFICE-PREP.md` section 4](../OFFICE-PREP.md#4-before-leaving-for-the-
 | | Verified pins set (and reported, so they become firmware defaults) | `show`: `pin_rs_tx`, `pin_rs_rx`, `pin_rs_de`, `pin_sd_cs`... marked `(changed)` where needed |
 | | Build used (`logger` or `logger-uart`) written down | Record sheet |
 | | Hotel staff WiFi set, if the owner has its name and password already | `set wifi_ssid <hotel staff WiFi name>`, `set wifi_pass <hotel staff WiFi password>`, `reboot`. Otherwise it is set on site (B8) |
-| | Office network removed as backup; site backup network set if there is one | `unset wifi_ssid2` and `unset wifi_pass2`, or, if the site has a second network: `set wifi_ssid2 <backup WiFi name>`, `set wifi_pass2 <backup WiFi password>` |
+| | Office network removed as second network; the other site's network set if the logger moves between two sites | `unset wifi_ssid2` and `unset wifi_pass2`, or: `set wifi_ssid2 <second WiFi name>`, `set wifi_pass2 <second WiFi password>` |
 | | `portal_pass` = the logger's own setup password from `manage.py add-device` | In the password manager; you have access to it on site |
 | | Hole in the lid over BOOT, labelled "Setup: hold 3 s" | Tested with the lid closed |
 | | Site profile on the VPS: 82.5 kVA, 200 A, 230 V | Owner: `add-site ... --contracted-kva 82.5 --rated-a 200` |
@@ -866,7 +866,7 @@ Skip to step 7 if the hotel WiFi was set at the office and `status` showed `WiFi
 5. **Fill in the WiFi group only:**
    - **`wifi_ssid`**: the hotel staff network's name, **exactly** as it appears in the list (capitals and spaces count);
    - **`wifi_pass`**: its WPA2 password (from the owner);
-   - **`wifi_ssid2`** / **`wifi_pass2`**: the **backup** network, if there is one (a second hotel network or a 4G router): same rules as above. The logger uses it only when the main network fails and goes back to the main one when it is seen again. Leave both empty if there is no backup.
+   - **`wifi_ssid2`** / **`wifi_pass2`**: the **second** network, if the logger also works at another site (that site's network) or there is a 4G router: same rules as above. The logger joins whichever of the two is in range and stays on it until the link drops. Leave both empty if there is no second network.
    Leave every other field as it is. Secret fields (`wifi_pass`, `dev_token`, `portal_pass`) show "(set: leave empty to keep)": **an empty secret field keeps the stored value**.
 6. **Tap "Save and restart"** (the blue button at the bottom).
    Expected: "2 setting(s) saved. Restarting..." and "Reconnect your phone to the normal WiFi." The `ARKAN-LOG-0001` network disappears.
@@ -1155,8 +1155,7 @@ All settings: [`../FIRMWARE.md` section 3](../FIRMWARE.md#3-all-settings). Every
 |---|---|---|---|
 | `wifi_ssid` | (empty) | Hotel staff network name | No |
 | `wifi_pass` | (empty) | Hotel staff network password (secret) | No |
-| `wifi_ssid2`, `wifi_pass2` | (empty) | Backup network, used only when the main one fails: set it if there is a second network (4G router, other hotel network), else keep empty | No |
-| `wifi_main_m` | `15` | Leave it: minutes between looks for the main network while on the backup | Yes |
+| `wifi_ssid2`, `wifi_pass2` | (empty) | Second network: the other site's network when the logger moves between two sites (or a 4G router), else keep empty. The logger joins whichever is in range | No |
 | `dev_token` | (empty) | Only with a token from the owner (secret) | No |
 | `portal_pass` | `arkan-setup` | The logger's setup password from the owner (secret, 8 characters or more) | No |
 | `meters` | `EM01:1` | `EM01:<meter address>` from the meter menu | Yes |

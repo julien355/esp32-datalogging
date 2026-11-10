@@ -18,8 +18,6 @@
 
 #define TIME_VALID_AFTER 1735689600L   // 2025-01-01: anything earlier means "clock not set"
 
-#define WIFI_MAIN_MIN_RSSI -80   // on the backup network: go back to the main one only if seen at this signal or better (dBm)
-
 #define WDT_TIMEOUT_S 60        // task watchdog: a task stuck this long reboots the board
 #define STABLE_UPTIME_S 600     // after 10 min up, the boot is "stable" (boot-loop and OTA rollback logic)
 #define BOOTLOOP_LIMIT 5        // unstable boots in a row before safe mode

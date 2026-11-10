@@ -12,9 +12,8 @@ const Def DEFS[] = {
     // WiFi
     {"wifi_ssid", "", "WiFi", "Main WiFi network (2.4 GHz)", 0},
     {"wifi_pass", "", "WiFi", "Main WiFi password", SECRET},
-    {"wifi_ssid2", "", "WiFi", "Backup WiFi network, used when the main one fails (for example a 4G router), empty = none", 0},
-    {"wifi_pass2", "", "WiFi", "Backup WiFi password", SECRET},
-    {"wifi_main_m", "15", "WiFi", "On the backup network: minutes between looks for the main network (goes back to it when seen), 0 = stay on the backup", 0},
+    {"wifi_ssid2", "", "WiFi", "Second WiFi network (another site, or a 4G router): the logger joins whichever is in range, empty = none", 0},
+    {"wifi_pass2", "", "WiFi", "Second WiFi password", SECRET},
     // Server
     {"srv_url", "https://arkan-monitoring.duckdns.org", "Server", "Platform base URL (http://IP:8800 for an office test)", 0},
     {"dev_token", "", "Server", "Device token given by tools/manage.py add-device", SECRET},
