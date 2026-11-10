@@ -357,6 +357,43 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(self.req("GET", "/api/v1/history/adab/day/2026-13-40")[0], 400)
         self.assertEqual(self.req("GET", "/api/v1/history/adab?meter=../x")[0], 400)
 
+    def test_custom_period_and_records_csv(self):
+        # hotel time is UTC+8: the hotel day 3 November is in the UTC day files of 2 and 3 November
+        rows = [row("2026-11-02T10:00:00Z", 1000), row("2026-11-02T17:00:00Z", 1001),   # hotel 2 Nov 18:00, 3 Nov 01:00
+                row("2026-11-03T05:00:00Z", 1002), row("2026-11-03T17:00:00Z", 1003)]   # hotel 3 Nov 13:00, 4 Nov 01:00
+        code, body = self.req("POST", "/api/v1/ingest", HEADER + "\n" + "\n".join(rows) + "\n", self.token)
+        self.assertEqual(json.loads(body)["stored"], 4, body)
+        j = json.loads(self.req("GET", "/api/v1/history/adab?from=2026-11-03&to=2026-11-03")[1])
+        self.assertEqual([r["t"] for r in j["hours"]], ["2026-11-03 01:00", "2026-11-03 13:00"])
+        self.assertEqual((j["from"], j["to"], j["first_day"]), ("2026-11-03 00:00", "2026-11-03", "2026-11-02"))
+        j = json.loads(self.req("GET", "/api/v1/quality/adab?from=2026-11-02&to=2026-11-03")[1])
+        self.assertEqual((len(j["hours"]), j["to"]), (3, "2026-11-03"))
+        # the CSV: the whole day files that hold those hotel dates, every row and column, as they are
+        url = f"http://127.0.0.1:{self.port}/api/v1/records/adab?from=2026-11-03&to=2026-11-03"
+        with urllib.request.urlopen(url, timeout=5) as r:
+            self.assertIn("text/csv", r.headers["Content-Type"])
+            self.assertIn('filename="adab-LOG-0001-2026-11-03.csv"', r.headers["Content-Disposition"])
+            self.assertEqual(r.read().decode().split("\n"), [HEADER] + rows + [""])
+        with urllib.request.urlopen(url.replace("from=2026-11-03", "from=2026-11-04").replace("to=2026-11-03", "to=2026-11-05"),
+                                    timeout=5) as r:
+            self.assertIn('filename="adab-LOG-0001-2026-11-04-to-2026-11-05.csv"', r.headers["Content-Disposition"])
+            self.assertEqual(r.read().decode().splitlines(), [HEADER] + rows[2:])   # 3 Nov (UTC) file only
+        # new columns that day (a _2 file): one header with every column, each value under its own column
+        h2 = HEADER.replace(",rssi", ",TH2_t,rssi")
+        r2 = row("2026-11-03T06:00:00Z", 1002.5).replace(",-63,", ",29.5,-63,")
+        self.assertEqual(json.loads(self.req("POST", "/api/v1/ingest", h2 + "\n" + r2 + "\n", self.token)[1])["stored"], 1)
+        code, body = self.req("GET", "/api/v1/records/adab?from=2026-11-03&to=2026-11-03")
+        self.assertEqual(code, 200, body)
+        self.assertEqual(body.splitlines(), [HEADER + ",TH2_t"] + [x + "," for x in rows] + [row("2026-11-03T06:00:00Z", 1002.5) + ",29.5"])
+        # refused: dates the wrong way round, more than 92 days, to without from, a bad date; nothing recorded: 404
+        for q in ("from=2026-11-05&to=2026-11-04", "from=2026-01-01&to=2026-11-01", "to=2026-11-03", "from=2026-13-01&to=2026-13-02"):
+            self.assertEqual(self.req("GET", "/api/v1/records/adab?" + q)[0], 400, q)
+            self.assertEqual(self.req("GET", "/api/v1/history/adab?" + q)[0], 400, q)
+            self.assertEqual(self.req("GET", "/api/v1/quality/adab?" + q)[0], 400, q)
+        self.assertEqual(self.req("GET", "/api/v1/records/adab?from=2025-01-01&to=2025-01-02")[0], 404)
+        self.assertEqual(self.req("GET", "/api/v1/records/adab?from=2026-11-03&to=2026-11-03&device=LOG-9")[0], 404)
+        self.assertEqual(self.req("GET", "/api/v1/records/nosite?from=2026-11-03&to=2026-11-03")[0], 404)
+
     def test_quality(self):
         hdr = ("ts,EM01_v1,EM01_v1_min,EM01_v1_max,EM01_v2,EM01_v2_min,EM01_v2_max,EM01_v3,EM01_v3_min,EM01_v3_max,"
                "EM01_i1,EM01_i2,EM01_i3,EM01_f,EM01_f_min,EM01_f_max,EM01_p,EM01_q,EM01_pf,EM01_pf_min,EM01_pf_max,"

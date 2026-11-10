@@ -358,21 +358,32 @@ class Weather:
             out["hours"] = [r for r in fc.get("hours", []) if r["t"][:10] >= today]
         return out
 
-    def log(self, site, days=7):
-        """GET /api/v1/weather/<site>/log: actual weather per hour with the day-ahead forecast of that hour."""
-        days = max(1, min(int(days), MAX_LOG_DAYS))
+    def log(self, site, days=7, start=None, end=None):
+        """GET /api/v1/weather/<site>/log: actual weather per hour with the day-ahead forecast of that hour.
+        The last `days` local days, or the local dates start to end ("YYYY-MM-DD", both included; ValueError when
+        they are bad, the wrong way round or more than MAX_LOG_DAYS days apart)."""
         now = self.local_now(site)
-        start = (now - timedelta(days=days - 1)).strftime("%Y-%m-%d 00:00")
-        years = range(int(start[:4]), now.year + 1)
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if start or end:
+            if not start:
+                raise ValueError("to without from")
+            d0 = datetime.strptime(start, "%Y-%m-%d")
+            d1 = datetime.strptime(end, "%Y-%m-%d") if end else today
+            if d1 < d0 or (d1 - d0).days >= MAX_LOG_DAYS:
+                raise ValueError(f"from must be before to, at most {MAX_LOG_DAYS} days")
+        else:
+            d0, d1 = today - timedelta(days=max(1, min(int(days), MAX_LOG_DAYS)) - 1), today
+        start, stop = d0.strftime("%Y-%m-%d 00:00"), (d1 + timedelta(days=1)).strftime("%Y-%m-%d 00:00")
+        years = range(d0.year, d1.year + 1)
         fc = {}
         for y in years:
             for r in self._read(self.path(site, "dayahead", y)):
-                if r["t"] >= start:
+                if start <= r["t"] < stop:
                     fc[r["t"]] = r
         hours = []
         for y in years:
             for r in self._read(self.path(site, "actual", y)):
-                if r["t"] < start:
+                if not start <= r["t"] < stop:
                     continue
                 o = {"t": r["t"]}
                 for c in ACTUAL_COLS[1:]:
@@ -409,11 +420,12 @@ class Weather:
                              "fc_tmin_c": min(d["fc_t"], default=None), "fc_tmax_c": max(d["fc_t"], default=None),
                              "fc_precip_mm": round(d["fc_rain"], 1) if d["fc_hours"] else None, "fc_code": d["fc_code"],
                              "fc_condition": condition(d["fc_code"])})
-        return {"site": site, "from": start, "now": now.strftime("%Y-%m-%d %H:%M"), "source": SOURCE,
-                "hours": hours, "days": out_days}
+        return {"site": site, "from": start, "to": d1.strftime("%Y-%m-%d"), "now": now.strftime("%Y-%m-%d %H:%M"),
+                "source": SOURCE, "hours": hours, "days": out_days}
 
-    def log_csv(self, site, days=7):
-        j = self.log(site, days)
+    def log_csv(self, site, days=7, start=None, end=None, j=None):
+        """The log as CSV; j: an answer of log() already read."""
+        j = j or self.log(site, days, start, end)
         cols = list(ACTUAL_COLS) + ["fc_" + c for c in FC_KEYS] + ["fc_issued_utc"]
         buf = io.StringIO()
         w = csv.writer(buf, lineterminator="\n")

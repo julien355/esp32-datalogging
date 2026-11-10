@@ -10,13 +10,15 @@ only in the service's memory (since 0.5.0, the live snapshots are saved too).
 | Data | How often | File (in `sites/<site>/`) | Read it through the API |
 |---|---|---|---|
 | **Live** snapshot: kW, V, A, PF, Hz, temperatures, logger status | every 15 s | `<device>/live.json` (the last one), `<device>/live/YYYY-MM-DD.jsonl` (all of a UTC day, 7 days kept) | `GET /api/v1/live/<site>` (last + 60 min + open alarms), `GET /api/v1/live/<site>/day/<YYYY-MM-DD>?device=` |
-| **Records**: 1-minute meter and sensor values (mean, min, max) | every minute, sent in batches | `<device>/raw/YYYY/MM/YYYY-MM-DD.csv` (UTC day; `_2.csv` if the columns changed) | `GET /api/v1/history/<site>?days=N` (per hotel hour), `GET /api/v1/history/<site>/day/<date>` (1-minute power), `GET /api/v1/quality/<site>?days=N` (power quality per hotel hour: voltage, frequency, power factor, kVArh, unbalance, dips, swells, with the limits and the power quality alarm lines), `GET /api/v1/quality/<site>/day/<date>` (1-minute voltage, frequency, power factor) |
+| **Records**: 1-minute meter and sensor values (mean, min, max) | every minute, sent in batches | `<device>/raw/YYYY/MM/YYYY-MM-DD.csv` (UTC day; `_2.csv` if the columns changed) | `GET /api/v1/records/<site>?from=YYYY-MM-DD&to=YYYY-MM-DD` (the day files that hold those hotel dates, as they are, in one CSV), `GET /api/v1/history/<site>?days=N` (per hotel hour), `GET /api/v1/history/<site>/day/<date>` (1-minute power), `GET /api/v1/quality/<site>?days=N` (power quality per hotel hour: voltage, frequency, power factor, kVArh, unbalance, dips, swells, with the limits and the power quality alarm lines), `GET /api/v1/quality/<site>/day/<date>` (1-minute voltage, frequency, power factor) |
 | Energy per day | on demand | `daily.csv` (`manage.py daily`) | from the history API (`kwh` per hour) |
 | **Alarms** | when they start and end | `alarms/YYYY.csv`, `<device>/alarm-state.json` | `GET /api/v1/alarms/<site>` |
 | **Weather** forecast | every hour | `weather/forecast.json` | `GET /api/v1/weather/<site>` |
 | **Weather log**: actual weather, day-ahead forecast | every hour, once a day | `weather/actual-YYYY.csv`, `weather/dayahead-YYYY.csv` | `GET /api/v1/weather/<site>/log?days=N` (`&format=csv`) |
 | Site profile: name, time zone, labels, contract, position | by hand | `site.json` | in `GET /api/v1/live/<site>` (`profile`) |
 | Loggers, firmware, last record | on each upload | `devices.json`, `<device>/events.jsonl`, `<device>/settings-reported.json` | `GET /api/v1/status` |
+
+Every `?days=N` (the last N hotel days, today included) also takes `?from=YYYY-MM-DD&to=YYYY-MM-DD` instead: hotel dates, both included, at most 92 days.
 
 Formats: [`DATA-FORMAT.md`](DATA-FORMAT.md) (records), [`LIVE.md`](LIVE.md) (live), [`WEATHER.md`](WEATHER.md) (weather),
 [`alarms/README.md`](alarms/README.md) (alarms). Times: records and live in UTC (`ts`, `recv`); history, weather and the

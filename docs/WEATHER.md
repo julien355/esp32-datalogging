@@ -6,7 +6,7 @@ The site page `/live/<site>/` has a **Weather** group in its side menu (service 
 |---|---|---|
 | Today | `#wtoday` | the forecast of today, hour by hour: weather, temperature, feels like, rain and its chance, humidity, cloud, wind, sun. Past hours in grey, with the logger's outdoor sensor (`TH2`) beside them. Tiles: now, lowest and highest, rain today and when it is likely, sun energy, sunrise and sunset |
 | Tomorrow | `#wtomorrow` | the next day forecast: the same table and graphs, and tomorrow's highest against today's |
-| Weather log | `#wlog` | the actual weather of every past hour against what was forecast the day before, and against the outdoor sensor; one row per day with the site's kWh. 7, 14 or 31 days. **CSV ↓** downloads the hourly log |
+| Weather log | `#wlog` | the actual weather of every past hour against what was forecast the day before, and against the outdoor sensor; one row per day with the site's kWh. 7, 14 or 31 days, or two dates (From … to …, Show). **CSV ↓** downloads the hourly log of that period |
 
 **Live now** also shows one line under the alarms: weather now, today's range and rain, tomorrow's range (click it for Today).
 
@@ -92,6 +92,6 @@ The container needs to reach `api.open-meteo.com` on port 443 (outbound HTTPS, l
 ## API (behind the Arkan login)
 
 - `GET /api/v1/weather/<site>`: the last forecast: `current`, `days` (per day: condition, low, high, rain, chance, sun kWh/m², UV, sunrise, sunset) and `hours` from today 00:00 to the day after tomorrow, `fetched`, `error`.
-- `GET /api/v1/weather/<site>/log?days=7`: `hours` (actual with the `fc_` day-ahead values) and `days` (low, high, rain, sun, forecast low, high, rain), up to 92 days; `&format=csv` for the CSV file.
+- `GET /api/v1/weather/<site>/log?days=7` or `?from=YYYY-MM-DD&to=YYYY-MM-DD` (hotel dates, both included): `hours` (actual with the `fc_` day-ahead values) and `days` (low, high, rain, sun, forecast low, high, rain), up to 92 days; `&format=csv` for the CSV file.
 
 Code: [`server/app/weather.py`](../server/app/weather.py); page: [`server/app/live.html`](../server/app/live.html) (`WXVIEWS`); tests: [`server/tests/test_weather.py`](../server/tests/test_weather.py).

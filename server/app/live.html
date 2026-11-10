@@ -118,6 +118,14 @@ pre{background:var(--surface-2);padding:10px 12px;border-radius:var(--r-md);font
 .fwstat{font-size:14px;margin-bottom:10px}
 .fwstat .ev{font-size:12.5px;color:var(--muted);margin-top:2px}
 @container app (max-width:560px){.hide-s{display:none}}
+/* Period of the history pages: 7, 14, 31 days or two dates (calendars), and the CSV download */
+.period{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+.period .acts{display:inline-flex;gap:8px;align-items:center}
+a.btn{text-decoration:none}
+.dates{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;font-weight:600;color:var(--muted)}
+input[type="date"]{width:auto;min-width:0;padding:5px 8px;border-radius:var(--r-md);border:1px solid var(--control);background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;line-height:1.4}
+.dates.on input[type="date"]{border-color:var(--action);box-shadow:0 0 0 1px var(--action)}
+.btn[aria-disabled="true"]{opacity:.4;cursor:default}
 .mocknote{background:var(--warn-bg);color:var(--warn-ink);font-size:12.5px;font-weight:600;text-align:center;padding:4px 12px}
 </style>
 <script src="/live/_ui/arkan-ui.js"></script>
@@ -222,11 +230,17 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MONS = ['Jan', '
 const fdate = ms => { const d = new Date(ms); return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONS[d.getUTCMonth()]}`; };
 const fhm = ms => new Date(ms).toISOString().slice(11, 16);
 const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
+const addD = (d, n) => isoDay(tp(d + ' 00:00') + n * 864e5);                          // "YYYY-MM-DD" + n days
+const nDays = (a, b) => Math.round((tp(b + ' 00:00') - tp(a + ' 00:00')) / 864e5) + 1;   // days from a to b, both included
 
 // ------------------------------------------------------------------ mockup: the server's answers come from FX
 if (MOCK) {
   const J = (body, status = 200) => Promise.resolve({ok: status < 400, status, json: async () => JSON.parse(JSON.stringify(body))});
   const since = days => isoDay(tp(FX.history.now.slice(0, 10) + ' 00:00') - (days - 1) * 864e5);
+  // ?days=N or ?from=&to=: [first day, the day after the last], to compare with "YYYY-MM-DD HH:MM"
+  const rng = u => { const q = new URLSearchParams(u.split('?')[1] || ''), t = FX.history.now.slice(0, 10);
+    return q.get('from') ? [q.get('from'), addD(q.get('to') || t, 1)] : [since(+q.get('days') || 7), addD(t, 1)]; };
+  const inR = ([a, b]) => x => x >= a && x < b;
   window.fetch = (url, opt = {}) => {
     const u = String(url); let m;
     if ((opt.method || 'GET') === 'POST') {
@@ -248,16 +262,18 @@ if (MOCK) {
       const ks = Object.keys(FX.days).sort(), k = FX.days[m[1]] ? m[1] : ks[0];   // days not saved show the oldest saved day
       return J({...FX.days[k], day: m[1]});
     }
-    if ((m = u.match(/^\/api\/v1\/history\/[a-z0-9-]+\?days=(\d+)$/))) { const f = since(+m[1]); return J({...FX.history, from: f + ' 00:00', hours: FX.history.hours.filter(r => r.t >= f)}); }
-    if ((m = u.match(/^\/api\/v1\/weather\/[a-z0-9-]+\/log\?days=(\d+)/))) { const f = since(+m[1]);
-      return J({...FX.wxlog, hours: FX.wxlog.hours.filter(r => r.t >= f), days: FX.wxlog.days.filter(d => d.date >= f)}); }
+    if (/^\/api\/v1\/history\/[a-z0-9-]+\?/.test(u)) { const r = rng(u), ok = inR(r);
+      return J({...FX.history, from: r[0] + ' 00:00', to: addD(r[1], -1), first_day: FX.history.hours[0]?.t.slice(0, 10), hours: FX.history.hours.filter(x => ok(x.t))}); }
+    if (/^\/api\/v1\/weather\/[a-z0-9-]+\/log\?/.test(u)) { const ok = inR(rng(u));
+      return J({...FX.wxlog, hours: FX.wxlog.hours.filter(x => ok(x.t)), days: FX.wxlog.days.filter(d => ok(d.date))}); }
     if (/^\/api\/v1\/weather\/[a-z0-9-]+$/.test(u)) return J(FX.weather);
     if ((m = u.match(/^\/api\/v1\/quality\/[a-z0-9-]+\/day\/(\d{4}-\d{2}-\d{2})$/))) {
       const ks = Object.keys(FX.qdays).sort(), k = FX.qdays[m[1]] ? m[1] : ks[0];   // days not saved show the oldest saved day
       return J({...FX.qdays[k], day: m[1]});
     }
-    if ((m = u.match(/^\/api\/v1\/quality\/[a-z0-9-]+\?days=(\d+)$/))) { const f = since(+m[1]);
-      return J({...FX.quality, from: f + ' 00:00', hours: FX.quality.hours.filter(r => r.t >= f), events: FX.quality.events.filter(e => e.local_time >= f)}); }
+    if (/^\/api\/v1\/quality\/[a-z0-9-]+\?/.test(u)) { const r = rng(u), ok = inR(r);
+      return J({...FX.quality, from: r[0] + ' 00:00', to: addD(r[1], -1), first_day: FX.history.hours[0]?.t.slice(0, 10),
+        hours: FX.quality.hours.filter(x => ok(x.t)), events: FX.quality.events.filter(e => ok(e.local_time))}); }
     return J({ok: false, error: 'not in the mockup'}, 404);
   };
 }
@@ -293,7 +309,7 @@ const ROLE_NAME = {admin: 'Admin', viewer: 'Viewer'};
 const ROLE_NOTE = {admin: 'every page, firmware update included', viewer: 'what a login outside ADMIN_USERS sees'};
 const roles = () => ME.admin ? ['admin', 'viewer'] : ['viewer'];
 const role = () => isAdmin() ? 'admin' : 'viewer';
-let view = 'now', span = 14, dayShown = null, PROF = {}, STATUS = '', fwReady = Promise.resolve();
+let view = 'now', span = 14, range = null, dayShown = null, PROF = {}, STATUS = '', fwReady = Promise.resolve();
 const visible = () => VIEWS.filter(v => !(v.admin && !isAdmin()) && (site || v.global));
 const known = id => VIEWS.some(v => v.id === id && (site || v.global));
 const SITES = MOCK ? '#sites' : '/live/';   // the list of all sites is its own address on the server
@@ -348,7 +364,52 @@ const chartCard = (id, title = '') => `<section class="card">${title ? `<div cla
 const SEV = {critical: 'crit', warning: 'warn', info: 'info'};
 const sevPill = s => `<span class="pill ${SEV[s] || 'neutral'}">${esc(s)}</span>`;
 const segBtn = (attr, on, label, dis = false) => `<button type="button" ${attr} aria-pressed="${on}"${dis ? ' disabled style="opacity:.4;cursor:default"' : ''}>${label}</button>`;
-const spanPicker = () => `<div class="seg" role="group" aria-label="Period">${[7, 14, 31].map(d => segBtn(`data-span="${d}"`, d === span, d + ' days')).join('')}</div>`;
+
+// ------------------------------------------------------------------ period of the history pages
+// The last `span` hotel days (buttons 7, 14, 31 days), or `range` = {from, to}: two hotel dates, both included, chosen with
+// the From and To calendars and Show. At most MAXD days (history.MAX_DAYS on the server). The API takes ?days=N or ?from=&to=.
+const MAXD = 92, PRESETS = [7, 14, 31];
+let FIRST = null;   // hotel date of the oldest record (first_day of the answers): the calendars start there
+const todayH = () => isoDay(nowMs() + (PROF.utc_offset_h ?? 8) * 36e5);
+const P = x => typeof x === 'number' ? {days: x} : x;
+const per = () => range || {days: span};
+const pq = p => (p = P(p)).days ? `days=${p.days}` : `from=${p.from}&to=${p.to}`;
+const pDates = () => range || {from: addD(todayH(), 1 - span), to: todayH()};
+const fday = d => fdate(tp(d + ' 00:00')) + (d.slice(0, 4) !== todayH().slice(0, 4) ? ' ' + d.slice(0, 4) : '');
+const fdays = (a, b) => a === b ? fday(a) : `${fday(a)} to ${fday(b)}`;
+const pText = () => range ? fdays(range.from, range.to) : `last ${span} days`;   // "Hotel time, last 7 days."
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+const dateIn = (attr, value, label) => `<input type="date" ${attr} value="${value}"${FIRST ? ` min="${FIRST}"` : ''} max="${todayH()}" aria-label="${label}">`;
+// The original 1-minute records of the logger for those hotel dates: GET /api/v1/records/<site> (the day files, every column)
+function csvBtn(from, to, has = true) {
+  const what = fdays(from, to);
+  if (!has) return `<span class="btn small" aria-disabled="true" title="No records for ${esc(what)}">${icon('down', 'sm')}CSV</span>`;
+  return `<a class="btn small" href="/api/v1/records/${esc(site)}?from=${from}&amp;to=${to}" download title="${esc(`The original 1-minute records of ${what}: ` +
+    'every column and row of the day files, times in UTC. The files are UTC days, so the hours just before and after are in too.')}"${
+    MOCK ? ' data-ui-toast="On the real site this downloads the original records as CSV"' : ''}>${icon('down', 'sm')}CSV</a>`;
+}
+const recCsv = has => { const d = pDates(); return csvBtn(d.from, d.to, has); };
+function periodPicker(dl = '') {
+  const d = pDates();
+  return `<div class="period"><div class="seg" role="group" aria-label="Period">${PRESETS.map(n => segBtn(`data-span="${n}"`, !range && n === span, n + ' days')).join('')}</div>
+    <div class="dates${range ? ' on' : ''}" role="group" aria-label="From and to dates (hotel time)"><label for="pFrom">From</label>${dateIn('id="pFrom" data-pick="from"', d.from, 'From')}
+      <label for="pTo">to</label>${dateIn('id="pTo" data-pick="to"', d.to, 'To')}</div><span class="acts"><button type="button" class="btn small" data-apply>Show</button>${dl}</span></div>`;
+}
+function applyRange() {   // the Show button, or Enter in a date field
+  let from = el('pFrom')?.value, to = el('pTo')?.value;
+  const today = todayH(), ok = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '') && d <= today;
+  if (!ok(from) || !ok(to)) return toast(`Choose two dates, up to today (${fday(today)})`);
+  if (from > to) [from, to] = [to, from];
+  if (nDays(from, to) > MAXD) { from = addD(to, 1 - MAXD); toast(`At most ${MAXD} days at a time: from ${fday(from)}`); }
+  const n = nDays(from, to);
+  if (to === today && PRESETS.includes(n)) { span = n; range = null; } else range = {from, to};   // "the last 7 days" moves with time
+  periodChanged();
+  show(view);
+}
+function periodChanged() {   // the day shown minute by minute (#voltage) follows the period when it falls outside
+  const d = pDates();
+  if (qDay && (qDay < d.from || qDay > d.to)) qDay = null;
+}
 
 // ------------------------------------------------------------------ Live now
 // Sparkline: one or more series over the last 60 minutes, hover shows the values at that time
@@ -392,8 +453,8 @@ document.addEventListener('mousemove', ev => {
 
 function card(label, key, v, pts, times, extra = '') {
   const vals = pts.filter(x => x !== null);
-  const range = vals.length > 1 ? `<div class="sub">60 min: ${fmt(key, Math.min(...vals))} – ${fmt(key, Math.max(...vals))} ${esc(unitOf(key))}</div>` : '';
-  return `<div class="kpi"><span class="eyebrow">${esc(label)}</span><div class="big">${fmt(key, v)}<small>${esc(unitOf(key))}</small></div>${extra}${range}
+  const span60 = vals.length > 1 ? `<div class="sub">60 min: ${fmt(key, Math.min(...vals))} – ${fmt(key, Math.max(...vals))} ${esc(unitOf(key))}</div>` : '';
+  return `<div class="kpi"><span class="eyebrow">${esc(label)}</span><div class="big">${fmt(key, v)}<small>${esc(unitOf(key))}</small></div>${extra}${span60}
     ${spark([{key, name: label, color: C[0], pts}], times)}</div>`;
 }
 function capBar(frac, text) {
@@ -553,11 +614,13 @@ async function sitesView(box) {
 // ------------------------------------------------------------------ history views
 // /api/v1/history/<site> (one row per local hour, from the day files) and /api/v1/history/<site>/day/<date> (1-minute power).
 const HCACHE = {};
-async function hourly(days) {
-  const c = HCACHE[days];
+async function hourly(p = per()) {   // p: a number of days, or {days} or {from, to}
+  const k = pq(p), c = HCACHE[k];
   if (c && Date.now() - c.at < 120e3) return c.j;
-  const j = await getJ(`/api/v1/history/${site}?days=${days}`);
-  HCACHE[days] = {at: Date.now(), j};
+  const j = await getJ(`/api/v1/history/${site}?${k}`);
+  if (!j.hours) throw new Error(j.error || 'no hours');
+  if (j.first_day) FIRST = j.first_day;
+  HCACHE[k] = {at: Date.now(), j};
   return j;
 }
 function nice(lo, hi, n = 5) {
@@ -680,9 +743,9 @@ async function renderHistory() {
   if (view === 'prefs') return settingsView(box);
   if (view === 'register') return registerView(box);
   if (view === 'power') {
-    const j = await hourly(span);
+    const j = await hourly();
     const pk = j.hours.filter(r => r.p_max !== undefined).reduce((a, r) => (!a || r.p_max > a.p_max ? r : a), null);
-    box.innerHTML = head('Power, hour by hour', `Mean kW of each hour and the highest 15-second sample in it. Hotel time, last ${span} days.`, spanPicker()) +
+    box.innerHTML = head('Power, hour by hour', `Mean kW of each hour and the highest 15-second sample in it. Hotel time, ${pText()}.`, periodPicker(recCsv(j.hours.length > 0))) +
       tiles([statTile('Highest 15-second sample', pk ? pk.p_max.toFixed(1) : '–', 'kW', pk ? `${fdate(tp(pk.t))} ${pk.t.slice(11)}` : ''),
        statTile('Mean over the period', (j.hours.reduce((a, r) => a + (r.p ?? 0), 0) / (j.hours.filter(r => r.p !== undefined).length || 1)).toFixed(1), 'kW'),
        PROF.contracted_kva ? statTile('PLN contract', PROF.contracted_kva, 'kVA', 'apparent power, see Live now') : '']) +
@@ -690,14 +753,13 @@ async function renderHistory() {
     lineChart(el('ch'), [{name: 'Mean of the hour', color: C[0], pts: j.hours.map(r => [tp(r.t), r.p ?? null])},
       {name: 'Highest 15-second sample', color: C[1], width: 1.4, pts: j.hours.map(r => [tp(r.t), r.p_max ?? null])}], {unit: 'kW', yZero: true});
   } else if (view === 'day') {
-    const j0 = await hourly(Math.max(span, 14)), today = j0.now.slice(0, 10);
-    dayShown ??= today;
-    const j = await getJ(`/api/v1/history/${site}/day/${dayShown}`);
-    const ms = tp(dayShown + ' 00:00'), d = byDay(j0.hours)[dayShown];
-    const pts = j.minutes.map(m => [tp(`${dayShown} ${m[0]}`), m[1], m[2], m[3]]);
+    dayShown ??= todayH();
+    const day = dayShown, [j0, j] = await Promise.all([hourly({from: day, to: day}), getJ(`/api/v1/history/${site}/day/${day}`)]);
+    const today = j0.now.slice(0, 10), ms = tp(day + ' 00:00'), d = byDay(j0.hours)[day];
+    const pts = j.minutes.map(m => [tp(`${day} ${m[0]}`), m[1], m[2], m[3]]);
     const pk = pts.reduce((a, p) => (!a || (p[3] ?? p[1]) > (a[3] ?? a[1]) ? p : a), null);
     const tools = `<div class="seg" role="group" aria-label="Day">${segBtn(`data-day="${isoDay(ms - 864e5)}"`, false, '◀ ' + fdate(ms - 864e5))}${segBtn('', true, fdate(ms))}${
-      segBtn(`data-day="${isoDay(ms + 864e5)}"`, false, fdate(ms + 864e5) + ' ▶', dayShown >= today)}</div>`;
+      segBtn(`data-day="${isoDay(ms + 864e5)}"`, false, fdate(ms + 864e5) + ' ▶', dayShown >= today)}</div>${dateIn('data-pick="day"', day, 'Day')}${csvBtn(day, day, pts.length > 0)}`;
     box.innerHTML = head(`One day, minute by minute: ${fdate(ms)}`, 'Total power of every minute (mean of the 15-second samples). Hover for the minute\'s lowest and highest sample.', tools) +
       tiles([statTile(dayShown === today ? 'Energy so far' : 'Energy', d ? d.kwh.toFixed(0) : '–', 'kWh', d && d.minutes < 1430 ? `${(d.minutes / 14.4).toFixed(0)} % of the minutes recorded` : ''),
         statTile('Highest 15-second sample', pk ? (pk[3] ?? pk[1]).toFixed(1) : '–', 'kW', pk ? 'at ' + fhm(pk[0]) : ''),
@@ -707,13 +769,16 @@ async function renderHistory() {
       extra: b => { const p = pts.find(q => q[0] === b[0]); return p && p[2] !== null ? `<div class="dim">samples ${p[2].toFixed(1)} – ${p[3].toFixed(1)} kW</div>` : ''; }}],
       {unit: 'kW', yZero: true, gapMs: 3 * 6e4, step: 6e4});
   } else if (view === 'energy') {
-    const j = await hourly(span), days = byDay(j.hours), keys = Object.keys(days).sort(), today = j.now.slice(0, 10);
+    const j = await hourly(), days = byDay(j.hours), keys = Object.keys(days).sort(), today = j.now.slice(0, 10);
     const full = keys.filter(k => k !== today && days[k].minutes >= 1430);
     const avg = full.length ? full.reduce((a, k) => a + days[k].kwh, 0) / full.length : null;
-    const yest = isoDay(tp(today + ' 00:00') - 864e5);
-    box.innerHTML = head('Energy per day', `kWh per hotel day (00:00 to 24:00), from the meter's counter. Lighter bars: today, or a day with missing minutes. Last ${span} days.`, spanPicker()) +
-      tiles([statTile('Today so far', days[today] ? days[today].kwh.toFixed(0) : '–', 'kWh'),
-        statTile('Yesterday', days[yest] ? days[yest].kwh.toFixed(0) : '–', 'kWh'),
+    const yest = isoDay(tp(today + ' 00:00') - 864e5), top = keys.reduce((a, k) => (!a || days[k].kwh > days[a].kwh ? k : a), null);
+    box.innerHTML = head('Energy per day', `kWh per hotel day (00:00 to 24:00), from the meter's counter. Lighter bars: today, or a day with missing minutes. ${cap(pText())}.`,
+        periodPicker(recCsv(j.hours.length > 0))) +
+      tiles([range ? statTile('Total of the period', keys.reduce((a, k) => a + days[k].kwh, 0).toFixed(0), 'kWh', `${keys.length} day${keys.length === 1 ? '' : 's'} with records`)
+          : statTile('Today so far', days[today] ? days[today].kwh.toFixed(0) : '–', 'kWh'),
+        range ? statTile('Highest day', top ? days[top].kwh.toFixed(0) : '–', 'kWh', top ? fday(top) : '')
+          : statTile('Yesterday', days[yest] ? days[yest].kwh.toFixed(0) : '–', 'kWh'),
         statTile('Mean of the full days', avg === null ? '–' : avg.toFixed(0), 'kWh', `${full.length} full day${full.length === 1 ? '' : 's'}`)]) +
       `<div class="mt-16">${chartCard('ch')}</div>`;
     barChart(el('ch'), keys.map(k => { const d = days[k], ms = tp(k + ' 00:00'), part = k === today || d.minutes < 1430;
@@ -746,7 +811,7 @@ async function renderHistory() {
     barChart(el('ch'), [{v: last, light: true, l1: 'Last week: ' + last.toFixed(0) + ' kWh', l2: rng(lw0), tip: `<b>Last week</b>${last.toFixed(0)} kWh<br>${rng(lw0)}`},
       {v: cur, l1: 'This week so far: ' + cur.toFixed(0) + ' kWh', l2: rng(w0), tip: `<b>This week so far</b>${cur.toFixed(0)} kWh<br>${rng(w0)}`}], 'kWh', {xName: 'Same hours of each week', maxW: 150});
   } else if (view === 'temperature' || view === 'humidity') {
-    const j = await hourly(span), q = view === 'temperature' ? 't' : 'rh', unit = q === 't' ? '°C' : '% RH';
+    const j = await hourly(), q = view === 'temperature' ? 't' : 'rh', unit = q === 't' ? '°C' : '% RH';
     const ids = [...new Set(j.hours.flatMap(r => Object.keys(r)).filter(k => /^TH\d+_/.test(k)).map(k => k.split('_')[0]))].sort();
     const series = ids.map((id, n) => ({name: sensorName(`${id}_${q}`), color: C[n] || QUIET,
       pts: j.hours.map(r => [tp(r.t), r[`${id}_${q}`] ?? null]),
@@ -755,7 +820,8 @@ async function renderHistory() {
     for (const s of series) { const v = s.pts.map(p => p[1]).filter(x => x !== null);
       if (v.length) tl.push(statTile(`${s.name}: lowest – highest`, `${Math.min(...v).toFixed(q === 't' ? 1 : 0)} – ${Math.max(...v).toFixed(q === 't' ? 1 : 0)}`, unit, 'hourly means')); }
     box.innerHTML = head(view === 'temperature' ? 'Temperature' : 'Relative humidity',
-      `Hourly means of the 5-minute readings; hover for the hour's lowest and highest. ${esc(Object.entries(PROF.sensors || {}).map(([k, v]) => `${k}: ${v}`).join(' · '))}. Last ${span} days.`, spanPicker()) +
+      `Hourly means of the 5-minute readings; hover for the hour's lowest and highest. ${esc(Object.entries(PROF.sensors || {}).map(([k, v]) => `${k}: ${v}`).join(' · '))}. ${cap(pText())}.`,
+      periodPicker(recCsv(j.hours.length > 0))) +
       `<div class="tiles" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">${tl.join('')}</div><div class="mt-16">${chartCard('ch')}</div>`;
     lineChart(el('ch'), series, {unit, digits: q === 't' ? 1 : 0});
   }
@@ -769,11 +835,12 @@ async function wxNow() {
   WXC = {at: Date.now(), j};
   return j;
 }
-async function wxLog(days) {
-  const c = WXL[days];
+async function wxLog(p = per()) {
+  const k = pq(p), c = WXL[k];
   if (c && Date.now() - c.at < 300e3) return c.j;
-  const j = await getJ(`/api/v1/weather/${site}/log?days=${days}`);
-  WXL[days] = {at: Date.now(), j};
+  const j = await getJ(`/api/v1/weather/${site}/log?${k}`);
+  if (!j.hours) throw new Error(j.error || 'no hours');
+  WXL[k] = {at: Date.now(), j};
   return j;
 }
 function wxIcon(code, day = 1) {   // WMO weather code -> symbol
@@ -795,9 +862,9 @@ function wxMissing(j, title) {
     : `<section class="card">Weather is not set for this site. On the VPS, with the site's position (decimal degrees, south negative):
        <pre>${how}</pre>See docs/WEATHER.md.</section>`);
 }
-async function measuredOutdoor(days) {   // hotel hour -> {t, min, max} of the outdoor sensor, from the day files
+async function measuredOutdoor(p) {   // hotel hour -> {t, min, max} of the outdoor sensor, from the day files
   const O = outId(), m = {};
-  try { for (const r of (await hourly(days)).hours) if (r[`${O}_t`] !== undefined) m[r.t] = {t: r[`${O}_t`], min: r[`${O}_t_min`], max: r[`${O}_t_max`]}; }
+  try { for (const r of (await hourly(p)).hours) if (r[`${O}_t`] !== undefined) m[r.t] = {t: r[`${O}_t`], min: r[`${O}_t_min`], max: r[`${O}_t_max`]}; }
   catch (e) {}
   return m;
 }
@@ -878,20 +945,21 @@ const WXVIEWS = {
   },
 
   async wlog(box) {
-    const [lg, j, meas] = await Promise.all([wxLog(span), wxNow(), measuredOutdoor(span)]);
-    if (!lg.hours.length) { box.innerHTML = wxMissing(j, 'Weather log') || head('Weather log', '') +
+    const [lg, j, meas] = await Promise.all([wxLog(), wxNow(), measuredOutdoor(per())]);
+    if (!lg.hours.length) { box.innerHTML = range ? head('Weather log', `${cap(pText())}.`, periodPicker()) +   // dates chosen: keep the picker
+        '<section class="card"><div class="empty">No weather logged for these dates.</div></section>' : wxMissing(j, 'Weather log') || head('Weather log', '') +
       '<section class="card"><div class="empty">Nothing logged yet: an hour is logged one hour after it ends, and tomorrow\'s forecast once a day.</div></section>'; return; }
-    let days = {}; try { days = byDay((await hourly(span)).hours); } catch (e) {}
+    let days = {}; try { days = byDay((await hourly()).hours); } catch (e) {}
     const O = outId(), both = lg.hours.filter(r => r.temp_c !== null && r.fc_temp_c !== null);
     const mae = both.length ? both.reduce((a, r) => a + Math.abs(r.fc_temp_c - r.temp_c), 0) / both.length : null;
     const bias = both.length ? both.reduce((a, r) => a + r.fc_temp_c - r.temp_c, 0) / both.length : null;
     const sm = lg.hours.filter(r => r.temp_c !== null && meas[r.t]);
     const sd = sm.length ? sm.reduce((a, r) => a + meas[r.t].t - r.temp_c, 0) / sm.length : null;
     const rainy = lg.days.filter(d => d.precip_mm >= 1).length, fcd = lg.days.filter(d => d.fc_hours >= 20);
-    const csv = `/api/v1/weather/${esc(site)}/log?days=${span}&format=csv`;
+    const csv = `/api/v1/weather/${esc(site)}/log?${esc(pq(per()))}&amp;format=csv`;
     box.innerHTML = head('Weather log: actual against forecast', `Actual: the weather service's value for each hour that has passed (logged one hour after it ends). ` +
-        `Forecast: what was forecast for that hour the day before, at ${String(j.dayahead_hour ?? 18).padStart(2, '0')}:00. Measured: the logger's outdoor sensor (${esc(O)}). Last ${span} days.`,
-        `${spanPicker()}<a class="btn small" href="${csv}"${MOCK ? ' data-ui-toast="On the real site this downloads the log as CSV"' : ''}>${icon('down', 'sm')}CSV</a>`) +
+        `Forecast: what was forecast for that hour the day before, at ${String(j.dayahead_hour ?? 18).padStart(2, '0')}:00. Measured: the logger's outdoor sensor (${esc(O)}). ${cap(pText())}.`,
+        periodPicker(`<a class="btn small" href="${csv}" title="The weather log of these dates"${MOCK ? ' data-ui-toast="On the real site this downloads the log as CSV"' : ''}>${icon('down', 'sm')}CSV</a>`)) +
       tiles([statTile('Hours logged', lg.hours.length, '', `${both.length} with a day-ahead forecast`),
         statTile('Day-ahead forecast error', mae === null ? '–' : '± ' + mae.toFixed(1), '°C', bias === null ? 'none yet: the first is saved this evening' : `mean of the hours; forecast ${bias >= 0 ? 'warmer' : 'cooler'} by ${Math.abs(bias).toFixed(1)} °C on average`),
         statTile('Rain days (≥ 1 mm)', rainy, `of ${lg.days.length}`, fcd.length ? `forecast the day before: ${fcd.filter(d => d.fc_precip_mm >= 1).length} of ${fcd.length}` : ''),
@@ -921,11 +989,13 @@ const WXVIEWS = {
 const QCACHE = {}, QCOUNTS = ['vn', 'vok', 'vlow', 'vhigh', 'dips', 'swells', 'lost', 'loaded', 'pf_low'];
 const BAND = 'var(--line)', PLN_KVARH = 0.62;   // PLN bills the kVArh above 0.62 x kWh (= power factor 0.85) in a month
 let qDay = null;
-async function qHourly(days) {
-  const c = QCACHE[days];
+async function qHourly(p = per()) {
+  const k = pq(p), c = QCACHE[k];
   if (c && Date.now() - c.at < 120e3) return c.j;
-  const j = await getJ(`/api/v1/quality/${site}?days=${days}`);
-  QCACHE[days] = {at: Date.now(), j};
+  const j = await getJ(`/api/v1/quality/${site}?${k}`);
+  if (!j.hours) throw new Error(j.error || 'no hours');
+  if (j.first_day) FIRST = j.first_day;
+  QCACHE[k] = {at: Date.now(), j};
   return j;
 }
 const pctOf = (a, b, d = 1) => {   // never "100.0" (or "0.0") when some minutes are out (or in): more decimals instead
@@ -982,19 +1052,19 @@ function qByDay(H) {
   for (const r of H) (g[r.t.slice(0, 10)] ??= []).push(r);
   return Object.fromEntries(Object.entries(g).map(([k, rows]) => [k, qSum(rows)]));
 }
-function noMeter(box, title, note) {
-  box.innerHTML = head(title, note, spanPicker()) + '<section class="card"><div class="empty">No meter records for this period.</div></section>';
+function noMeter(box, title, note, has = false) {
+  box.innerHTML = head(title, note, periodPicker(recCsv(has))) + '<section class="card"><div class="empty">No meter records for this period.</div></section>';
 }
 
 const QVIEWS = {
   async quality(box) {
-    const j = await qHourly(span), H = j.hours, L = j.limits, t = qSum(H), today = j.now.slice(0, 10), nf = j.nominal_hz;
+    const j = await qHourly(), H = j.hours, L = j.limits, t = qSum(H), today = j.now.slice(0, 10), nf = j.nominal_hz;
     const title = 'Power quality';
     const note = `Voltage, frequency, unbalance and power factor from the 1-minute records (mean, lowest and highest 15-second sample), ` +
-      `against the limits of the alarm register. Hotel time, last ${span} days.`;
-    if (t.vlo === null && t.fmin === null) return noMeter(box, title, note);
+      `against the limits of the alarm register. Hotel time, ${pText()}.`;
+    if (t.vlo === null && t.fmin === null) return noMeter(box, title, note, H.length > 0);
     const fOut = t.fmin !== null && (t.fmin < nf - L.f_dev.v || t.fmax > nf + L.f_dev.v);
-    let h = head(title, note, spanPicker()) + `<div class="tiles qt">${[
+    let h = head(title, note, periodPicker(recCsv(true))) + `<div class="tiles qt">${[
       statTile('Voltage within the limits', flag(t.vn && t.vok / t.vn < 0.95, pctOf(t.vok, t.vn)), '%',
         `minutes with all three phases between ${L.low.v} and ${L.high.v} V (1-minute means) · ${t.vlow} min below, ${t.vhigh} min above`),
       statTile('Voltage, lowest – highest', `${f1(t.vlo, 0)} – ${f1(t.vhi, 0)}`, 'V',
@@ -1042,19 +1112,19 @@ const QVIEWS = {
   },
 
   async voltage(box) {
-    const j = await qHourly(span), H = j.hours, L = j.limits, t = qSum(H);
+    const j = await qHourly(), H = j.hours, L = j.limits, t = qSum(H);
     const title = 'Voltage per phase, hour by hour';
     const note = `Mean of each phase (L-N) per hour, and in grey the lowest to highest 15-second sample of the hour (any phase). ` +
-      `Dashed: the limits of the alarm register. Hotel time, last ${span} days.`;
-    if (t.vlo === null) return noMeter(box, title, note);
-    box.innerHTML = head(title, note, spanPicker()) + tiles([...t.ph.map((P, n) =>
+      `Dashed: the limits of the alarm register. Hotel time, ${pText()}.`;
+    if (t.vlo === null) return noMeter(box, title, note, H.length > 0);
+    box.innerHTML = head(title, note, periodPicker(recCsv(true))) + tiles([...t.ph.map((P, n) =>
         statTile(`L${n + 1}: mean`, f1(P.n ? P.w / P.n : null), 'V', `lowest ${f1(P.lo)} · highest ${f1(P.hi)} V`)),
       statTile('Voltage unbalance: mean', flag(t.vuMean > L.vu.v, f1(t.vuMean, 2)), '%', `highest hourly mean ${f1(t.vu, 2)} % · limit ${L.vu.v} % (${esc(L.vu.id)})`)]) +
       `<div class="mt-16">${chartCard('ch')}</div>` + sec('Voltage unbalance, hour by hour') + chartCard('ch2') + '<div id="qday"></div>';
     const byT = new Map(H.map(r => [tp(r.t), r]));
-    const range = k => b => { const r = byT.get(b[0]); return r && r[`v${k}_min`] !== undefined ? ` <span class="dim">(${f1(r[`v${k}_min`])}–${f1(r[`v${k}_max`])})</span>` : ''; };
+    const rangeTip = k => b => { const r = byT.get(b[0]); return r && r[`v${k}_min`] !== undefined ? ` <span class="dim">(${f1(r[`v${k}_min`])}–${f1(r[`v${k}_max`])})</span>` : ''; };
     const ext = (r, s, f) => { const v = [1, 2, 3].map(k => r[`v${k}_${s}`]).filter(x => x !== undefined); return v.length ? f(...v) : null; };
-    lineChart(el('ch'), [1, 2, 3].map(k => ({name: 'L' + k, color: C[k - 1], pts: H.map(r => [tp(r.t), r[`v${k}`] ?? null]), extra: range(k)})),
+    lineChart(el('ch'), [1, 2, 3].map(k => ({name: 'L' + k, color: C[k - 1], pts: H.map(r => [tp(r.t), r[`v${k}`] ?? null]), extra: rangeTip(k)})),
       {unit: 'V', axis: 'volts', refs: vRefs(j), bands: [{name: 'Lowest – highest 15-second sample', color: BAND, pts: H.map(r => [tp(r.t), ext(r, 'min', Math.min), ext(r, 'max', Math.max)])}]});
     lineChart(el('ch2'), [{name: 'Mean of the hour', color: C[0], pts: H.map(r => [tp(r.t), r.vu ?? null])},
       {name: 'Highest minute', color: C[1], width: 1.4, pts: H.map(r => [tp(r.t), r.vu_max ?? null])}],
@@ -1063,11 +1133,11 @@ const QVIEWS = {
   },
 
   async pf(box) {
-    const j = await qHourly(span), H = j.hours, L = j.limits, t = qSum(H), lim = L.pf.v, target = 0.95;
+    const j = await qHourly(), H = j.hours, L = j.limits, t = qSum(H), lim = L.pf.v, target = 0.95;
     const title = 'Power factor';
     const note = `Mean power factor of each hour while the load is ${j.pf_load_kw} kW or more (as alarm ${esc(L.pf.id)}), and its lowest 15-second sample. ` +
-      `PLN bills the reactive energy above 62 % of the kWh (power factor 0.85) of the month. Hotel time, last ${span} days.`;
-    if (t.pf === null && t.kvarh === null) return noMeter(box, title, note);
+      `PLN bills the reactive energy above 62 % of the kWh (power factor 0.85) of the month. Hotel time, ${pText()}.`;
+    if (t.pf === null && t.kvarh === null) return noMeter(box, title, note, H.length > 0);
     let cap = null;   // the largest need of an hour: kW x (tan phi now - tan phi at the target)
     for (const r of H) if (r.pf > 0 && r.pf < target && r.p !== undefined) {
       const need = Math.abs(r.p) * (tanPhi(r.pf) - tanPhi(target));
@@ -1075,7 +1145,7 @@ const QVIEWS = {
     }
     const excess = t.kwh !== null && t.kvarh !== null ? Math.max(0, t.kvarh - PLN_KVARH * t.kwh) : null;
     const days = qByDay(H);
-    box.innerHTML = head(title, note, spanPicker()) + tiles([
+    box.innerHTML = head(title, note, periodPicker(recCsv(true))) + tiles([
       statTile('Power factor of the period', flag(under(t.pfE, lim), f1(t.pfE, 2)), '',
         t.pfE === null ? 'no kVArh counter in the records' : `${f1(t.kwh, 0)} kWh and ${f1(t.kvarh, 0)} kVArh (meter counters)`),
       statTile('Mean under load', flag(under(t.pf, lim), f1(t.pf, 2)), '', `lowest 15-second sample ${f1(t.pfmin, 2)}`),
@@ -1113,8 +1183,8 @@ const QVIEWS = {
 };
 
 async function qDaySection() {   // #voltage: one hotel day, minute by minute (redrawn alone by the day buttons)
-  const j = await qHourly(span), L = j.limits, t = qSum(j.hours), today = j.now.slice(0, 10);
-  qDay ??= today;
+  const j = await qHourly(), L = j.limits, t = qSum(j.hours), today = j.now.slice(0, 10);
+  qDay ??= range && range.to < today ? range.to : today;
   const box = el('qday');
   if (!box) return;
   const day = qDay, dj = await getJ(`/api/v1/quality/${site}/day/${day}`);
@@ -1122,8 +1192,8 @@ async function qDaySection() {   // #voltage: one hotel day, minute by minute (r
   const ci = Object.fromEntries(dj.cols.map((c, i) => [c, i])), R = dj.rows, ms = tp(qDay + ' 00:00');
   const worst = t.vloAt ? t.vloAt.t.slice(0, 10) : null;
   const tools = `<div class="headtools"><div class="seg" role="group" aria-label="Day">${segBtn(`data-qday="${isoDay(ms - 864e5)}"`, false, '◀ ' + fdate(ms - 864e5))}${segBtn('', true, fdate(ms))}${
-      segBtn(`data-qday="${isoDay(ms + 864e5)}"`, false, fdate(ms + 864e5) + ' ▶', qDay >= today)}</div>` +
-    (worst && worst !== qDay ? `<button class="btn small" data-qday="${worst}">Lowest of the ${span} days: ${fdate(tp(worst + ' 00:00'))}</button>` : '') + '</div>';
+      segBtn(`data-qday="${isoDay(ms + 864e5)}"`, false, fdate(ms + 864e5) + ' ▶', qDay >= today)}</div>${dateIn('data-pick="qday"', qDay, 'Day')}` +
+    (worst && worst !== qDay ? `<button class="btn small" data-qday="${worst}">Lowest of the period: ${fdate(tp(worst + ' 00:00'))}</button>` : '') + '</div>';
   let lo = null, hi = null, dips = 0, swells = 0;
   for (const r of R) for (const k of [1, 2, 3]) {
     const a = r[ci[`v${k}_min`]] ?? r[ci[`v${k}`]], b = r[ci[`v${k}_max`]] ?? r[ci[`v${k}`]];
@@ -1144,9 +1214,9 @@ async function qDaySection() {   // #voltage: one hotel day, minute by minute (r
     `<div class="mt-16">${chartCard('ch4')}</div>`;
   const pts = k => R.map(r => [tp(`${qDay} ${r[0]}`), r[ci['v' + k]]]);
   const at = new Map(R.map(r => [tp(`${qDay} ${r[0]}`), r]));
-  const range = k => b => { const r = at.get(b[0]); return r && r[ci[`v${k}_min`]] !== null ? ` <span class="dim">(${f1(r[ci[`v${k}_min`]])}–${f1(r[ci[`v${k}_max`]])})</span>` : ''; };
+  const rangeTip = k => b => { const r = at.get(b[0]); return r && r[ci[`v${k}_min`]] !== null ? ` <span class="dim">(${f1(r[ci[`v${k}_min`]])}–${f1(r[ci[`v${k}_max`]])})</span>` : ''; };
   const ext = (r, s, f) => { const v = [1, 2, 3].map(k => r[ci[`v${k}_${s}`]] ?? r[ci[`v${k}`]]).filter(x => x !== null); return v.length ? f(...v) : null; };
-  lineChart(el('ch4'), [1, 2, 3].map(k => ({name: 'L' + k, color: C[k - 1], width: 1.4, pts: pts(k), extra: range(k)})),
+  lineChart(el('ch4'), [1, 2, 3].map(k => ({name: 'L' + k, color: C[k - 1], width: 1.4, pts: pts(k), extra: rangeTip(k)})),
     {unit: 'V', axis: 'volts', gapMs: 3 * 6e4, step: 6e4, refs: vRefs(j),
      bands: [{name: 'Lowest – highest 15-second sample', color: BAND, pts: R.map(r => [tp(`${qDay} ${r[0]}`), ext(r, 'min', Math.min), ext(r, 'max', Math.max)])}]});
 }
@@ -1627,9 +1697,30 @@ document.addEventListener('click', ev => {
     return qDaySection().catch(() => { el('qday').innerHTML = '<section class="card"><div class="empty">Could not read that day from the server.</div></section>'; });
   }
   if (b.dataset.vf) vfAll = b.dataset.vf === 'all';
-  if (b.dataset.span) span = +b.dataset.span;
+  if (b.dataset.span) { span = +b.dataset.span; range = null; periodChanged(); }
   if (b.dataset.day) dayShown = b.dataset.day;
   show(view);
+});
+// From and To: Show (or Enter) applies the two dates; until then Show is highlighted. A day's calendar (One day, Voltage) applies
+// at once, a moment after the last change, so typing a date digit by digit does not redraw the page at every digit.
+document.addEventListener('click', ev => { if (ev.target.closest('button[data-apply]')) applyRange(); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && /^(from|to)$/.test(ev.target.dataset?.pick || '')) { ev.preventDefault(); applyRange(); } });
+const datesEdited = () => { const b = document.querySelector('button[data-apply]'), d = pDates();
+  if (b && el('pFrom') && el('pTo')) b.classList.toggle('primary', el('pFrom').value !== d.from || el('pTo').value !== d.to); };
+let pickT;
+for (const type of ['input', 'change']) document.addEventListener(type, ev => {
+  const k = ev.target.dataset?.pick;
+  if (k === 'from' || k === 'to') return datesEdited();
+  if (type !== 'change' || (k !== 'day' && k !== 'qday')) return;
+  const v = ev.target.value, v0 = view;
+  clearTimeout(pickT);
+  pickT = setTimeout(() => {   // a redraw meanwhile (resize, refresh) replaced the field: the date chosen still counts
+    if (view !== v0 || !/^\d{4}-\d{2}-\d{2}$/.test(v) || v > todayH() || v < '2000-01-01') return;   // other page, or half typed
+    if (k === 'day') { dayShown = v; return show(view); }
+    if (!el('qday')) return;
+    qDay = v;
+    qDaySection().catch(() => { el('qday').innerHTML = '<section class="card"><div class="empty">Could not read that day from the server.</div></section>'; });
+  }, 600);
 });
 addEventListener('hashchange', () => show(location.hash.slice(1)));
 const STATIC = ['now', 'firmware', 'prefs', 'register'];   // not redrawn by a resize or the 5-minute refresh
@@ -1648,7 +1739,10 @@ if (!site) { show(view); setInterval(() => { if (view === 'sites' && !document.h
 else {   // the live call also brings the site profile (names, sensors, contract) the other pages use
   if (view === 'now') tick(); else tick().finally(() => fwReady).finally(() => show(view));
   setInterval(tick, 15000);
-  setInterval(() => { if (!STATIC.includes(view) && !document.hidden) { delete HCACHE[span]; delete QCACHE[span]; WXC = null; WXL = {}; redraw(); } }, 300e3);
+  setInterval(() => {   // a period that ended before today does not change: not read again
+    if (STATIC.includes(view) || document.hidden || (range && range.to < todayH())) return;
+    delete HCACHE[pq(per())]; delete QCACHE[pq(per())]; WXC = null; WXL = {}; redraw();
+  }, 300e3);
 }
 </script>
 </body>

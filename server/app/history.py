@@ -2,6 +2,10 @@
 
     hourly(store, site, device, days)   one row per local hour: kWh, mean and peak kW, sensor means, min and max
     minutes(store, site, device, day)   the 1-minute power of one local day
+    open_records(store, site, device)   the original day files of a period, for the CSV download (csv_chunks)
+
+A period is the last `days` local days (today included) or the local dates start to end (both included, at most
+MAX_DAYS days): see period().
 
 Local time = UTC + the site's utc_offset_h (WITA, UTC+8, at Adab). Energy comes from the meter's cumulative
 counter (EM01_e): each step between two records less than MAX_GAP_S apart is given to the hour of the later
@@ -15,7 +19,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 MAX_GAP_S = 3600
-MAX_DAYS = 62
+MAX_DAYS = 92                 # longest period of the pages and of the CSV download (about 3 months)
 SYS_COLS = ("ts", "rssi", "heap_kb", "up_s", "backlog_min", "sd", "boot")
 
 _cache = {}          # path -> (mtime, size, summary)
@@ -42,6 +46,39 @@ def _offset(store, site):
         return timedelta(hours=float(store.site_profile(site).get("utc_offset_h", 8)))
     except (TypeError, ValueError):
         return timedelta(hours=8)
+
+
+def period(off, days=7, start=None, end=None, now=None):
+    """(first day 00:00, the day after the last 00:00), in local time, of the last `days` days up to today or of the
+    dates start to end ("YYYY-MM-DD", both included; end alone is not allowed, start alone runs to today).
+    ValueError: a bad date, an end before the start, or more than MAX_DAYS days."""
+    now = now or datetime.now(timezone.utc)
+    today = (now + off).replace(hour=0, minute=0, second=0, microsecond=0)
+    if start or end:
+        if not start:
+            raise ValueError("to without from")
+        d0 = datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        d1 = datetime.strptime(end, "%Y-%m-%d").replace(tzinfo=timezone.utc) if end else today
+        if d1 < d0 or (d1 - d0).days >= MAX_DAYS:
+            raise ValueError(f"from must be before to, at most {MAX_DAYS} days")
+        return d0, d1 + timedelta(days=1)
+    days = max(1, min(int(days), MAX_DAYS))
+    return today - timedelta(days=days - 1), today + timedelta(days=1)
+
+
+def first_day(store, site, device, off):
+    """Local date of a logger's oldest record (None without records): the earliest date the pages can show."""
+    for _, _, path in store.day_files(site, device):
+        try:
+            with open(path, encoding="utf-8") as f:
+                f.readline()
+                for ln in f:
+                    t = _parse_ts(ln.split(",", 1)[0])
+                    if t:
+                        return (t + off).strftime("%Y-%m-%d")
+        except OSError:
+            continue
+    return None
 
 
 def _read(path):
@@ -100,14 +137,13 @@ def _files(store, site, device, utc_from, utc_to):
     return [(day, path) for day, _, path in store.day_files(site, device) if d0 <= day <= d1]
 
 
-def hourly(store, site, device, days=15, meter="EM01"):
-    days = max(1, min(int(days), MAX_DAYS))
+def hourly(store, site, device, days=15, meter="EM01", start=None, end=None):
     off = _offset(store, site)
     now = datetime.now(timezone.utc)
-    local_start = (now + off).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days - 1)
-    utc_from = local_start - off
+    local_start, local_end = period(off, days, start, end, now)
+    utc_from, utc_to = local_start - off, min(local_end - off, now)
     out, prev_last = {}, None
-    for _, path in _files(store, site, device, utc_from - timedelta(days=1), now):
+    for _, path in _files(store, site, device, utc_from - timedelta(days=1), utc_to):
         s = _summarise(path, meter, off)
         # the energy step from the previous file's last record to this file's first one
         if prev_last and s["first"]:
@@ -121,10 +157,10 @@ def hourly(store, site, device, days=15, meter="EM01"):
             o = out.setdefault(k, {"kwh": 0.0, "parts": []})
             o["kwh"] += h["kwh"]
             o["parts"].append(h)
-    first_key = local_start.strftime("%Y-%m-%d %H:00")
+    first_key, end_key = local_start.strftime("%Y-%m-%d %H:00"), local_end.strftime("%Y-%m-%d %H:00")
     rows = []
     for k in sorted(out):
-        if k < first_key:
+        if not first_key <= k < end_key:
             continue
         o = out[k]
         n = sum(p["n"] for p in o["parts"])
@@ -146,7 +182,8 @@ def hourly(store, site, device, days=15, meter="EM01"):
                 r[c + "_min"], r[c + "_max"] = round(mn[c], 2), round(mx[c], 2)
         rows.append(r)
     return {"site": site, "device": device, "meter": meter, "utc_offset_h": off.total_seconds() / 3600,
-            "from": first_key, "now": (now + off).strftime("%Y-%m-%d %H:%M"), "hours": rows}
+            "from": first_key, "to": (local_end - timedelta(days=1)).strftime("%Y-%m-%d"),
+            "now": (now + off).strftime("%Y-%m-%d %H:%M"), "first_day": first_day(store, site, device, off), "hours": rows}
 
 
 def minutes(store, site, device, day, meter="EM01"):
@@ -166,3 +203,60 @@ def minutes(store, site, device, day, meter="EM01"):
             pts.append([(t + off).strftime("%H:%M"), p, _num(row.get(f"{meter}_p_min")), _num(row.get(f"{meter}_p_max"))])
     pts.sort()
     return {"site": site, "device": device, "meter": meter, "day": day, "minutes": pts}
+
+
+def open_records(store, site, device, days=7, start=None, end=None):
+    """The original day files that hold the records of a period of local days, for the CSV download.
+
+    The files are UTC days, so the first and the last one reach a few hours outside the period (no row is removed).
+    Returns (first date, last date, [(header, open file, bytes after the header)]). The files are opened and measured
+    under the store's lock, so a row being written is never cut and a file rewritten by a backfill is read whole.
+    The caller streams them with csv_chunks() and closes them."""
+    off = _offset(store, site)
+    local_start, local_end = period(off, days, start, end)
+    files = _files(store, site, device, local_start - off, local_end - off - timedelta(seconds=1))
+    out = []
+    with store.lock:
+        try:
+            for _, path in files:
+                f = open(path, "rb")
+                header = f.readline()
+                out.append((header.rstrip(b"\r\n"), f, os.fstat(f.fileno()).st_size - len(header)))
+        except OSError:
+            for _, f, _ in out:
+                f.close()
+            raise
+    return local_start.strftime("%Y-%m-%d"), (local_end - timedelta(days=1)).strftime("%Y-%m-%d"), out
+
+
+def csv_chunks(files, size=1 << 16):
+    """One CSV from open_records(): the header once, then the rows of every file in order, as they are in the files.
+    When the columns changed during the period (a _2 file, docs/DATA-FORMAT.md), the header has every column in the
+    order first seen and each row its values under its own columns (empty under the others)."""
+    cols = []
+    for header, _, _ in files:
+        cols += [c for c in header.split(b",") if c not in cols]
+    yield b",".join(cols) + b"\n"
+    for header, f, n in files:
+        if header.split(b",") == cols:          # the usual case: the bytes of the file, unchanged
+            last = b"\n"
+            while n > 0:
+                b = f.read(min(size, n))
+                if not b:
+                    break
+                n -= len(b)
+                last = b[-1:]
+                yield b
+            if last != b"\n":
+                yield b"\n"
+            continue
+        at = [cols.index(c) for c in header.split(b",")]
+        out = []
+        for ln in f.read(n).splitlines():       # one day file, under 1 MB
+            if not ln.strip():
+                continue
+            cells = [b""] * len(cols)
+            for i, v in zip(at, ln.split(b",")):
+                cells[i] = v
+            out.append(b",".join(cells) + b"\n")
+        yield b"".join(out)
