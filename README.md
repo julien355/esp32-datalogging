@@ -3,6 +3,7 @@
 Energy and environment datalogger built on a Bluino ESP32-S3 (T/RH, RS485, RTC, analog inputs) board plus an AM2301 temp/RH sensor,
 reading a FORT FCN300 (3E4Y or 3EH4Y, same registers) meter over Modbus RTU. Pilot site: **adab**.
 
+- **Where everything is (GitHub, our computer `C:\dev\esp32-datalogging`, VPS, logger) and how to check it is up to date:** [`docs/CHECK-UP-TO-DATE.md`](docs/CHECK-UP-TO-DATE.md)
 - Plan and work split: [`docs/PLAN.md`](docs/PLAN.md). The monitoring platform (ingest, dashboards, per-site data folders) lives in its own repository, `arkan-monitoring`.
 - What is reused from existing repositories and open-source projects: [`docs/REUSE.md`](docs/REUSE.md)
 - Meter register map and what must be verified: [`docs/meter/`](docs/meter/)

@@ -18,7 +18,7 @@ House rules: the VPS only runs **tags**; the owner approves every container rest
 
 ### A1. On GitHub: merge, then tag
 
-The pull request "Release v0.6.0" was merged into the default branch once CI was green (jobs `firmware`, `server`, `tools`), and the merge commit was tagged `v0.6.0`. Its `/health` answers `"version": "0.6.0"`. No `fw-v` tag comes with it (firmware: A0).
+The pull request "Release v0.6.0" was merged into the default branch once CI was green (jobs `firmware`, `server`, `tools`): merge commit `309d57a`. Its tag `v0.6.0` is pushed from the PC ([`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md) section 7): check that `v0.6.0` is listed on <https://github.com/julien355/esp32-datalogging/tags> before A3.2. Its `/health` answers `"version": "0.6.0"`. No `fw-v` tag comes with it (firmware: A0).
 
 ### A2. Before: where you start from
 
