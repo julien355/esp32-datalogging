@@ -972,10 +972,10 @@ A `handle` block with a matcher wins over the plain `handle` block, so the logge
 
 ### B22. Install the site file, validate, reload (owner)
 
-**Where:** VPS, owner with sudo. First the login file for this platform only, which the site file imports: created empty, with the same owner and rights as the Arkan login file (the logins go in later, [../LIVE.md](../LIVE.md#logins)):
+**Where:** VPS, owner with sudo. First the login file for this platform only, which the site file imports. It holds one comment line and has the same owner and rights as the Arkan login file; the logins go in later ([../LIVE.md](../LIVE.md#logins)). Not empty: Caddy 2.6 refuses to import an empty file (`Could not read tokens ... EOF`):
 
 ```bash
-sudo touch /opt/edge/secrets/monitoring-users.caddy
+echo '# Logins for this platform only (technicians), one line per login: <name> <hash>. docs/LIVE.md "Logins".' | sudo tee /opt/edge/secrets/monitoring-users.caddy
 ```
 
 ```bash

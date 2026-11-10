@@ -13,7 +13,11 @@ And before pushing a tag, check which commit it points to: `git log -1 --oneline
 | **VPS** | `hermes-vps`, folder `/opt/arkan-monitoring` (a git clone, at a tag). Data: `/srv/arkan-monitoring/data` | The newest `v…` tag |
 | **Logger** | `LOG-0001`, site `adab` | The newest `fw-v…` release that is not marked pre-release |
 
-**Latest, 10 November 2026:** code `v0.8.0` (the Modbus link of each meter, the history pages with two dates and a CSV: [`UPDATING.md`](UPDATING.md) section M), after `v0.7.1` (logins for this platform only, a login limited to one site; it includes `v0.7.0`, the site page in the Arkan design: section L). Firmware `0.5.1` (two WiFi networks of equal rank: section W), which includes `0.5.0` (the Modbus link: section M). All of it is merged into the default branch: pull request #9, merge commit `bc2bb84` (it closed #8, #10 and #11 as merged), then #13, merge commit `a4b6812`. **Not yet done:** the tags `v0.7.1` (on `ce96ffb`) and `v0.8.0` (on `bc2bb84`), the VPS update, the bench test and the tag `fw-v0.5.1` (on `a4b6812`). `fw-v0.5.0` is skipped: 0.5.1 contains it. All of that is the general update, [section 7](#7-general-update-to-do-now-in-order-10-november-2026). Before it: the VPS runs `v0.6.0` (commit `309d57a`); `LOG-0001` runs firmware `0.4.1` (release `fw-v0.4.1`, same commit); `0.4.0` is marked withdrawn (pre-release), never send it.
+**Latest, 10 November 2026:** code `v0.8.0` (the Modbus link of each meter, the history pages with two dates and a CSV: [`UPDATING.md`](UPDATING.md) section M), after `v0.7.1` (logins for this platform only, a login limited to one site; it includes `v0.7.0`, the site page in the Arkan design: section L). Firmware `0.5.1` (two WiFi networks of equal rank: section W), which includes `0.5.0` (the Modbus link: section M). All of it is merged into the default branch: pull request #9, merge commit `bc2bb84` (it closed #8, #10 and #11 as merged), then #13, merge commit `a4b6812`.
+
+**Done on 10 November** ([section 7](#7-general-update-to-do-now-in-order-10-november-2026), steps 1 to 4): the tags `v0.7.1` (on `ce96ffb`) and `v0.8.0` (on `bc2bb84`) are pushed; the merged branches are `archive/…` tags; the VPS runs `v0.8.0`; the technician has a login limited to Adab, without firmware update.
+
+**Still to do:** `LOG-0001` runs firmware `0.4.1` (release `fw-v0.4.1`). Next comes the bench test of `0.5.1` and the tag `fw-v0.5.1` on `a4b6812` (steps 5 and 6). `fw-v0.5.0` is skipped: 0.5.1 contains it. `0.4.0` is marked withdrawn (pre-release): never send it.
 
 ## 2. GitHub (browser, 1 minute)
 
@@ -68,7 +72,7 @@ cd /opt/arkan-monitoring
 git describe --tags --always
 ```
 
-**Expected:** the newest `v…` tag of section 2 (today `v0.8.0`, once tagged).
+**Expected:** the newest `v…` tag of section 2 (today `v0.8.0`).
 
 ```bash
 curl -s http://127.0.0.1:8800/health
@@ -131,10 +135,10 @@ A cloud session cannot push tags or delete branches (GitHub access refuses it), 
 
 | # | Step | Where | Time |
 |---|---|---|---|
-| 1 | Push the tags `v0.7.1` and `v0.8.0` | PC | 3 min |
-| 2 | Archive the merged branches | PC | 2 min |
-| 3 | Update the VPS from `v0.6.0` to `v0.8.0` | VPS (owner approves the restart and the Caddy reload) | 30 min |
-| 4 | The technician's login | VPS (owner) | 10 min |
+| 1 | ~~Push the tags `v0.7.1` and `v0.8.0`~~ **Done 10 Nov** | PC | 3 min |
+| 2 | ~~Archive the merged branches~~ **Done 10 Nov** | PC | 2 min |
+| 3 | ~~Update the VPS from `v0.6.0` to `v0.8.0`~~ **Done 10 Nov** | VPS (owner approves the restart and the Caddy reload) | 30 min |
+| 4 | ~~The technician's login~~ **Done 10 Nov** | VPS (owner) | 10 min |
 | 5 | Bench test firmware 0.5.1 on `LOG-0001` by cable (the Modbus link, then the two WiFi networks with a phone hotspot) | PC + logger on USB + phone | 45 min |
 | 6 | Release firmware 0.5.1 (`fw-v0.5.1`) | PC | 5 min |
 | 7 | Archive the old VPS copy (left from section 8) | VPS (owner) | 2 min |
@@ -143,6 +147,8 @@ A cloud session cannot push tags or delete branches (GitHub access refuses it), 
 Step 2 after step 1. Steps 4 and 5 after step 3, in any order. Step 6 only after step 5 passed.
 
 ### Step 1. Push the tags `v0.7.1` and `v0.8.0` (PC, PowerShell)
+
+**Done on 10 November 2026:** `v0.7.1` points to `ce96ffb` (service 0.7.1) and `v0.8.0` to `bc2bb84` (service 0.8.0). Kept here for reference.
 
 [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 1 first: the folder on the default branch, up to date and clean.
 
@@ -200,6 +206,8 @@ git push origin v0.7.1 v0.8.0
 
 ### Step 2. Archive the merged branches (PC, PowerShell)
 
+**Done on 10 November 2026:** the seven branches are `archive/…` tags on their last commits, and the last commit of `claude/great-bell-00lrct` is `archive/claude/great-bell-00lrct-d1a03fa`. GitHub keeps only the default branch. Kept here for reference.
+
 Each branch becomes a tag `archive/<name>`, then the branch is deleted (section 6). All seven are merged. `claude/exciting-ritchie-a4bjtk` is the branch of the cloud session that wrote this section, and `claude/fervent-heisenberg-3gi5iq` is the branch of #13.
 
 ```powershell
@@ -233,6 +241,8 @@ git push origin --delete claude/great-bell-00lrct
 
 ### Step 3. Update the VPS from `v0.6.0` to `v0.8.0` (`ssh hermes-vps`)
 
+**Done on 10 November 2026:** `/health` answers `"version": "0.8.0"`; `USER_SITES=` added to `server/.env`; new Caddy file installed, the old one kept as `/opt/edge/monitoring.caddy.before-v0.8.0`. One surprise: `caddy validate` refused the empty `monitoring-users.caddy` (`Could not read tokens while importing ...: EOF`). Caddy 2.6 does not import an empty file, so the file got one comment line, and [`UPDATING.md`](UPDATING.md) L3.3 now says so. Kept here for reference.
+
 Do it in one update, straight to `v0.8.0`. Follow [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 2, with `<previous-tag>` = `v0.6.0` and `vX.Y.Z` = `v0.8.0`. Its 2.1 is step 1 above. The points below are what this update needs on top, in the order of part 2.
 
 1. **2.2:** `git describe --tags --always` shows `v0.6.0`.
@@ -250,7 +260,7 @@ git diff --stat v0.6.0 v0.8.0 -- server/.env.example server/deploy server/docker
 - `docker-compose.yml`: nothing by hand.
 - `oed/monitoring-oed.caddy`: nothing, OED is not installed on `hermes-vps`.
 - `monitoring.caddy` (owner):
-  - First the empty login file for this platform only: [`UPDATING.md`](UPDATING.md) **L3.3**.
+  - First the login file for this platform only, with one comment line (not empty: Caddy 2.6 refuses an empty file): [`UPDATING.md`](UPDATING.md) **L3.3**.
   - Then the new Caddy file, with `caddy validate`: [`UPDATING.md`](UPDATING.md) **L3.4**. Name the copy `/opt/edge/monitoring.caddy.before-v0.8.0`. In `v0.6.0` the file was the same as in `v0.7.0`, so the `diff` there expects the same lines.
 5. **2.6 (owner approves):** `docker compose up -d --build` in `/opt/arkan-monitoring/server`, then `sudo systemctl reload caddy`.
 6. **Checks:**
@@ -271,6 +281,8 @@ git diff --stat v0.6.0 v0.8.0 -- server/.env.example server/deploy server/docker
 **Done when:** `/health` answers `"version": "0.8.0"`, and the Adab page has the Arkan design, the **Open alarms** card with the meter line, and **From … to …** on the history pages.
 
 ### Step 4. The technician's login (owner, `ssh hermes-vps`)
+
+**Done on 10 November 2026:** one login in `monitoring-users.caddy`, limited to `adab` by `USER_SITES`. It is not in `ADMIN_USERS`, so it has no **Firmware update**. Checked: `/api/v1/admin/me` answers `"sites": ["adab"]`, `/live/` sends it to `/live/adab/`, and a private window shows the Adab page without **All sites**. The login name is not written here: logins stay out of git. Kept here for reference.
 
 After step 3. Follow [`LIVE.md`](LIVE.md#adding-a-technicians-login-owner-on-hermes-vps), steps 1 to 7. Decide two things first:
 
@@ -395,7 +407,7 @@ Section 6, the part marked **VPS (owner)**: archive `/opt/arkan-monitoring.hand-
 
 Run sections 2 to 5 of this guide. Expected:
 - the newest tags are `v0.8.0` and `fw-v0.5.1`, and the newest run on the **Actions** page is green;
-- the only branch is the default branch (step 2);
+- the only branch is the default branch (step 2). If `claude/exciting-ritchie-a4bjtk` is back (a later docs pull request of the cloud session, merged), delete it with `git push origin --delete claude/exciting-ritchie-a4bjtk`: its work is in the default branch;
 - the PC folder is clean on the default branch;
 - the VPS runs `v0.8.0` (`/health` answers `0.8.0`);
 - `LOG-0001` runs `fw 0.5.1` with a fresh last record.

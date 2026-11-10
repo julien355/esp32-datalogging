@@ -2,7 +2,7 @@
 
 How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: firmware `0.5.1`** (section W, below, the loggers only): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0`** (section M, with firmware `0.5.0`, released as part of `0.5.1`): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
-**Status, 10 November 2026:** sections L and M are merged into the default branch (pull request #9, merge commit `bc2bb84`), and section W too (pull request #13, merge commit `a4b6812`). None of them is tagged or installed yet. The general update goes from `v0.6.0` straight to `v0.8.0`, and from firmware `0.4.1` straight to `0.5.1` (it contains 0.5.0, so `fw-v0.5.0` is never tagged). Step by step: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md#7-general-update-to-do-now-in-order-10-november-2026) section 7. `v0.7.0` was tagged but not installed: going from `v0.6.0` straight to `v0.7.1` or `v0.8.0` is fine, then do the N4 browser checks too. Before them: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
+**Status, 10 November 2026:** sections L and M are merged into the default branch (pull request #9, merge commit `bc2bb84`), and section W too (pull request #13, merge commit `a4b6812`). **The VPS runs `v0.8.0` since 10 November** (tags `v0.7.1` and `v0.8.0` pushed; the technician's login limited to Adab). **Still to do:** `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`) and goes straight to `0.5.1`, which contains 0.5.0, so `fw-v0.5.0` is never tagged. Steps 5 and 6 of [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md#7-general-update-to-do-now-in-order-10-november-2026) section 7. `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
 
@@ -248,7 +248,7 @@ pio device monitor -p COM4 -b 115200 -f esp32_exception_decoder -f time -f log2f
 
 | Part | What changed | What it needs |
 |---|---|---|
-| Logins for this platform only | A second Caddy login file, `/opt/edge/secrets/monitoring-users.caddy`, for people who need only this platform (a technician). It opens the site pages and their API, not OED and not the other Arkan dashboards | The file must exist before the new Caddy file is installed (L3.3), empty while nobody is in it |
+| Logins for this platform only | A second Caddy login file, `/opt/edge/secrets/monitoring-users.caddy`, for people who need only this platform (a technician). It opens the site pages and their API, not OED and not the other Arkan dashboards | The file must exist before the new Caddy file is installed (L3.3), with at least one comment line: Caddy 2.6 refuses an empty file |
 | `USER_SITES` in `server/.env` | Limits a login to some sites (`tech-adab:adab`): `/live/` and another site's page send it to its own site, **All sites** leaves its menu, every API path of another site or of another site's logger answers `403` (firmware update and register table included). Logins not listed: no change | An optional `.env` line, with the first such login ([`LIVE.md`](LIVE.md#logins)) |
 | Site page | **All sites** hidden for those logins; **Settings** shows the login's sites | VPS update |
 | `GET /api/v1/admin/me` | New field `sites`: `null` (every site) or the login's sites | Nothing |
@@ -340,10 +340,10 @@ git checkout v0.7.1
 
 **L3.3 The login file for this platform only (owner)**
 
-Create it empty, with the same owner and rights as the Arkan login file (Caddy must be able to read it):
+Create it with one comment line, and with the same owner and rights as the Arkan login file, so that Caddy can read it. **Not empty:** Caddy 2.6 refuses to import an empty file (`Could not read tokens while importing /opt/edge/secrets/monitoring-users.caddy: EOF`, seen on 10 November 2026). A file holding only a comment line counts as no login.
 
 ```bash
-sudo touch /opt/edge/secrets/monitoring-users.caddy
+echo '# Logins for this platform only (technicians), one line per login: <name> <hash>. docs/LIVE.md "Logins".' | sudo tee /opt/edge/secrets/monitoring-users.caddy
 ```
 
 ```bash
@@ -390,7 +390,7 @@ If the port is not 8800 (tutorial 2, B14), edit the three `reverse_proxy 127.0.0
 sudo caddy validate --config /etc/caddy/Caddyfile
 ```
 
-**Expected:** `Valid configuration`. **If** an error names `monitoring-users.caddy`: the file is missing (L3.3), or Caddy refuses it empty: add the technician's line first ([`LIVE.md`](LIVE.md#adding-a-technicians-login-owner-on-hermes-vps), steps 1 to 3) and validate again. Nothing has changed on the live site until the reload.
+**Expected:** `Valid configuration`. **If** an error names `monitoring-users.caddy` (for example `Could not read tokens ... EOF`): the file is missing or empty. Write its comment line (L3.3) and validate again. Nothing has changed on the live site until the reload.
 
 **L3.5 Rebuild, restart and reload (owner approves)**
 

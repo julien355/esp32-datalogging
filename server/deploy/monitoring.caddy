@@ -1,7 +1,8 @@
 # /opt/edge/sites/monitoring.caddy on hermes-vps (native Caddy, imported by the main Caddyfile).
 # Logins: the Arkan logins of every dashboard (/opt/edge/secrets/hub-users.caddy) and the logins for this
 # platform only (/opt/edge/secrets/monitoring-users.caddy, technicians: docs/LIVE.md "Logins"). Both files
-# must exist (the second may be empty). USER_SITES in server/.env limits a login to some sites.
+# must exist; the second holds at least a comment line (Caddy 2.6 refuses an empty imported file).
+# USER_SITES in server/.env limits a login to some sites.
 # The loggers' endpoints are open (no basicauth): the device token is checked by the service.
 # After any change: caddy validate, then the owner approves the reload.
 

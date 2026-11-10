@@ -9,7 +9,8 @@
 # (OED v1.0.0 src/server/app.js), so the two never collide.
 # Logins: our service takes the Arkan logins (hub-users.caddy) and the logins for this platform only
 # (monitoring-users.caddy, technicians, maybe limited to one site by USER_SITES: docs/LIVE.md "Logins").
-# OED shows every site, so it takes the Arkan logins only. Both files must exist (the second may be empty).
+# OED shows every site, so it takes the Arkan logins only. Both files must exist; the second holds at
+# least a comment line (Caddy 2.6 refuses an empty imported file).
 # After any change: caddy validate, then the owner approves the reload.
 
 arkan-monitoring.duckdns.org {
