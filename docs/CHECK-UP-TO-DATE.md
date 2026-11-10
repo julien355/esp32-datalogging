@@ -48,6 +48,7 @@ git status
 - `Your branch is behind ... by N commits`: run `git pull`.
 - Another branch (for example `release-0.4.1` after a bench flash): `git checkout ccr-a52c0421-oygp4n`, then `git pull`.
 - Modified files listed: commit and push them, or ask before you go on.
+- `needs merge` or `you need to resolve your current index first`: an old merge was left unfinished. Do not resolve it: close VS Code, move the whole folder to `C:\dev\_archive\esp32-datalogging-<date>` (`Move-Item`), clone again (above), then check the archived copy with the command below. Done this way on 10 November 2026.
 
 Is there anything on this PC that GitHub does not have?
 
@@ -251,6 +252,8 @@ docker compose exec ingest python tools/manage.py set-config LOG-0001 ota_check_
 **Done when:** within 15 minutes, `docker compose exec ingest python tools/manage.py show-config LOG-0001` shows `ota_check_h = 6` in the lines reported by the logger.
 
 ### Step 7. Archive the old copies
+
+**PC done on 10 November 2026:** the old folder (an unfinished merge from 8 November) is `C:\dev\_archive\esp32-datalogging-2026-11-10`, and `C:\dev\esp32-datalogging` is a fresh clone. VPS copy: see below.
 
 Section 6: other copies on the PC go into `C:\dev\_archive\`; the owner archives and removes `/opt/arkan-monitoring.hand-copy-2026-11-08` on the VPS.
 

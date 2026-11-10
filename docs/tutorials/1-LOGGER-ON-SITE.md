@@ -275,16 +275,12 @@ Choose **one** of the two ways.
 
 **Way 1: git clone (recommended, you can update later with `git pull`).**
 
-1. Open PowerShell in the folder where you keep projects, for example your Documents folder:
+1. Open PowerShell. The code goes in **one** folder, `C:\dev\esp32-datalogging`, the same on every PC ([`CHECK-UP-TO-DATE.md`](../CHECK-UP-TO-DATE.md)). Clone the repository into it:
    ```powershell
-   cd $HOME\Documents
+   git clone https://github.com/julien355/esp32-datalogging.git C:\dev\esp32-datalogging
    ```
-2. Clone the repository:
-   ```powershell
-   git clone https://github.com/julien355/esp32-datalogging.git
-   ```
-   Expected: a folder `esp32-datalogging` is created, with `firmware`, `docs` and `server` inside.
-   If not: if GitHub asks you to sign in, the repository is private: ask the owner to give your GitHub account access.
+   Expected: the folder `C:\dev\esp32-datalogging` is created, with `firmware`, `docs` and `server` inside.
+   If not: `already exists and is not an empty directory`: the folder is there already; bring it up to date instead (`CHECK-UP-TO-DATE.md` section 3). If GitHub asks you to sign in, check the address.
 
 **Way 2: ZIP download (no Git needed, no easy update).**
 
@@ -314,7 +310,7 @@ This section takes you from "the code is on the laptop" (A3) to "the board runs 
 #### A4.1 Open the project the right way
 
 1. Open VS Code.
-2. Menu **File > Open Folder...**, go to `Documents\esp32-datalogging\firmware` and click **Select Folder**.
+2. Menu **File > Open Folder...**, go to `C:\dev\esp32-datalogging\firmware` and click **Select Folder**.
    **Choose the `firmware` folder itself**, the one that contains the file `platformio.ini`, not the top folder `esp32-datalogging`. PlatformIO only recognises a project when `platformio.ini` is at the top of the opened folder.
 3. If VS Code asks "Do you trust the authors of the files in this folder?", click **Yes, I trust the authors**.
 4. Expected, within a minute:
@@ -346,7 +342,7 @@ Use **one** of these three ways:
 
 **Check that you are in the right terminal.** A panel opens at the bottom of VS Code. Its tab (on the right of the panel) is named **PlatformIO CLI** or similar, and the prompt ends with your project folder, for example:
 ```
-PS C:\Users\you\Documents\esp32-datalogging\firmware>
+PS C:\dev\esp32-datalogging\firmware>
 ```
 Type:
 ```powershell
@@ -357,7 +353,7 @@ If not:
 - `pio : The term 'pio' is not recognized...`: you are in a normal terminal (menu **Terminal > New Terminal** opens one of those). Close it (trash-can icon on the right of the terminal panel) and use Way 1, 2 or 3.
 - The prompt is not in `...\firmware`: type the next command (adapt the path):
   ```powershell
-  cd $HOME\Documents\esp32-datalogging\firmware
+  cd C:\dev\esp32-datalogging\firmware
   ```
 - To see the terminal panel again after hiding it: menu **View > Terminal** (or press `Ctrl` and the backtick key, left of `1` on a US keyboard).
 
