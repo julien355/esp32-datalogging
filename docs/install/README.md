@@ -4,7 +4,7 @@ Lab manual, version 0.1, 5 November 2026. Based on `docs/PLAN.md` v0.9.
 
 This manual takes a group of students, under the supervision of an engineer, from a bare logger board on the bench to a commissioned logger at the Adab hotel. Each lab teaches the theory behind the step, then has you do it, measure it and write it down.
 
-> **Status of what you are installing (updated 8 November 2026).** The logger firmware (0.4.0) and the monitoring platform's ingest service are now **written** and tested in CI and with a simulated logger, **not yet on the real board**. The step-by-step guides that match them are the tutorials in [`../tutorials/`](../tutorials/) (logger on site, VPS, Open Energy Dashboard); where this manual and a tutorial disagree, **the tutorial is right** (upload format, sensor timing, settings). Labs 1, 2, 3 and 5 use the test sketches in [`labs/`](labs/).
+> **Status of what you are installing (updated 9 November 2026).** The logger firmware (0.4.1) and the monitoring platform's ingest service are now **written** and tested in CI and with a simulated logger. The bench board has run firmware 0.3.0 since 8 November, online and uploading, with the AM2301 on GPIO 1; 0.4.1 is not yet tested on it. The step-by-step guides that match them are the tutorials in [`../tutorials/`](../tutorials/) (logger on site, VPS, Open Energy Dashboard); where this manual and a tutorial disagree, **the tutorial is right** (upload format, sensor timing, settings). Labs 1, 2, 3 and 5 use the test sketches in [`labs/`](labs/).
 
 > **Facts still to verify.** The pin map, the meter register map and its scaling are **not verified**. They are marked **to verify** wherever they appear. Part of your job in these labs is to verify them and record the result. Never treat a "to verify" value as a fact until your record sheet, signed by the supervisor, says it is.
 
@@ -182,7 +182,7 @@ From `docs/PLAN.md` section 2, read from photos of the board (`docs/img/board-to
 | I2C SDA / SCL | 8 / 9 | to verify in Lab 1 |
 | SD SCK / MISO / MOSI | 12 / 13 / 11 | to verify in Lab 1 (the "SPI INTERFACE" header reads GND 3V3 12 13 11 21) |
 | SD CS | 10 or 21 | to verify in Lab 1 |
-| RS485 TX / RX / DE-RE | top 3 rows of the back table | to verify in Lab 1, by reading the back silkscreen and by the Lab 3 echo test |
+| RS485 TX / RX / DE-RE | TX 17, RX 18, no DE (board's pin table, 9 Nov 2026) | to confirm by the Lab 3 test (a Modbus answer) |
 | AM2301 data (`TH2`) | 4 (proposed: free on the header, not a strapping pin) | to verify in Lab 1 and Lab 2 |
 
 ---
@@ -202,7 +202,7 @@ The ESP32-S3 runs at **3.3 V**. Its input pins read a voltage as "low" below abo
 Consequences on this board:
 
 - **Power:** 5 V comes in on USB-C. A regulator on the board makes 3.3 V for the ESP32, the SD card, the RTC and the sensors. The DC jack feeds a different regulator that needs **7 to 15 V**: 5 V there is too low, and feeding two inputs at once can back-feed one supply into the other. Drawing (b).
-- **Strapping pins:** some GPIOs (on the ESP32-S3: GPIO 0, 3, 45, 46) are read at reset to choose the boot mode. A sensor pulling one of them at power-up can stop the board from booting. That is why `TH2` is proposed on GPIO 4, not a strapping pin.
+- **Strapping pins:** some GPIOs (on the ESP32-S3: GPIO 0, 3, 45, 46) are read at reset to choose the boot mode. A sensor pulling one of them at power-up can stop the board from booting. That is why `TH2` is on GPIO 1, not a strapping pin.
 - **Current per pin:** keep it to a few mA. A 4.7 kohm pull-up to 3.3 V sinks only 3.3 / 4700 = 0.7 mA when the line is pulled low.
 
 **In the lab:** you measure the 5 V and 3.3 V rails, and confirm that nothing you connect brings more than 3.3 V to a pin.
@@ -366,7 +366,7 @@ Worked example: outdoors T = 29.8 C, RH = 66.5 %: gamma = ln(0.665) + 17.62 x 29
 6. **I2C scan.** Read the list of addresses. Identify each one (section 4.2). If nothing is found, try SDA and SCL swapped (edit the pins) and record which works.
 7. **RTC.** Read the time. Set it to **UTC** with `T2026-11-05 06:30:00` (use the real UTC time from a phone or `https://time.is/UTC`). Read it again after 10 minutes and note the drift. Unplug USB for 2 minutes, plug in, read again: the time must have kept running (the CR1220 cell). Record `lostPower`.
 8. **SD card.** Insert the card. The sketch tries CS = 10 first; type `c` to try 21. Record which CS works. Read the file back. Remove the card, read it on the laptop: the lines must be there.
-9. **Free GPIO for `TH2`.** With nothing connected to GPIO 4, check on the header that GPIO 4 is free (not tied to another part: continuity to nearby pins and to GND/3V3 should be open). Record.
+9. **Free GPIO for `TH2`.** With nothing connected to GPIO 1, check on the header that GPIO 1 is free (not tied to another part: continuity to nearby pins and to GND/3V3 should be open). Record.
 10. **Clean up:** unplug USB, store the board in its ESD bag.
 
 **Expected result.**
@@ -393,7 +393,7 @@ Worked example: outdoors T = 29.8 C, RH = 66.5 %: gamma = ln(0.665) + 17.62 x 29
 | SD SCK / MISO / MOSI | 12 / 13 / 11 (to verify) | | |
 | SD CS that works | 10 or 21 | | |
 | RS485 TX / RX / DE from back silkscreen | (unknown) | | |
-| GPIO 4 free on the header | yes (to verify) | | |
+| GPIO 1 free on the header | yes | | |
 | Safety rules read and signed (names) | | | |
 | Supervisor signature, date | | | |
 
@@ -420,7 +420,7 @@ Worked example: outdoors T = 29.8 C, RH = 66.5 %: gamma = ln(0.665) + 17.62 x 29
 **Steps.**
 
 1. **USB unplugged.** Read the AM2301's label: check the wire colours (usually red VCC, black GND, yellow DATA). Record them.
-2. **Wire it as in drawing (d):** VCC to **3V3**, GND to **GND**, DATA to **GPIO 4**, and the **4.7 kohm resistor from DATA to 3V3** at the board end. Use the real 1 m cable between the board and the sensor.
+2. **Wire it as in drawing (d):** VCC to **3V3**, GND to **GND**, DATA to **GPIO 1**, and the **4.7 kohm resistor from DATA to 3V3** at the board end. Use the real 1 m cable between the board and the sensor.
 3. **Check before power:** resistance DATA to 3V3 = 4.7 kohm (plus or minus 5 %). Continuity on each core end to end. No short between cores.
 4. **Power on (USB-C).** Measure DATA to GND with the sensor idle: expect **3.2 to 3.4 V**. Measure VCC at the sensor end: 3.2 to 3.4 V. **If you see 5 V anywhere on DATA, unplug at once.**
 5. **Flash** `lab2_am2301.ino`. Watch the lines every 5 s. Leave it 10 minutes: the sensors must settle (the AM2301 is slow, about 2 s per reading and minutes to follow a temperature step).
@@ -893,7 +893,7 @@ Rules for the tests:
 | Board gets hot, smells | 5 V on the DC jack or on a GPIO, reversed supply | **Unplug at once.** Check drawing (b); call the supervisor |
 | Upload fails ("no serial data", "port busy") | Not in download mode, wrong port, Serial Monitor open | Hold BOOT, press RESET, release BOOT; close the monitor; pick the right port |
 | Serial Monitor empty | "USB CDC On Boot" disabled, wrong baud | Enable it; 115200 baud |
-| Board does not boot with `TH2` connected | DATA on a strapping pin, or pulled low at reset | Use GPIO 4 (to verify); check the sensor wiring |
+| Board does not boot with `TH2` connected | DATA on a strapping pin, or pulled low at reset | Use GPIO 1 (`pin_dht` = 1); check the sensor wiring |
 | I2C scan finds nothing | Wrong SDA/SCL pins, swapped, missing pull-ups | Swap 8 and 9; check the board's I2C header; measure SDA/SCL idle at 3.3 V |
 | RTC loses time after unplugging | Flat or missing CR1220, cell upside down | Measure the cell (about 3 V); replace; + side up |
 | RTC time 8 h out | Set in WITA instead of UTC | Set it again in UTC |

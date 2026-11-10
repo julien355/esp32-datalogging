@@ -1,6 +1,6 @@
 # Logger firmware: functions and settings
 
-Firmware **0.4.0** (CSV schema 3; 0.4.0 adds the remote register table (2.9.2) and the OTA build marker (2.8)), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
+Firmware **0.4.1** (CSV schema 3; 0.4.0 added the remote register table (2.9.2) and the OTA build marker (2.8); 0.4.1 fixes the watchdog restart on empty server replies, see [`UPDATING.md`](UPDATING.md) section 5, and moves the AM2301 default to GPIO 1), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
 Status: **written, compiled by CI, not yet run on the board.** The pin map and the meter register map are still **to verify** (Lab 1 and Lab 3 of the install manual).
 
 How to build, flash, configure and test it: [`OFFICE-PREP.md`](OFFICE-PREP.md). The file format: [`DATA-FORMAT.md`](DATA-FORMAT.md).
@@ -162,7 +162,7 @@ Stored in NVS (survive power cuts and reflashing; erased only by `factory`). Cha
 |  | `pin_rs_tx` | `-1` | RS485 TX (to verify, -1 = not set) |
 |  | `pin_rs_rx` | `-1` | RS485 RX (to verify, -1 = not set) |
 |  | `pin_rs_de` | `-1` | RS485 DE/RE, -1 if the board switches by itself |
-|  | `pin_dht` | `4` | AM2301 data |
+|  | `pin_dht` | `1` | AM2301 data |
 |  | `pin_led` | `-1` | Status LED, -1 = none |
 |  | `pin_btn` | `0` | Setup button (BOOT = 0): hold 3 s to open the setup portal |
 | Robustness | `reboot_hr` | `19` | Daily reboot at this UTC hour, minute 05 (19 = 03:05 WITA), -1 = never |

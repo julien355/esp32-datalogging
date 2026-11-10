@@ -76,7 +76,7 @@ Plain text, UTF-8, comma separated, `\n` line ends, a header line, no quotes, `.
 | `up_s` | s | Uptime |
 | `backlog_min` | min | Age of the oldest record not yet uploaded |
 | `sd` | | 1 = written to the SD card, 0 = the card was failing (row kept in RAM only) |
-| `boot` | | On the first record after a boot only: `reason@firmware`, for example `poweron@0.4.0` or `sw:ota@0.4.1` |
+| `boot` | | On the first record after a boot only: `reason@firmware`, for example `poweron@0.4.1` or `sw:ota@0.4.2` |
 
 A second meter adds the same block with `EM02_`. The meter columns and their scales come from the register table: **until the register check, the values and units of currents and powers are not trusted.**
 

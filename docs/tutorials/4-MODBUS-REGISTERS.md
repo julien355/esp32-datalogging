@@ -370,7 +370,7 @@ Here the **laptop plays the meter** and the **logger reads it** through the real
 
 ### 4.1 Wire it
 
-Laptop adapter `A` to the logger's `A`, `B` to `B` (and `G` to `G` if the adapter has one). Swapped `A`/`B` only gives timeouts: swap and retry. The logger's `120` jumper can stay on (the cable is short).
+Laptop adapter `A` to the logger's `A+`, `B` to `B-` (and `G` or `GND` to the logger's `GND` if the adapter has one; the logger's RS485 terminals are printed `A+`, `B-`, `GND`). Swapped `A`/`B` only gives timeouts: swap and retry. The logger's `120` jumper can stay on (the cable is short).
 
 ### 4.2 Start the fake meter
 

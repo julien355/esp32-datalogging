@@ -78,6 +78,21 @@ Default for Adab:
 - Each day file is summarised once and kept in memory until it changes: the first 14-day request reads the files (under a second for 14 days), later ones take a few milliseconds.
 - These pages overlap with OED's line, bar and compare graphs. OED stays for what they do not do: groups of sites, export, maps, the comparison of any period.
 
+**Power quality pages of `/live/<site>/`** (side menu, group *Power quality*, added 9 November 2026):
+
+| Menu | Address | What it shows |
+|---|---|---|
+| Power quality | `#quality` | the share of minutes with all three phases inside the voltage limits (A05/A06: 207–242 V, 1-minute means), the lowest and highest 15 s sample, dips and swells (A26/A27: minutes with a 15 s sample below 207 V or above 253 V; below 100 V is A04 phase lost), voltage unbalance (A28, 2 %), the frequency range (A07, 50 ± 0.5 Hz), the power factor of the period, current imbalance (A10); a table day by day (click a day for its voltage minute by minute); the power quality lines of the alarm log of the period; the frequency hour by hour with its lowest–highest band |
+| Voltage | `#voltage` | each phase's hourly mean with a grey band from the lowest to the highest 15 s sample, and the limits as dashed lines; voltage unbalance hour by hour (mean and highest minute, A28 line); **one hotel day minute by minute** (◀ ▶, and a button to the day of the lowest sample of the period); hover for each phase's range |
+| Power factor | `#pf` | power factor of the period from the kWh and kVArh counters; mean under load; share of the loaded time below 0.85; the **kVArh above 62 % of the kWh** (what PLN bills as excess reactive energy when the month's power factor is under 0.85); an indicative capacitor size to reach 0.95; the power factor hour by hour with its lowest sample, its mean by hour of the day, kW and kvar hour by hour, and a table day by day |
+
+- Data: `GET /api/v1/quality/<site>?days=N` (one row per hotel hour, with the limits and the power quality alarm lines) and `GET /api/v1/quality/<site>/day/<date>` (the 1-minute voltage, frequency and power factor of one hotel day), from the day files by `server/app/quality.py`. Same login as the rest. 7, 14 or 31 days, like the history pages.
+- **The limits come from the alarm register in use** (`alarm-register.csv` on the VPS, with the site's own lines): change a threshold there and the page counts against it at the next request, so the page and the alarms always agree. A line switched off (`enabled` = no) still gives its threshold, shown as "(alarm off)".
+- Same rules as the alarms: unbalance is the largest deviation of a phase from the mean of the three, in % of the mean; current imbalance is not counted below 5 A; the power factor is counted only while the load is 1 kW or more, without its sign (leading or lagging is not told apart).
+- The power factor of a period is kWh / √(kWh² + kVArh²) from the meter's counters `EM01_e` and `EM01_eq`, like PLN's monthly reading. The capacitor size is the largest need of an hour, kW × (tan φ − tan φ at 0.95): a first figure for an automatic bank, to confirm with a site survey.
+- What a 1-minute record of 15 s samples cannot show: a sag shorter than the sampling, harmonics (THD) and flicker. The register table read today has no harmonic values.
+- Each day file is summarised once and kept in memory until it changes, as for the history pages: under a second for the first 14-day request, then a few milliseconds.
+
 **Weather pages of `/live/<site>/`** (side menu, group *Weather*, added 9 November 2026): **Today** (`#wtoday`, the forecast hour by hour with the outdoor sensor beside the past hours), **Tomorrow** (`#wtomorrow`, the next day forecast) and **Weather log** (`#wlog`, the actual weather of each hour against the forecast made the day before, with the day's kWh). Live now shows one weather line under the alarms. Open-Meteo, fetched every hour by the ingest service; logs in `sites/<site>/weather/`. Setup and file format: [`WEATHER.md`](WEATHER.md).
 
 **Logger pages of `/live/<site>/`** (side menu, group *Logger*):

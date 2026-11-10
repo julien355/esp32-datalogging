@@ -40,8 +40,9 @@ class Sim:
     def values(self, t, advance=False):
         hour = (datetime.fromtimestamp(t, timezone.utc).hour + 8) % 24   # WITA
         load = 18 + 14 * max(0, math.sin((hour - 6) / 24 * 2 * math.pi)) + random.uniform(-1.5, 1.5)
-        v = [230 + random.uniform(-2, 2) for _ in range(3)]
-        pf = 0.92 + random.uniform(-0.02, 0.02)
+        # the supply sags a little with the load; the power factor is lower at light load (night), as in most hotels
+        v = [233 - 0.12 * load + d + random.uniform(-1.5, 1.5) for d in (0.0, -1.0, 0.8)]
+        pf = min(0.98, 0.74 + 0.006 * load + random.uniform(-0.02, 0.02))
         p_ph = [load / 3 * random.uniform(0.9, 1.1) for _ in range(3)]
         i = [p_ph[k] * 1000 / (v[k] * pf) for k in range(3)]
         p = sum(p_ph)

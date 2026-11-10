@@ -3,7 +3,7 @@
 For: technicians and students, working under a supervising engineer, with a licensed electrician for the panel work.
 Site: Adab hotel, site code `adab`. Logger: `LOG-0001`. Platform: `https://arkan-monitoring.duckdns.org` on the VPS `hermes-vps`.
 
-> **Status (8 November 2026).** The logger firmware (version **0.4.0**, folder [`firmware/`](../../firmware/)) is written and compiled by CI, but it has **not yet run on the real board**. The pin map is provisional (the RS485 pins are **not known yet**) and the meter register map is **not verified**. Part A of this tutorial verifies the pins on the bench. The meter register map can only be verified on site: the spare meter at the office has no Modbus port (8 November 2026), so B10 is where it is checked. Expect small surprises on the first bench day and write down everything you find.
+> **Status (9 November 2026).** The logger firmware (version **0.4.1**, folder [`firmware/`](../../firmware/)) is written and compiled by CI. The bench board `LOG-0001` has run firmware 0.3.0 (built on the office PC) since 8 November: online, uploading to the platform, the AM2301 confirmed on **GPIO 1**. Version 0.4.1 itself has not yet run on the board (do not use 0.4.0: it restarts every minute, see [`../UPDATING.md`](../UPDATING.md) section 5). The pin map is provisional (the RS485 pins are **not known yet**) and the meter register map is **not verified**. Part A of this tutorial verifies the pins on the bench. The meter register map can only be verified on site: the spare meter at the office has no Modbus port (8 November 2026), so B10 is where it is checked. Expect small surprises on the first bench day and write down everything you find.
 
 This tutorial takes you through the common path from start to end. For the full details it links to the reference documents:
 - what the logger does, all its settings and console commands: [`../FIRMWARE.md`](../FIRMWARE.md)
@@ -132,9 +132,9 @@ Positions below are for the top photo above, with the USB-C connector on the lef
 | **TH1** sensor module (blue) | Centre bottom | Temperature and humidity of the room air (I2C) | Chip type: AHT10 (0x38)? **to verify** with `i2c` (T2) |
 | **I2C (OLED)** header (4 pins) | Bottom edge, under the blue module | Optional small display, not used | |
 | **ADS1115** | Top right corner (silkscreen `ADS1115`) | 4-channel analog input, spare | I2C 0x48 expected |
-| **GPIO header** (two rows) | Right side, beside the green terminals | Pins of the ESP32-S3: numbers, `GND`, `3V3`, `5V` | `TH2` data on **GPIO 4** (proposed, **to verify**) |
-| **Green screw terminals** | Right edge: a long block and a 3-way block | Field wiring. The 3-way block near the `120` jumper is probably the **RS485 A, B, G** terminal | Which terminal is A, B and G: **to verify** on the board (drawing (c) note 5) |
-| **RS485 transceiver** (8-pin chip) | Bottom right, beside the `120` jumper | Turns the ESP32's serial signals into the RS485 pair | TX/RX/DE GPIOs **unknown, to verify** (T2) |
+| **GPIO header** (two rows) | Right side, beside the green terminals | Pins of the ESP32-S3: numbers, `GND`, `3V3`, `5V` | `TH2` data on **GPIO 1** (confirmed) |
+| **Green screw terminals** | Right edge: a 3-way block and a long block | Field wiring. The **3-way block**, beside the RS485 chip and the `120` jumper, is the RS485 terminal, printed **A+, B-, GND**. The **long block** is printed **5V, 3V3, IO2, IO1, A1, A0** (IO = ESP32 GPIO; A0, A1 = ADS1115 inputs) | Labels seen on the board 9 November 2026. On the bench the AM2301 is on `3V3`, `IO1` and the `GND` of the 3-way block |
+| **RS485 transceiver** (8-pin chip) | Bottom right, beside the `120` jumper | Turns the ESP32's serial signals into the RS485 pair | From the board's pin table (9 November 2026): **TX = GPIO 17, RX = GPIO 18**, no DE pin given (`pin_rs_de` = -1, the board switches direction by itself). Set on `LOG-0001` with the console; **to confirm** with the simulator (tutorial 4, part 4) or the meter |
 | **`120` jumper** | Bottom right, silkscreen `120` | Connects a 120 ohm termination resistor across A and B | **ON** at the logger (the logger is one end of the bus) |
 | **TX / RX LEDs** | Bottom right corner | Blink when RS485 data goes out / comes in (PLAN section 2) | **to verify** |
 | **Power LED** | Near USB-C | On when the board has power | Position **to verify** |
@@ -169,7 +169,7 @@ Drawing (c): [`../install/schematics/c-rs485-wiring.svg`](../install/schematics/
 |---|---|
 | [`firmware/`](../../firmware/) | The logger firmware (PlatformIO project). Open this folder in VS Code |
 | [`firmware/platformio.ini`](../../firmware/platformio.ini) | The build settings: the two builds `logger` and `logger-uart` |
-| [`firmware/include/config.h`](../../firmware/include/config.h) | The firmware version (`FW_VERSION "0.4.0"`) and the SD card paths |
+| [`firmware/include/config.h`](../../firmware/include/config.h) | The firmware version (`FW_VERSION "0.4.1"`) and the SD card paths |
 | [`firmware/src/settings.cpp`](../../firmware/src/settings.cpp) | The list of all settings and their defaults |
 | [`firmware/src/console.cpp`](../../firmware/src/console.cpp) | The console commands |
 | [`docs/OFFICE-PREP.md`](../OFFICE-PREP.md) | Bench tests T1 to T13 and the bench record sheet |
@@ -494,7 +494,7 @@ Typing the command several times if needed is safe: a failed upload does not dam
    pio device monitor
    ```
 2. Press **RESET** on the board, wait 5 seconds, type `status` and press Enter.
-   Expected: the first line says `firmware 0.4.0` (or the version you built; the version is set in `firmware/include/config.h`, `FW_VERSION`).
+   Expected: the first line says `firmware 0.4.1` (or the version you built; the version is set in `firmware/include/config.h`, `FW_VERSION`).
 3. **If the monitor stays empty** (no text at all, even after RESET and typing `status`), the board needs the other build. Close the monitor (`Ctrl+C`), then:
    ```powershell
    pio run -e logger-uart -t upload
@@ -543,12 +543,12 @@ The **serial console** is a text window on the laptop where the logger prints wh
    If not: if the port is wrong, give it: `pio device monitor -p COM5`. If the port disappears (native USB re-enumerates at each reset), just run the command again.
 2. **Press RESET** on the board (or unplug and replug USB-C). Expected boot text (the times and numbers will differ):
    ```
-   === Arkan logger, firmware 0.4.0, boot reason poweron ===
+   === Arkan logger, firmware 0.4.1, boot reason poweron ===
    [uptime 1s] RTC time invalid (battery or first use): waiting for NTP or 'time set'
    [uptime 1s] SD card ok: 15193 MB, 0 MB used, upload pointer 0 part 1 offset 0
-   [uptime 1s] BOOT fw=0.4.0 reason=poweron boot#1 dev=LOG-0001 heap=...
+   [uptime 1s] BOOT fw=0.4.1 reason=poweron boot#1 dev=LOG-0001 heap=...
    [uptime 1s] TH1 sensor: aht (0x38)
-   [uptime 1s] TH2 sensor: AM2301 on GPIO 4
+   [uptime 1s] TH2 sensor: AM2301 on GPIO 1
    [uptime 1s] Meter: built-in FCN300 register table (19 values, not verified)
    [uptime 1s] Meter: RS485 pins not set (pin_rs_tx / pin_rs_rx): meter NOT read, records show EM01_n = 0
    [uptime 1s] Sampling every 15 s, ... columns
@@ -563,7 +563,7 @@ The **serial console** is a text window on the laptop where the logger prints wh
    If not: no text at all = wrong build (A4.7 step 3) or wrong port.
 4. **Type `status`.** Expected, for example:
    ```
-   Logger LOG-0001, firmware 0.4.0, CSV schema 3, up 42 s, boot poweron
+   Logger LOG-0001, firmware 0.4.1, CSV schema 3, up 42 s, boot poweron
    Time: NOT SET (RTC found)
    SD: ok, rows written 0, SD errors 0
    Heap: ... free, ... min free
@@ -662,7 +662,7 @@ The full procedure, with every step and expected result, is in [`../OFFICE-PREP.
 | **T2** Pins and I2C | `i2c`; `status` SD line; RS485 pins from the back silkscreen | 0x68 (RTC), TH1 chip (0x38, 0x40 or 0x44), 0x48 found; `SD: ok`; RS485 pins set | **The most important test.** Write the verified pins in the record sheet: `pin_rs_tx`, `pin_rs_rx`, `pin_rs_de`, `pin_sd_cs`, and SDA/SCL if swapped. Until the RS485 pins are set, the meter is not read at all |
 | **T3** Sensors | `status` "Last sample"; breathe on them; pull the TH2 data wire | Values rise within 30 s; `TH2=fault`, `err` rows, then **A14** in the alarm log, cleared when plugged back | Note the differences with the reference instrument, but the real offsets are set **on site** (B11) |
 | **T4** RS485 wiring and meter-off test | `mb 1 3 0 64` with no meter answering | A timeout with the hint "wiring, A/B, id, baud"; `status` shows `EM01: no answer`, `EM01_n` = 0; **A03** after a minute; the boot log says the table was read from the SD card | The spare meter has **no Modbus port** (8 November): it cannot be read, so the registers are checked on site (B10). Mains wiring of any meter: **electrician only** |
-| **T5** Records on the card | `ls /data/<YYYY>/<MM>`, `tail ... 3`, `header` | One row per minute, `EM01_n` = 4, `TH1_t` on every 5th row, `boot` = `poweron@0.4.0` on the first row | |
+| **T5** Records on the card | `ls /data/<YYYY>/<MM>`, `tail ... 3`, `header` | One row per minute, `EM01_n` = 4, `TH1_t` on every 5th row, `boot` = `poweron@0.4.1` on the first row | |
 | **T6** WiFi and upload | `status`; the day file on the VPS; the live page | `Uploads: ok n`; the VPS day file grows every minute; live page "Live · updated n s ago" | |
 | **T7** Lost connection | WiFi off 1 h (and once 12 h+) | Backlog grows, then back to 0; every minute of the outage on the VPS, each once; after 6 h offline a reboot `sw:offline` | |
 | **T8** Power cuts | Unplug 5 min; then 10 quick cuts | A 5-minute gap, `boot=poweron`; no boot loop, no "SAFE MODE" after 10 min | |
@@ -688,7 +688,7 @@ Drawings (e) and (d): [`../install/schematics/e-enclosure-layout.svg`](../instal
    Expected: with the lid closed, the pin reaches and presses BOOT; you feel the click.
    The documents do not say how this hole is kept closed against dust and water (the box is IP54): decide with the supervisor (for example a removable rubber plug or a label over it) and write it in the as-built record.
    Do **not** press RESET through any hole: BOOT held during a reset puts the board in download mode (the logger stops logging until the next RESET or power cycle).
-4. **TS1 terminal strip for `TH2`:** fit it with the **4.7 kohm pull-up resistor between 3V3 and DATA**. Short leads from TS1 to the board header: TS1 3V3 to the **3V3** pin, TS1 DATA to **GPIO 4** (**to verify**, from T2/Lab 1), TS1 GND to a **GND** pin. Sleeved leads, in ferrules.
+4. **TS1 terminal strip for `TH2`:** fit it with the **4.7 kohm pull-up resistor between 3V3 and DATA**. Short leads from TS1 to the board header: TS1 3V3 to the **3V3** pin, TS1 DATA to **GPIO 1** (confirmed on the board), TS1 GND to a **GND** pin. Sleeved leads, in ferrules.
    Expected: with the power off, DATA to 3V3 on TS1 reads 4.47 to 4.94 kohm.
 5. **RS485 terminal:** set the board's **`120` jumper ON**.
 6. **The microSD card:** formatted FAT32, labelled `LOG-0001`, with `/config/registers.csv` = `docs/meter/registers-proposed.csv` (a proposal, not verified: the supervisor checks it on site, B10). Insert it.
@@ -862,7 +862,7 @@ Skip to step 7 if the hotel WiFi was set at the office and `status` showed `WiFi
    If the password is refused: if `portal_pass` was never changed, it is `arkan-setup`. Otherwise check the password manager entry for LOG-0001.
 3. **Open the page.** Most phones open it by themselves (a "sign in to network" page). If not, open a browser and type `http://192.168.4.1` (http, not https).
    Expected: a page titled **"Logger LOG-0001 setup"**, with a grey status box (firmware, time, SD card, TH1 chip, WiFi and upload status, last sample), the line **"WiFi networks seen"** with their signal in dBm, then all the settings in groups.
-4. **Check the status box first:** firmware 0.4.0, `SD card: ok`, a valid time, the last sample with `EM01_...` values. Check that the hotel staff network is in "WiFi networks seen", better than -70 dBm. (If the list says "scanning, reload in a few seconds", reload the page.)
+4. **Check the status box first:** firmware 0.4.1, `SD card: ok`, a valid time, the last sample with `EM01_...` values. Check that the hotel staff network is in "WiFi networks seen", better than -70 dBm. (If the list says "scanning, reload in a few seconds", reload the page.)
 5. **Fill in the WiFi group only:**
    - **`wifi_ssid`**: the hotel staff network's name, **exactly** as it appears in the list (capitals and spaces count);
    - **`wifi_pass`**: its WPA2 password (from the owner);
@@ -899,7 +899,7 @@ The portal closes by itself after 15 minutes without activity (`portal_min`), or
    ```
    (`<YYYY>/<MM>/<YYYY-MM-DD>` = today's **UTC** date. Before 08:00 WITA, the UTC date is yesterday's.)
    Expected:
-   - `list`: `LOG-0001: fw 0.4.0, last record <a time within the last 2 minutes>`;
+   - `list`: `LOG-0001: fw 0.4.1, last record <a time within the last 2 minutes>`;
    - the day file: one new line per minute, with `EM01_n` = 4 and values in the meter columns;
    - `alarms`: the install's own lines, for example **A02** Power interruption for each power swap, maybe **A03** from before the RS485 cable was connected (it must be **cleared**), **A01** if the logger was off more than 15 minutes. No unexplained open alarm;
    - `show-config`: the settings the logger reported after its last boot (firmware, settings, TH1 chip), matching what you set.
@@ -958,7 +958,7 @@ After the last change and restart, wait 30 minutes, then:
 | 2 | Logger status | Portal status box (or console `status`) | `WiFi: up ... rssi` better than -70 dBm; `Uploads: ok n, failed 0` (a few failures early on are fine); `Backlog: 0 min`; `SD card: ok` |
 | 3 | Rows on the VPS | Operator: `tail -n 30` of today's day file | 30 rows, one per minute, no missing minute; `EM01_n` = 4; `TH1_t`, `TH2_t` filled on the rows at :00, :05, :10... (6 rows) and empty on the others, never `err` |
 | 4 | Alarm log | Operator: `manage.py alarms adab` | No open alarm except ones you can explain |
-| 5 | Settings | Operator: `manage.py show-config LOG-0001` | Offsets, `meters`, `mb_baud` as set; firmware 0.4.0 |
+| 5 | Settings | Operator: `manage.py show-config LOG-0001` | Offsets, `meters`, `mb_baud` as set; firmware 0.4.1 or later |
 
 ### B13 As-built record, photos, closing the box
 
@@ -1001,7 +1001,7 @@ This is done remotely, the next day. Full list: [`../install/README.md` Lab 7 Pa
 | `daily.csv` (`manage.py daily adab`) | One row per WITA day: `coverage_pct` near 100, `EM01_e_delta` = kWh of the day, `dips`, `swells`, `power_interruptions`, `alarms_started` |
 | The logger (portal or console `status`) | `WiFi: up`, `Uploads: ok n`, `Backlog: 0 min`, `SD: ok`, no "SAFE MODE" |
 
-After a power cut, the data has a gap, the first record after it has `boot=poweron@0.4.0`, and the alarm log shows **A01** (if longer than 15 minutes) and **A02** with the outage length. Nothing else to do: the clock (RTC) keeps the time and logging restarts by itself.
+After a power cut, the data has a gap, the first record after it has `boot=poweron@0.4.1`, and the alarm log shows **A01** (if longer than 15 minutes) and **A02** with the outage length. Nothing else to do: the clock (RTC) keeps the time and logging restarts by itself.
 
 ### C2 WhatsApp alerts (later)
 
@@ -1088,7 +1088,7 @@ Be careful with remote changes of `meters`, `mb_baud`, `mb_format` and the `pin_
    docker compose exec ingest python tools/manage.py publish-fw /data/firmware.bin
    ```
 3. An online logger checks within a minute; otherwise every 6 hours (`ota_check_h`); the console command `ota` makes it check at once. It downloads the file, checks it, writes it to its second flash slot and restarts.
-   Expected: `manage.py list` shows the new version; the alarm log has **A35 Firmware updated** "0.4.0 -> 0.4.1, by remote update (OTA)".
+   Expected: `manage.py list` shows the new version; the alarm log has **A35 Firmware updated** "0.4.1 -> 0.4.2, by remote update (OTA)".
 4. If the new firmware restarts 3 times before 10 minutes of uptime, the logger **goes back to the previous version by itself** (`boot=sw:ota_rollback@...`, **A36** in the alarm log). Tell the supervisor.
 
 **By USB, on site:** as in A4 (`pio run -t upload`, with the right build). The settings are kept. This is a power swap (laptop on the USB-C port). The alarm log shows **A35 Firmware updated**, marked as flashed by hand.
@@ -1101,7 +1101,7 @@ The console commands need the laptop on USB (a power swap). Many checks are also
 |---|---|---|---|
 | **No WiFi** | `status`: `WiFi: down for n s`. `wifi`: is the network seen, at what RSSI? `tail /log/<YYYY-MM>.log 20`: `WiFi: connection failed (attempt n, status s)` | **A01** Logger offline (no record for 15 min); **A17** Weak WiFi (below -80 dBm for 60 min) | Re-enter the name and password with the portal (B8); the network must be 2.4 GHz WPA2 without a login page; the hotel may have changed the password (ask the owner); RSSI must be better than -70 dBm. After 6 h offline the logger reboots by itself (`sw:offline`): that is normal and harmless |
 | **No meter answer** | `status`: `EM01: no answer (n in a row)`. `mb 1 3 0 16` (with the meter's address): `error 0xE2 (timeout ...)`. Boot log or `mb`: `RS485 pins not set` | **A03** Meter not answering | Swap A/B once (power off); check `meters`, `mb_baud`, `mb_format` against the meter menu; check `pin_rs_tx`, `pin_rs_rx`, `pin_rs_de` against the record; `120` jumper ON; ask the electrician to check the meter end. **If the RS485 pins are not set, the meter columns are missing completely and A03 cannot fire**: check `status` shows `EM01_...` values |
-| **Sensor err** | `status`: `TH1=fault` or `TH2=fault`. `i2c` for `TH1` (its address must be listed). Day file: `err` in `TH1_t`/`TH2_t` | **A14** Temp/RH sensor fault | `TH2`: check TS1 wiring and colours, DATA idle 3.2 to 3.4 V, pull-up 4.7 kohm, `th2_on` = 1, `pin_dht` = 4. `TH1`: `th1_type` = `auto`. Outdoors after rain, 99 to 100 % RH for hours is normal (A25 only after a day) |
+| **Sensor err** | `status`: `TH1=fault` or `TH2=fault`. `i2c` for `TH1` (its address must be listed). Day file: `err` in `TH1_t`/`TH2_t` | **A14** Temp/RH sensor fault | `TH2`: check TS1 wiring and colours, DATA idle 3.2 to 3.4 V, pull-up 4.7 kohm, `th2_on` = 1, `pin_dht` = 1. `TH1`: `th1_type` = `auto`. Outdoors after rain, 99 to 100 % RH for hours is normal (A25 only after a day) |
 | **Clock not set** | `time`: `System UTC NOT SET, RTC invalid or absent`. `status`: `Time: NOT SET`; `Last sample: (clock not set, nothing recorded)` | **A01** (no record without a valid clock); **A18** Clock wrong (more than 2 min off) | Connect to WiFi (NTP sets the clock and the RTC), or `time set 2026-11-12T03:15:00` in **UTC**. If the time is lost at every power cut: replace the CR1220 cell (+ side up) |
 | **SD failed** | `status`: `SD: FAILED`, `RAM queue n rows`. `ls /`: `no such folder` | **A15** SD card error | The logger keeps 3 h of rows in RAM and still uploads them. Power off, reseat the card, check it is FAT32 (8 to 32 GB); check `pin_sd_cs` (10 or 21); replace the card if it fails again |
 | **Backlog growing** | `status`: `Backlog: n min`, `Uploads: ... failed n, last error ...`. `upload` forces a try | **A16** Backlog growing (over 60 min while WiFi is up) | Read `last error`: 401/403 = token (next line); a number like -1 or 5xx = server or network problem: ask the operator to check the service. Nothing is lost: the rows wait on the card |
@@ -1166,7 +1166,7 @@ All settings: [`../FIRMWARE.md` section 3](../FIRMWARE.md#3-all-settings). Every
 | `th2_off_t`, `th2_off_rh` | `0` | `TH2` offsets from B11 | Yes |
 | `th2_on` | `1` | 0 only if the AM2301 is removed | Yes |
 | `pin_rs_tx`, `pin_rs_rx`, `pin_rs_de` | `-1` | Only the values verified in T2 | Yes (careful) |
-| `pin_sd_cs`, `pin_sda`, `pin_scl`, `pin_dht` | `10`, `8`, `9`, `4` | Only the values verified in T2 | Yes (careful) |
+| `pin_sd_cs`, `pin_sda`, `pin_scl`, `pin_dht` | `10`, `8`, `9`, `1` | Only the values verified in T2 | Yes (careful) |
 
 **Do not change** without the supervisor and the owner: `dev_id` (`LOG-0001`), `srv_url`, `tls_verify` (1), `sample_s` (15), `th_avg_min` (5), `reboot_hr` (19 = 03:05 WITA), `offline_rbt_h` (6), `ota_on` (1), `rcfg_on` (1), `live_on` (1), and the others.
 

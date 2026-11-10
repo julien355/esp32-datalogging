@@ -92,34 +92,57 @@ static void cmdLs(const String &dir) {
   xSemaphoreGive(sdMutex);
 }
 
+// One block of a file. The SD lock is held only for this read, never while printing: the sampler and the
+// uploads write to the card meanwhile (0.4.0 and older held it for the whole command, and a tail of a big
+// file, read byte by byte, starved them into a watchdog restart). -1: no such file or card busy.
+static int readAt(const String &path, long pos, uint8_t *buf, int len, long &size) {
+  if (xSemaphoreTake(sdMutex, pdMS_TO_TICKS(5000)) != pdTRUE) return -1;
+  int n = -1;
+  if (SD.exists(path)) {   // exists() is quiet, open() of a missing file logs an error
+    File f = SD.open(path, FILE_READ);
+    if (f) {
+      size = f.size();
+      n = (pos < size && f.seek(pos)) ? f.read(buf, len) : 0;
+      f.close();
+    }
+  }
+  xSemaphoreGive(sdMutex);
+  return n;
+}
+
 static void cmdCat(const String &path, int tailLines) {
-  xSemaphoreTake(sdMutex, portMAX_DELAY);
-  File f = SD.open(path, FILE_READ);
-  if (!f) {
-    xSemaphoreGive(sdMutex);
-    Serial.println("no such file");
+  uint8_t buf[512];
+  long size = 0, start = 0;
+  if (readAt(path, 0, buf, 0, size) < 0) {
+    Serial.println("no such file (or SD card busy)");
     return;
   }
-  if (tailLines > 0) {   // start of the last n lines
-    long size = f.size(), pos = size, start = 0;
+  if (tailLines > 0) {   // start of the last n lines: scan backwards, one block at a time
+    long pos = size;
     int count = 0;
-    while (pos > 0) {
-      pos--;
-      f.seek(pos);
-      if (f.read() == '\n' && pos != size - 1 && ++count == tailLines) {
-        start = pos + 1;
-        break;
+    bool found = false;
+    while (pos > 0 && !found) {
+      int len = pos > (long)sizeof(buf) ? (int)sizeof(buf) : (int)pos;
+      pos -= len;
+      long sz;
+      if (readAt(path, pos, buf, len, sz) != len) break;
+      for (int i = len - 1; i >= 0; i--) {
+        if (buf[i] == '\n' && pos + i != size - 1 && ++count == tailLines) {
+          start = pos + i + 1;
+          found = true;
+          break;
+        }
       }
     }
-    f.seek(start);
   }
-  uint8_t buf[256];
-  while (f.available()) {
-    int n = f.read(buf, sizeof(buf));
+  for (long pos = start; pos < size;) {   // the size when the command started: lines added since are left out
+    long sz;
+    int len = size - pos > (long)sizeof(buf) ? (int)sizeof(buf) : (int)(size - pos);
+    int n = readAt(path, pos, buf, len, sz);
+    if (n <= 0) break;
     Serial.write(buf, n);
+    pos += n;
   }
-  f.close();
-  xSemaphoreGive(sdMutex);
   Serial.println();
 }
 

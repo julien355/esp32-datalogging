@@ -359,6 +359,9 @@ const VIEWS = [
   {id: 'week', name: 'This week vs last', sub: 'kWh so far', grp: 'History'},
   {id: 'temperature', name: 'Temperature', sub: 'room and outdoor', grp: 'History'},
   {id: 'humidity', name: 'Humidity', sub: 'room and outdoor', grp: 'History'},
+  {id: 'quality', name: 'Power quality', sub: 'overview, frequency, alarms', grp: 'Power quality'},
+  {id: 'voltage', name: 'Voltage', sub: 'per phase, dips, unbalance', grp: 'Power quality'},
+  {id: 'pf', name: 'Power factor', sub: 'kvar, kVArh, PLN 0.85', grp: 'Power quality'},
   {id: 'wtoday', name: 'Today', sub: 'forecast hour by hour', grp: 'Weather'},
   {id: 'wtomorrow', name: 'Tomorrow', sub: 'next day forecast', grp: 'Weather'},
   {id: 'wlog', name: 'Weather log', sub: 'actual vs forecast', grp: 'Weather'},
@@ -411,14 +414,17 @@ function showTip(ev, html) {
 }
 const hideTip = () => { el('tip').style.display = 'none'; };
 
-// Line chart, one y axis; series = [{name, color, pts: [[ms, value], ...], width}]
-function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits = 1, step = 36e5}) {
+// Line chart, one y axis; series = [{name, color, pts: [[ms, value], ...], width, unit, extra}]
+// refs = [{v, label, color}]: dashed limit lines, labelled at the right; bands = [{name, color, pts: [[ms, low, high], ...]}]:
+// a shaded range drawn under the lines (lowest to highest sample); title(ms): the tooltip's first line; axis: the y axis title (unit).
+function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits = 1, step = 36e5, refs = [], bands = [], title = null, axis = null}) {
   sizeTo(box);
   const vals = series.flatMap(s => s.pts.map(p => p[1])).filter(v => v !== null);
   const xs = series.flatMap(s => s.pts.map(p => p[0]));
   if (vals.length < 2) { box.innerHTML = '<div class="card k">No records for this period.</div>'; return; }
   const x0 = Math.min(...xs), x1 = Math.max(...xs) || x0 + 1;
-  const yt = nice(yZero ? 0 : Math.min(...vals), Math.max(...vals)), y0 = yt[0], y1 = yt[yt.length - 1];
+  const ext = vals.concat(bands.flatMap(b => b.pts.flatMap(p => [p[1], p[2]])).filter(v => v !== null), refs.map(r => r.v));
+  const lo = Math.min(...ext), yt = nice(yZero ? Math.min(0, lo) : lo, Math.max(...ext)), y0 = yt[0], y1 = yt[yt.length - 1];
   const X = v => CM.l + (v - x0) / ((x1 - x0) || 1) * (CW - CM.l - CM.r), Y = v => CH - CM.b - (v - y0) / ((y1 - y0) || 1) * (CH - CM.t - CM.b);
   const spanD = (x1 - x0) / 864e5;
   let g = '';
@@ -431,10 +437,25 @@ function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits =
     for (const [t, v] of s.pts) { if (v === null) { prev = null; continue; }
       d += `${prev === null || t - prev > gapMs ? 'M' : 'L'}${X(t).toFixed(1)},${Y(v).toFixed(1)}`; prev = t; }
     return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2}" stroke-linejoin="round"/>`; }).join('');
-  box.innerHTML = `${series.length > 1 ? `<div class="legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('')}</div>` : ''}
+  const shade = bands.map(b => {   // one closed shape per run of points without a gap: along the highs, back along the lows
+    const runs = []; let run = [];
+    for (const p of b.pts) {
+      if (p[1] === null || p[2] === null || (run.length && p[0] - run[run.length - 1][0] > gapMs)) { if (run.length) runs.push(run); run = []; }
+      if (p[1] !== null && p[2] !== null) run.push(p);
+    }
+    if (run.length) runs.push(run);
+    const d = runs.map(r => 'M' + r.map(p => `${X(p[0]).toFixed(1)},${Y(p[2]).toFixed(1)}`).join('L') + 'L' +
+      r.slice().reverse().map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join('L') + 'Z').join('');
+    return `<path d="${d}" fill="${b.color}" stroke="${b.color}" stroke-width="1" stroke-linejoin="round"/>`; }).join('');
+  const lines = refs.map(r => `<line x1="${CM.l}" x2="${CW - CM.r}" y1="${Y(r.v).toFixed(1)}" y2="${Y(r.v).toFixed(1)}" stroke="${r.color || '#b45309'}" stroke-width="1.2" stroke-dasharray="5 4"/>`).join('');
+  const labels = refs.filter(r => r.label).map(r => { const y = Y(r.v), ly = y - 4 < CM.t + 10 ? y + 13 : y - 4;   // over the lines
+    return `<text x="${CW - CM.r - 4}" y="${ly.toFixed(1)}" text-anchor="end" font-size="11" fill="#52606d" stroke="#fff" stroke-width="3" paint-order="stroke">${esc(r.label)}</text>`; }).join('');
+  const keys = [...bands.map(b => `<span><i style="background:${b.color};height:10px"></i>${esc(b.name)}</span>`),
+    ...series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`)];
+  box.innerHTML = `${keys.length > 1 ? `<div class="legend">${keys.join('')}</div>` : ''}
     <svg class="chart" viewBox="0 0 ${CW} ${CH}" role="img" aria-label="${esc(series.map(s => s.name).join(', '))}">
-    <g class="ax">${g}<text x="12" y="${(CH - CM.b + CM.t) / 2}" transform="rotate(-90 12 ${(CH - CM.b + CM.t) / 2})" text-anchor="middle">${esc(unit)}</text></g>
-    ${paths}<line class="xh" y1="${CM.t}" y2="${CH - CM.b}" stroke="#7b8794" stroke-dasharray="3 3" visibility="hidden"/><g class="dots"></g>
+    <g class="ax">${g}<text x="12" y="${(CH - CM.b + CM.t) / 2}" transform="rotate(-90 12 ${(CH - CM.b + CM.t) / 2})" text-anchor="middle">${esc(axis ?? unit)}</text></g>
+    ${shade}${lines}${paths}${labels}<line class="xh" y1="${CM.t}" y2="${CH - CM.b}" stroke="#7b8794" stroke-dasharray="3 3" visibility="hidden"/><g class="dots"></g>
     <rect x="${CM.l}" y="${CM.t}" width="${CW - CM.l - CM.r}" height="${CH - CM.t - CM.b}" fill="transparent"/></svg>`;
   const svg = box.querySelector('svg'), xh = svg.querySelector('.xh'), dots = svg.querySelector('.dots');
   svg.addEventListener('mousemove', ev => {
@@ -444,11 +465,13 @@ function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits =
       let best = null; for (const p of s.pts) if (p[1] !== null && (best === null || Math.abs(p[0] - t) < Math.abs(best[0] - t))) best = p;
       if (!best || Math.abs(best[0] - t) > gapMs) continue; ref = ref ?? best[0];
       dd += `<circle cx="${X(best[0])}" cy="${Y(best[1])}" r="4" fill="${s.color}" stroke="#fff" stroke-width="2"/>`;
-      rows += `<div>${series.length > 1 ? `<span class="sq" style="background:${s.color}"></span>${esc(s.name)}: ` : ''}<b>${best[1].toFixed(digits)}</b> ${esc(unit)}${s.extra ? s.extra(best) : ''}</div>`;
+      rows += `<div>${series.length > 1 ? `<span class="sq" style="background:${s.color}"></span>${esc(s.name)}: ` : ''}<b>${best[1].toFixed(digits)}</b> ${esc(s.unit || unit)}${s.extra ? s.extra(best) : ''}</div>`;
     }
     if (ref === null) { hideTip(); return; }
+    for (const b of bands) { const p = (b.at ??= new Map(b.pts.map(q => [q[0], q]))).get(ref);
+      if (p && p[1] !== null && p[2] !== null) rows += `<div><span class="sq" style="background:${b.color}"></span>${esc(b.name)}: <b>${p[1].toFixed(digits)} – ${p[2].toFixed(digits)}</b> ${esc(unit)}</div>`; }
     dots.innerHTML = dd; xh.setAttribute('x1', X(ref)); xh.setAttribute('x2', X(ref)); xh.setAttribute('visibility', 'visible');
-    showTip(ev, `<b>${fdate(ref)} ${fhm(ref)}${step > 6e4 ? '–' + fhm(ref + step) : ''}</b>${rows}`);
+    showTip(ev, `<b>${title ? esc(title(ref)) : `${fdate(ref)} ${fhm(ref)}${step > 6e4 ? '–' + fhm(ref + step) : ''}`}</b>${rows}`);
   });
   svg.addEventListener('mouseleave', () => { hideTip(); dots.innerHTML = ''; xh.setAttribute('visibility', 'hidden'); });
 }
@@ -495,6 +518,7 @@ async function renderHistory() {
   const box = el('content');
   hideTip();
   if (WXVIEWS[view]) return WXVIEWS[view](box);
+  if (QVIEWS[view]) return QVIEWS[view](box);
   if (view === 'versions') return versionsView(box);
   if (view === 'power') {
     const j = await hourly(span);
@@ -734,6 +758,246 @@ const WXVIEWS = {
   },
 };
 
+// ------------------------------------------------------------------ power quality (server/app/quality.py)
+// GET /api/v1/quality/<site>?days=N: one row per hotel hour (voltage of each phase: mean, lowest and highest 15 s sample;
+// frequency; power factor under load; kW, kvar, kWh, kVArh; voltage and current unbalance; minutes inside and outside
+// the limits, dips, swells), the limits of the alarm register and the power quality lines of the alarm log.
+// GET /api/v1/quality/<site>/day/<date>: the 1-minute voltage, frequency and power factor of one hotel day.
+const QCACHE = {}, QCOUNTS = ['vn', 'vok', 'vlow', 'vhigh', 'dips', 'swells', 'lost', 'loaded', 'pf_low'];
+const BAND = '#dfe4ea', PLN_KVARH = 0.62;   // PLN bills the kVArh above 0.62 x kWh (= power factor 0.85) in a month
+let qDay = null;
+async function qHourly(days) {
+  const c = QCACHE[days];
+  if (c && Date.now() - c.at < 120e3) return c.j;
+  const j = await (await fetch(`/api/v1/quality/${site}?days=${days}`, {cache: 'no-store'})).json();
+  QCACHE[days] = {at: Date.now(), j};
+  return j;
+}
+const pctOf = (a, b, d = 1) => {   // never "100.0" (or "0.0") when some minutes are out (or in): more decimals instead
+  if (!b) return '–';
+  const v = a / b * 100;
+  let s = v.toFixed(d);
+  while (d < 3 && ((a < b && +s >= 100) || (a > 0 && +s <= 0))) s = v.toFixed(++d);
+  return s;
+};
+const tanPhi = pf => Math.sqrt(Math.max(0, 1 - pf * pf)) / pf;
+const flag = (bad, html) => bad ? `<span class="bad">${html}</span>` : html;
+const under = (v, lim, d = 2) => v !== null && v !== undefined && +v.toFixed(d) < lim;   // as shown: 0.849 reads 0.85, not below 0.85
+const hourAt = t => `${fdate(tp(t))}, ${t.slice(11)} hour`;
+const limName = (l, what) => `${l.id} ${what}${l.enabled ? '' : ' (alarm off)'}`;
+function qRefs(refs) {   // one dashed line per value: limits with the same value share the line and the label
+  const m = new Map();
+  for (const r of refs) { const o = m.get(r.v); if (o) o.label += ' · ' + r.label; else m.set(r.v, {...r}); }
+  return [...m.values()];
+}
+function vRefs(j) {
+  const L = j.limits;
+  return qRefs([{v: L.high.v, label: limName(L.high, 'overvoltage')}, {v: L.swell.v, label: limName(L.swell, 'swell')},
+    {v: L.low.v, label: limName(L.low, 'undervoltage')}, {v: L.dip.v, label: limName(L.dip, 'dip')}]);
+}
+function qSum(H) {   // totals of a list of hours
+  const o = {minutes: 0, kwh: null, kvarh: null, vlo: null, vhi: null, vu: null, vuMax: null, vuW: 0, iu: null, fmin: null, fmax: null,
+    pfW: 0, pfmin: null, ph: [1, 2, 3].map(() => ({w: 0, n: 0, lo: null, hi: null}))};
+  for (const c of QCOUNTS) o[c] = 0;
+  const up = (k, v, low) => { if (v !== undefined && v !== null && (o[k] === null || (low ? v < o[k] : v > o[k]))) { o[k] = v; return true; } return false; };
+  for (const r of H) {
+    o.minutes += r.minutes;
+    for (const c of QCOUNTS) o[c] += r[c] || 0;
+    if (r.kwh !== undefined) o.kwh = (o.kwh ?? 0) + r.kwh;
+    if (r.kvarh !== undefined) o.kvarh = (o.kvarh ?? 0) + r.kvarh;
+    for (const k of [1, 2, 3]) {
+      const P = o.ph[k - 1];
+      if (r[`v${k}`] !== undefined) { P.w += r[`v${k}`] * r.minutes; P.n += r.minutes; }
+      if (r[`v${k}_min`] !== undefined && (P.lo === null || r[`v${k}_min`] < P.lo)) P.lo = r[`v${k}_min`];
+      if (r[`v${k}_max`] !== undefined && (P.hi === null || r[`v${k}_max`] > P.hi)) P.hi = r[`v${k}_max`];
+      if (up('vlo', r[`v${k}_min`], true)) o.vloAt = {t: r.t, ph: 'L' + k};
+      if (up('vhi', r[`v${k}_max`], false)) o.vhiAt = {t: r.t, ph: 'L' + k};
+    }
+    if (r.vu !== undefined) { o.vuW += r.vu * r.vn; up('vu', r.vu); up('vuMax', r.vu_max); }
+    up('iu', r.iu); up('fmin', r.f_min, true); up('fmax', r.f_max);
+    if (r.pf !== undefined) { o.pfW += r.pf * r.loaded; up('pfmin', r.pf_min, true); }
+  }
+  o.vuMean = o.vn ? o.vuW / o.vn : null;
+  o.pf = o.loaded ? o.pfW / o.loaded : null;                    // mean of the loaded minutes
+  o.pfE = o.kwh !== null && o.kvarh !== null && o.kwh + o.kvarh > 0 ? o.kwh / Math.hypot(o.kwh, o.kvarh) : null;   // from the counters
+  return o;
+}
+function qByDay(H) {
+  const g = {};
+  for (const r of H) (g[r.t.slice(0, 10)] ??= []).push(r);
+  return Object.fromEntries(Object.entries(g).map(([k, rows]) => [k, qSum(rows)]));
+}
+function noMeter(box, title, note) {
+  box.innerHTML = frame(title, note, spanPicker()) + '<div class="card k">No meter records for this period.</div>';
+}
+
+const QVIEWS = {
+  async quality(box) {
+    const j = await qHourly(span), H = j.hours, L = j.limits, t = qSum(H), today = j.now.slice(0, 10), nf = j.nominal_hz;
+    const title = 'Power quality';
+    const note = `Voltage, frequency, unbalance and power factor from the 1-minute records (mean, lowest and highest 15-second sample), ` +
+      `against the limits of the alarm register. Hotel time, last ${span} days.`;
+    if (t.vlo === null && t.fmin === null) return noMeter(box, title, note);
+    const fOut = t.fmin !== null && (t.fmin < nf - L.f_dev.v || t.fmax > nf + L.f_dev.v);
+    let h = frame(title, note, spanPicker()) + `<div class="grid">
+      ${statTile('Voltage within the limits', flag(t.vn && t.vok / t.vn < 0.95, pctOf(t.vok, t.vn)), '%',
+        `minutes with all three phases between ${L.low.v} and ${L.high.v} V (1-minute means) · ${t.vlow} min below, ${t.vhigh} min above`)}
+      ${statTile('Voltage, lowest – highest', `${f1(t.vlo, 0)} – ${f1(t.vhi, 0)}`, 'V',
+        t.vloAt ? `15-second samples · lowest on ${t.vloAt.ph}, ${hourAt(t.vloAt.t)}` : '')}
+      ${statTile('Dips · swells', flag(t.dips + t.swells > 0, `${t.dips} · ${t.swells}`), 'minutes',
+        `a sample below ${L.dip.v} V (${esc(L.dip.id)}) · above ${L.swell.v} V (${esc(L.swell.id)})` +
+        (t.lost ? ` · <span class="bad">${t.lost} min below ${L.lost.v} V (${esc(L.lost.id)} phase lost)</span>` : ''))}
+      ${statTile('Voltage unbalance', flag(t.vu !== null && +t.vu.toFixed(2) > L.vu.v, f1(t.vu, 2)), '%',
+        `highest hourly mean · limit ${L.vu.v} % (${esc(L.vu.id)}, EN 50160) · mean ${f1(t.vuMean, 2)} %, highest minute ${f1(t.vuMax, 1)} %`)}
+      ${statTile('Frequency, lowest – highest', flag(fOut, `${f1(t.fmin, 2)} – ${f1(t.fmax, 2)}`), 'Hz',
+        `15-second samples · ${esc(L.f_dev.id)} beyond ${nf} ± ${L.f_dev.v} Hz`)}
+      ${statTile('Power factor', flag(under(t.pfE ?? t.pf, L.pf.v), f1(t.pfE ?? t.pf, 2)), '',
+        `${t.pfE !== null ? 'from the kWh and kVArh counters' : 'mean under load'} · ${pctOf(t.pf_low, t.loaded, 0)} % of the loaded time below ${L.pf.v} · <a href="#pf">details</a>`)}
+      ${t.iu !== null ? statTile('Current imbalance', flag(t.iu > L.iu.v, f1(t.iu, 0)), '%',
+        `highest hourly mean · ${esc(L.iu.id)} at ${L.iu.v} %, not below ${j.i_floor_a} A of mean current`) : ''}</div>`;
+
+    const days = qByDay(H);
+    h += `<h2>Day by day · click a day for its voltage minute by minute</h2><table><tr><th>Day</th><th class="hide-s">Recorded</th>
+      <th>Voltage, lowest – highest</th><th>Within the limits</th><th>Dips · swells</th><th class="hide-s">Unbalance</th>
+      <th class="hide-s">Frequency</th><th>Power factor</th></tr>` + Object.keys(days).sort().reverse().map(k => {
+        const d = days[k], pf = d.pfE ?? d.pf;
+        return `<tr><td><a href="#voltage" data-qday="${k}">${fdate(tp(k + ' 00:00'))}</a></td>
+          <td class="hide-s">${k === today ? 'so far' : pctOf(d.minutes, 1440, 0) + ' %'}</td>
+          <td>${d.vlo === null ? '–' : `${f1(d.vlo, 0)} – ${f1(d.vhi, 0)} V`}</td>
+          <td>${d.vn ? flag(d.vok / d.vn < 0.95, pctOf(d.vok, d.vn) + ' %') : '–'}</td>
+          <td>${flag(d.dips + d.swells > 0, `${d.dips} · ${d.swells}`)}${d.lost ? ' <span class="sev critical">phase lost</span>' : ''}</td>
+          <td class="hide-s">${d.vu === null ? '–' : flag(d.vu > L.vu.v, f1(d.vu, 1) + ' %')}</td>
+          <td class="hide-s">${d.fmin === null ? '–' : `${f1(d.fmin, 2)} – ${f1(d.fmax, 2)} Hz`}</td>
+          <td>${pf === null ? '–' : flag(under(pf, L.pf.v), f1(pf, 2))}</td></tr>`; }).join('') + '</table>';
+
+    const ev = j.events.slice().reverse();
+    h += `<h2>Power quality alarms · ${ev.length ? `${ev.length} line${ev.length === 1 ? '' : 's'}, ` : ''}hotel time</h2>`;
+    h += ev.length ? `<table><tr><th>Time</th><th>Alarm</th><th>State</th><th>Value</th><th class="hide-s">Message</th></tr>${ev.slice(0, 200).map(e =>
+        `<tr><td>${esc(e.local_time)}</td><td>${esc(e.id)} ${esc(e.name)} <span class="sev ${esc(e.severity)}">${esc(e.severity)}</span></td>
+          <td>${esc(e.state)}${e.duration_min ? ` <span class="range">${esc(e.duration_min)} min</span>` : ''}</td>
+          <td>${esc(e.value)} ${e.unit === 'event' ? '' : esc(e.unit)}</td><td class="hide-s">${esc(e.message)}</td></tr>`).join('')}</table>`
+      : '<div class="card k">No power quality alarm in this period.</div>';
+    h += `<h2>Frequency, hour by hour</h2><div class="card chartbox" id="ch"></div>
+      <div class="foot">Limits from the alarm register (docs/alarms/alarms.csv): ${esc(L.low.id)}/${esc(L.high.id)} for a phase's 1-minute mean,
+      ${esc(L.dip.id)}/${esc(L.swell.id)} for a 15-second sample. A 15-second sample catches dips that last, not every short sag.</div>`;
+    box.innerHTML = h;
+    lineChart(el('ch'), [{name: 'Mean of the hour', color: C[0], pts: H.map(r => [tp(r.t), r.f ?? null])}],
+      {unit: 'Hz', digits: 2, bands: [{name: 'Lowest – highest 15-second sample', color: BAND, pts: H.map(r => [tp(r.t), r.f_min ?? null, r.f_max ?? null])}],
+       refs: [{v: +(nf - L.f_dev.v).toFixed(3), label: limName(L.f_dev, 'frequency')}, {v: +(nf + L.f_dev.v).toFixed(3), label: limName(L.f_dev, 'frequency')}]});
+  },
+
+  async voltage(box) {
+    const j = await qHourly(span), H = j.hours, L = j.limits, t = qSum(H);
+    const title = 'Voltage per phase, hour by hour';
+    const note = `Mean of each phase (L-N) per hour, and in grey the lowest to highest 15-second sample of the hour (any phase). ` +
+      `Dashed: the limits of the alarm register. Hotel time, last ${span} days.`;
+    if (t.vlo === null) return noMeter(box, title, note);
+    box.innerHTML = frame(title, note, spanPicker()) + `<div class="grid">${t.ph.map((P, n) =>
+        statTile(`L${n + 1}: mean`, f1(P.n ? P.w / P.n : null), 'V', `lowest ${f1(P.lo)} · highest ${f1(P.hi)} V`)).join('')}
+      ${statTile('Voltage unbalance: mean', flag(t.vuMean > L.vu.v, f1(t.vuMean, 2)), '%', `highest hourly mean ${f1(t.vu, 2)} % · limit ${L.vu.v} % (${esc(L.vu.id)})`)}</div>
+      <div class="card chartbox" id="ch"></div>
+      <h2>Voltage unbalance, hour by hour</h2><div class="card chartbox" id="ch2"></div><div id="qday"></div>`;
+    const byT = new Map(H.map(r => [tp(r.t), r]));
+    const range = k => b => { const r = byT.get(b[0]); return r && r[`v${k}_min`] !== undefined ? ` <span class="range">(${f1(r[`v${k}_min`])}–${f1(r[`v${k}_max`])})</span>` : ''; };
+    const ext = (r, s, f) => { const v = [1, 2, 3].map(k => r[`v${k}_${s}`]).filter(x => x !== undefined); return v.length ? f(...v) : null; };
+    lineChart(el('ch'), [1, 2, 3].map(k => ({name: 'L' + k, color: C[k - 1], pts: H.map(r => [tp(r.t), r[`v${k}`] ?? null]), extra: range(k)})),
+      {unit: 'V', axis: 'volts', refs: vRefs(j), bands: [{name: 'Lowest – highest 15-second sample', color: BAND, pts: H.map(r => [tp(r.t), ext(r, 'min', Math.min), ext(r, 'max', Math.max)])}]});
+    lineChart(el('ch2'), [{name: 'Mean of the hour', color: C[0], pts: H.map(r => [tp(r.t), r.vu ?? null])},
+      {name: 'Highest minute', color: C[1], width: 1.4, pts: H.map(r => [tp(r.t), r.vu_max ?? null])}],
+      {unit: '%', yZero: true, digits: 2, refs: [{v: L.vu.v, label: limName(L.vu, 'voltage unbalance')}]});
+    await qDaySection();
+  },
+
+  async pf(box) {
+    const j = await qHourly(span), H = j.hours, L = j.limits, t = qSum(H), lim = L.pf.v, target = 0.95;
+    const title = 'Power factor';
+    const note = `Mean power factor of each hour while the load is ${j.pf_load_kw} kW or more (as alarm ${esc(L.pf.id)}), and its lowest 15-second sample. ` +
+      `PLN bills the reactive energy above 62 % of the kWh (power factor 0.85) of the month. Hotel time, last ${span} days.`;
+    if (t.pf === null && t.kvarh === null) return noMeter(box, title, note);
+    let cap = null;   // the largest need of an hour: kW x (tan phi now - tan phi at the target)
+    for (const r of H) if (r.pf > 0 && r.pf < target && r.p !== undefined) {
+      const need = Math.abs(r.p) * (tanPhi(r.pf) - tanPhi(target));
+      if (!cap || need > cap.v) cap = {v: need, r};
+    }
+    const excess = t.kwh !== null && t.kvarh !== null ? Math.max(0, t.kvarh - PLN_KVARH * t.kwh) : null;
+    const days = qByDay(H);
+    box.innerHTML = frame(title, note, spanPicker()) + `<div class="grid">
+      ${statTile('Power factor of the period', flag(under(t.pfE, lim), f1(t.pfE, 2)), '',
+        t.pfE === null ? 'no kVArh counter in the records' : `${f1(t.kwh, 0)} kWh and ${f1(t.kvarh, 0)} kVArh (meter counters)`)}
+      ${statTile('Mean under load', flag(under(t.pf, lim), f1(t.pf, 2)), '', `lowest 15-second sample ${f1(t.pfmin, 2)}`)}
+      ${statTile(`Time below ${lim}`, flag(t.pf_low > 0, pctOf(t.pf_low, t.loaded)), '%', `${t.pf_low} of ${t.loaded} minutes under load`)}
+      ${statTile('kVArh above 62 % of the kWh', flag(excess > 0, f1(excess, 0)), 'kVArh',
+        excess === null ? 'needs the kWh and kVArh counters' : 'what PLN bills as excess reactive energy (counted per month); 0 while the power factor is 0.85 or more')}
+      ${statTile(`Capacitor to reach ${target}`, cap ? f1(cap.v, 0) : '0', 'kvar',
+        cap ? `largest hourly need: ${f1(Math.abs(cap.r.p), 1)} kW at ${f1(cap.r.pf, 2)}, ${hourAt(cap.r.t)} · an indication for an automatic bank, to check on site`
+          : `every hour at ${target} or more`)}</div>
+      <div class="card chartbox" id="ch"></div>
+      <h2>By hour of the day · mean of the period</h2><div class="card chartbox" id="ch3"></div>
+      <h2>Active and reactive power, hour by hour</h2><div class="card chartbox" id="ch2"></div>
+      <h2>Day by day</h2><table><tr><th>Day</th><th>kWh</th><th>kVArh</th><th>Power factor</th><th class="hide-s">Mean under load</th>
+        <th class="hide-s">Lowest sample</th><th>Below ${lim}</th><th class="hide-s">kVArh above 62 %</th></tr>${Object.keys(days).sort().reverse().map(k => {
+          const d = days[k], ex = d.kwh !== null && d.kvarh !== null ? Math.max(0, d.kvarh - PLN_KVARH * d.kwh) : null;
+          return `<tr><td>${fdate(tp(k + ' 00:00'))}</td><td>${f1(d.kwh, 0)}</td><td>${f1(d.kvarh, 0)}</td><td>${d.pfE === null ? '–' : flag(under(d.pfE, lim), f1(d.pfE, 2))}</td>
+            <td class="hide-s">${f1(d.pf, 2)}</td><td class="hide-s">${f1(d.pfmin, 2)}</td><td>${d.loaded ? flag(d.pf_low > 0, pctOf(d.pf_low, d.loaded, 0) + ' %') : '–'}</td>
+            <td class="hide-s">${ex === null ? '–' : f1(ex, 0)}</td></tr>`; }).join('')}</table>
+      <div class="foot">Power factor of a period = kWh / √(kWh² + kVArh²), from the meter's counters. The sign of the power factor is not used (leading or lagging);
+        no power factor is counted below ${j.pf_load_kw} kW. The capacitor estimate uses hourly means: size a bank with the supplier after a site survey.</div>`;
+    const byT = new Map(H.map(r => [tp(r.t), r]));
+    lineChart(el('ch'), [{name: 'Mean under load', color: C[0], pts: H.map(r => [tp(r.t), r.pf ?? null]),
+        extra: b => { const r = byT.get(b[0]); return r && r.p !== undefined ? ` <span class="range">at ${f1(r.p, 1)} kW</span>` : ''; }},
+      {name: 'Lowest 15-second sample', color: C[1], width: 1.4, pts: H.map(r => [tp(r.t), r.pf_min ?? null])}],
+      {unit: 'PF', digits: 2, refs: [{v: lim, label: limName(L.pf, 'low power factor')}]});
+    lineChart(el('ch2'), [{name: 'Active power', color: C[0], unit: 'kW', pts: H.map(r => [tp(r.t), r.p ?? null])},
+      {name: 'Reactive power', color: C[1], unit: 'kvar', pts: H.map(r => [tp(r.t), r.q ?? null])}], {unit: 'kW · kvar', yZero: true});
+    const hod = [...Array(24).keys()].map(hr => { const rows = H.filter(r => +r.t.slice(11, 13) === hr), s = qSum(rows);
+      const p = rows.filter(r => r.p !== undefined); return {hr, pf: s.pf, p: p.length ? p.reduce((a, r) => a + r.p, 0) / p.length : null}; });
+    const T0 = Date.UTC(2000, 0, 1), hh = n => String(n).padStart(2, '0') + ':00';
+    lineChart(el('ch3'), [{name: 'Mean under load', color: C[0], pts: hod.map(o => [T0 + o.hr * 36e5, o.pf]),
+        extra: b => { const o = hod[Math.round((b[0] - T0) / 36e5)]; return o && o.p !== null ? ` <span class="range">mean ${f1(o.p, 1)} kW</span>` : ''; }}],
+      {unit: 'PF', digits: 2, title: ms => { const n = Math.round((ms - T0) / 36e5); return `${hh(n)}–${hh(n + 1)}, every day`; },
+       refs: [{v: lim, label: limName(L.pf, 'low power factor')}]});
+  },
+};
+
+async function qDaySection() {   // #voltage: one hotel day, minute by minute (redrawn alone by the day buttons)
+  const j = await qHourly(span), L = j.limits, t = qSum(j.hours), today = j.now.slice(0, 10);
+  qDay ??= today;
+  const box = el('qday');
+  if (!box) return;
+  const day = qDay, dj = await (await fetch(`/api/v1/quality/${site}/day/${day}`, {cache: 'no-store'})).json();
+  if (el('qday') !== box || day !== qDay) return;   // redrawn (other span, page or day) while this day was loading
+  const ci = Object.fromEntries(dj.cols.map((c, i) => [c, i])), R = dj.rows, ms = tp(qDay + ' 00:00');
+  const worst = t.vloAt ? t.vloAt.t.slice(0, 10) : null;
+  const tools = `<div style="display:flex;gap:8px;flex-wrap:wrap"><div class="seg"><button data-qday="${isoDay(ms - 864e5)}">◀ ${fdate(ms - 864e5)}</button>
+    <button class="on">${fdate(ms)}</button><button data-qday="${isoDay(ms + 864e5)}" ${qDay >= today ? 'disabled' : ''}>${fdate(ms + 864e5)} ▶</button></div>` +
+    (worst && worst !== qDay ? `<div class="seg"><button data-qday="${worst}">Lowest of the ${span} days: ${fdate(tp(worst + ' 00:00'))}</button></div>` : '') + '</div>';
+  let lo = null, hi = null, dips = 0, swells = 0;
+  for (const r of R) for (const k of [1, 2, 3]) {
+    const a = r[ci[`v${k}_min`]] ?? r[ci[`v${k}`]], b = r[ci[`v${k}_max`]] ?? r[ci[`v${k}`]];
+    if (a !== null && (!lo || a < lo.v)) lo = {v: a, t: r[0], ph: k};
+    if (b !== null && (!hi || b > hi.v)) hi = {v: b, t: r[0], ph: k};
+  }
+  for (const r of R) {
+    const a = [1, 2, 3].map(k => r[ci[`v${k}_min`]] ?? r[ci[`v${k}`]]).filter(x => x !== null);
+    const b = [1, 2, 3].map(k => r[ci[`v${k}_max`]] ?? r[ci[`v${k}`]]).filter(x => x !== null);
+    dips += a.length && Math.min(...a) < L.dip.v; swells += b.length && Math.max(...b) > L.swell.v;
+  }
+  box.innerHTML = `<div class="vhead" style="margin-top:22px"><div><h2 class="vt">One day, minute by minute: ${fdate(ms)}</h2>
+      <div class="vn">Mean of each phase per minute, and in grey the lowest to highest 15-second sample of the minute. Hover for each phase's range.</div></div>${tools}</div>
+    <div class="grid">${statTile('Lowest 15-second sample', lo ? flag(lo.v < L.dip.v, f1(lo.v)) : '–', 'V', lo ? `L${lo.ph} at ${lo.t}` : '')}
+      ${statTile('Highest 15-second sample', hi ? flag(hi.v > L.swell.v, f1(hi.v)) : '–', 'V', hi ? `L${hi.ph} at ${hi.t}` : '')}
+      ${statTile('Dips · swells', flag(dips + swells > 0, `${dips} · ${swells}`), 'minutes', `below ${L.dip.v} V · above ${L.swell.v} V`)}
+      ${statTile('Minutes recorded', R.length, qDay === today ? 'so far' : 'of 1440', '')}</div>
+    <div class="card chartbox" id="ch4"></div>`;
+  const pts = k => R.map(r => [tp(`${qDay} ${r[0]}`), r[ci['v' + k]]]);
+  const at = new Map(R.map(r => [tp(`${qDay} ${r[0]}`), r]));
+  const range = k => b => { const r = at.get(b[0]); return r && r[ci[`v${k}_min`]] !== null ? ` <span class="range">(${f1(r[ci[`v${k}_min`]])}–${f1(r[ci[`v${k}_max`]])})</span>` : ''; };
+  const ext = (r, s, f) => { const v = [1, 2, 3].map(k => r[ci[`v${k}_${s}`]] ?? r[ci[`v${k}`]]).filter(x => x !== null); return v.length ? f(...v) : null; };
+  lineChart(el('ch4'), [1, 2, 3].map(k => ({name: 'L' + k, color: C[k - 1], width: 1.4, pts: pts(k), extra: range(k)})),
+    {unit: 'V', axis: 'volts', gapMs: 3 * 6e4, step: 6e4, refs: vRefs(j),
+     bands: [{name: 'Lowest – highest 15-second sample', color: BAND, pts: R.map(r => [tp(`${qDay} ${r[0]}`), ext(r, 'min', Math.min), ext(r, 'max', Math.max)])}]});
+}
+
 // ------------------------------------------------------------------ firmware versions (everyone; sending firmware: #firmware, admins)
 // GET /api/v1/versions/<site>: running firmware per logger, the offer, every firmware change and restart (events.jsonl),
 // the GitHub releases (asked by the server once an hour) and the files stored on the server.
@@ -808,6 +1072,7 @@ async function versionsView(box) {
   box.innerHTML = h + '<div class="foot">From the server\'s records: devices.json, each logger\'s events.jsonl and settings-reported.json. GitHub is asked at most once an hour.</div>';
 }
 
+let shown = 0;   // the latest show(): an older one still loading never writes its error over it
 async function show(id) {
   view = VIEWS.some(v => v.id === id) ? id : 'now';
   document.querySelectorAll('#side a[data-id]').forEach(a => a.classList.toggle('on', a.dataset.id === view));
@@ -822,12 +1087,18 @@ async function show(id) {
   }
   if (view === 'now') { el('content').innerHTML = ''; return tick(); }
   el('content').innerHTML = '<div class="card k">Loading…</div>';
+  const n = ++shown;
   try { await renderHistory(); }
-  catch (e) { el('content').innerHTML = `<div class="empty">Could not read the ${WXVIEWS[view] ? 'weather' : view === 'versions' ? 'firmware versions' : 'history'} from the server.</div>`; }
+  catch (e) { console.error(e); if (n === shown) el('content').innerHTML = `<div class="empty">Could not read the ${WXVIEWS[view] ? 'weather' : QVIEWS[view] ? 'power quality' : view === 'versions' ? 'firmware versions' : 'history'} from the server.</div>`; }
 }
 document.addEventListener('click', ev => {
-  const b = ev.target.closest('button[data-span],button[data-day],button[data-vf]');
+  const b = ev.target.closest('button[data-span],button[data-day],button[data-vf],[data-qday]');
   if (!b) return;
+  if (b.dataset.qday) {   // a day of the power quality pages: a link opens #voltage on it, a button redraws the day only
+    qDay = b.dataset.qday;
+    if (b.tagName === 'A' || !el('qday')) return;
+    return qDaySection().catch(() => { el('qday').innerHTML = '<div class="empty">Could not read that day from the server.</div>'; });
+  }
   if (b.dataset.vf) vfAll = b.dataset.vf === 'all';
   if (b.dataset.span) span = +b.dataset.span;
   if (b.dataset.day) dayShown = b.dataset.day;
@@ -983,7 +1254,7 @@ if (site) {   // the live call also brings the site profile (names, sensors, con
 }
 else { el('wrap').classList.add('solo'); tick(); }
 setInterval(tick, 15000);
-setInterval(() => { if (site && view !== 'now' && view !== 'firmware' && !document.hidden) { delete HCACHE[span]; WXC = null; WXL = {}; show(view); } }, 300e3);
+setInterval(() => { if (site && view !== 'now' && view !== 'firmware' && !document.hidden) { delete HCACHE[span]; delete QCACHE[span]; WXC = null; WXL = {}; show(view); } }, 300e3);
 </script>
 </body>
 </html>
