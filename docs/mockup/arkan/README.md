@@ -20,14 +20,14 @@ simulated data (14 days), nothing is sent to a logger.
 - **Settings**: the kit's display settings (mode: system, light, dark, high contrast; density; text size; motion; reset), saved in the
   browser as in the CMMS and shared with it on the same address. Also who is logged in, and the site details from `site.json` (read only).
 - **Meter registers** and **All sites** are pages of the same shell (today they are separate pages).
+- The link to Open Energy Dashboard is removed from the menu (review of 10 November).
 - Charts, tables, values, texts and the 15 s refresh are those of `server/app/live.html` and `registers.html`.
 - Every chart shows both axes with their scales and names; in a row of cards the figures and the charts line up (review of 10 November).
 
 ## To decide at the review
 
 1. View as: is Admin / Viewer the right list, or are named roles wanted (as "Hotel manager" in the CMMS)? Roles need a list on the server.
-2. The link to Open Energy Dashboard stays in the menu; today `/` sends back to `/live/`.
-3. English only, as today (the CMMS also has Indonesian).
+2. English only, as today (the CMMS also has Indonesian).
 
 ## Files
 

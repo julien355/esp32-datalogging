@@ -307,7 +307,6 @@ function renderChrome() {
     if (v.grp) h += `<div class="sep" role="separator"></div><div class="sep-l">${esc(v.grp)}</div>`;
     h += navLink(v);
   }
-  h += `<a href="/" ${MOCK ? 'data-ui-toast="On the real site this opens Open Energy Dashboard (/)"' : ''} title="Open Energy Dashboard: /">${icon('ext')}<span class="nl">Open Energy Dashboard</span><span class="ns">OED</span></a>`;
   el('snav').innerHTML = h;
   const who = r => `${ROLE_NAME[r]} · ${esc(ME.user || '…')}`;
   el('sideRole').innerHTML = `<div class="rail"><button class="icon-btn" data-ui-open="roleSheet" aria-label="View as" title="View as: ${who(role())}">${icon('user')}</button></div>
@@ -542,7 +541,7 @@ async function sitesView(box) {
   box.innerHTML = head('All sites', 'Every site and logger on this platform. Click a site for its live page.',
       `<span class="clock">${esc(j.time.replace('T', ' ').replace('Z', ' UTC'))}</span>`) +
     tableCard('<tr><th>Site</th><th>Logger</th><th>Power now</th><th>Live</th><th class="hide-s">Last record (UTC)</th><th class="hide-s">Firmware</th></tr>' + rows, 'Sites and loggers') +
-    '<div class="foot"><span>History: the pages of each site, or Open Energy Dashboard.</span></div>';
+    '<div class="foot"><span>History: the pages of each site.</span></div>';
 }
 
 // ------------------------------------------------------------------ history views
