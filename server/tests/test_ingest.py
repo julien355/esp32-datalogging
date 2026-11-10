@@ -306,6 +306,25 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(self.req("GET", "/live/_ui/server.py")[0], 404)
         self.assertEqual(self.req("GET", "/live/")[0], 200)
 
+    def test_meter_link_on_the_live_page(self):
+        # firmware 0.5.0 sends the Modbus link of each meter in sys.mb; the page gets one line per meter
+        ok = {"ok": True, "id": 1, "since": ts(30), "last_ok": ts(0), "fail_run": 0, "req": 4, "req_ok": 4,
+              "reads": 900, "fails": 2}
+        snap = {"ts": ts(0), "values": {"EM01_p": 12.3}, "sys": {"up_s": 7200, "mb": {"EM01": ok}}}
+        self.assertEqual(self.req("POST", "/api/v1/live", json.dumps(snap), self.token, "application/json")[0], 204)
+        code, body = self.req("GET", "/api/v1/live/adab")
+        links = json.loads(body)["devices"]["LOG-0001"]["meters"]
+        self.assertEqual([(m["meter"], m["state"], m["stale"], m["source"]) for m in links], [("EM01", "ok", False, "logger")])
+        self.assertEqual((links[0]["modbus_id"], links[0]["req_ok"], links[0]["since"]), (1, 4, ts(30)))
+        self.assertAlmostEqual(links[0]["for_s"], 1800, delta=70)
+        # the meter stops answering: the line stays, now "no_answer" with the reason
+        bad = dict(ok, ok=False, since=ts(0), last_ok=ts(1), fail_run=5, req_ok=0, err="timeout", fails=7)
+        snap = {"ts": ts(0), "values": {}, "sys": {"up_s": 7215, "mb": {"EM01": bad}}}
+        self.assertEqual(self.req("POST", "/api/v1/live", json.dumps(snap), self.token, "application/json")[0], 204)
+        links = json.loads(self.req("GET", "/api/v1/live/adab")[1])["devices"]["LOG-0001"]["meters"]
+        self.assertEqual((links[0]["state"], links[0]["err"], links[0]["fail_run"], links[0]["last_ok"]),
+                         ("no_answer", "timeout", 5, ts(1)))
+
     def test_live_saved_and_restored(self):
         # every snapshot is saved in the data folder: another dashboard reads the same data, a restart keeps it
         for i in range(3):
@@ -356,6 +375,43 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(self.req("GET", "/api/v1/history/nosite")[0], 404)
         self.assertEqual(self.req("GET", "/api/v1/history/adab/day/2026-13-40")[0], 400)
         self.assertEqual(self.req("GET", "/api/v1/history/adab?meter=../x")[0], 400)
+
+    def test_custom_period_and_records_csv(self):
+        # hotel time is UTC+8: the hotel day 3 November is in the UTC day files of 2 and 3 November
+        rows = [row("2026-11-02T10:00:00Z", 1000), row("2026-11-02T17:00:00Z", 1001),   # hotel 2 Nov 18:00, 3 Nov 01:00
+                row("2026-11-03T05:00:00Z", 1002), row("2026-11-03T17:00:00Z", 1003)]   # hotel 3 Nov 13:00, 4 Nov 01:00
+        code, body = self.req("POST", "/api/v1/ingest", HEADER + "\n" + "\n".join(rows) + "\n", self.token)
+        self.assertEqual(json.loads(body)["stored"], 4, body)
+        j = json.loads(self.req("GET", "/api/v1/history/adab?from=2026-11-03&to=2026-11-03")[1])
+        self.assertEqual([r["t"] for r in j["hours"]], ["2026-11-03 01:00", "2026-11-03 13:00"])
+        self.assertEqual((j["from"], j["to"], j["first_day"]), ("2026-11-03 00:00", "2026-11-03", "2026-11-02"))
+        j = json.loads(self.req("GET", "/api/v1/quality/adab?from=2026-11-02&to=2026-11-03")[1])
+        self.assertEqual((len(j["hours"]), j["to"]), (3, "2026-11-03"))
+        # the CSV: the whole day files that hold those hotel dates, every row and column, as they are
+        url = f"http://127.0.0.1:{self.port}/api/v1/records/adab?from=2026-11-03&to=2026-11-03"
+        with urllib.request.urlopen(url, timeout=5) as r:
+            self.assertIn("text/csv", r.headers["Content-Type"])
+            self.assertIn('filename="adab-LOG-0001-2026-11-03.csv"', r.headers["Content-Disposition"])
+            self.assertEqual(r.read().decode().split("\n"), [HEADER] + rows + [""])
+        with urllib.request.urlopen(url.replace("from=2026-11-03", "from=2026-11-04").replace("to=2026-11-03", "to=2026-11-05"),
+                                    timeout=5) as r:
+            self.assertIn('filename="adab-LOG-0001-2026-11-04-to-2026-11-05.csv"', r.headers["Content-Disposition"])
+            self.assertEqual(r.read().decode().splitlines(), [HEADER] + rows[2:])   # 3 Nov (UTC) file only
+        # new columns that day (a _2 file): one header with every column, each value under its own column
+        h2 = HEADER.replace(",rssi", ",TH2_t,rssi")
+        r2 = row("2026-11-03T06:00:00Z", 1002.5).replace(",-63,", ",29.5,-63,")
+        self.assertEqual(json.loads(self.req("POST", "/api/v1/ingest", h2 + "\n" + r2 + "\n", self.token)[1])["stored"], 1)
+        code, body = self.req("GET", "/api/v1/records/adab?from=2026-11-03&to=2026-11-03")
+        self.assertEqual(code, 200, body)
+        self.assertEqual(body.splitlines(), [HEADER + ",TH2_t"] + [x + "," for x in rows] + [row("2026-11-03T06:00:00Z", 1002.5) + ",29.5"])
+        # refused: dates the wrong way round, more than 92 days, to without from, a bad date; nothing recorded: 404
+        for q in ("from=2026-11-05&to=2026-11-04", "from=2026-01-01&to=2026-11-01", "to=2026-11-03", "from=2026-13-01&to=2026-13-02"):
+            self.assertEqual(self.req("GET", "/api/v1/records/adab?" + q)[0], 400, q)
+            self.assertEqual(self.req("GET", "/api/v1/history/adab?" + q)[0], 400, q)
+            self.assertEqual(self.req("GET", "/api/v1/quality/adab?" + q)[0], 400, q)
+        self.assertEqual(self.req("GET", "/api/v1/records/adab?from=2025-01-01&to=2025-01-02")[0], 404)
+        self.assertEqual(self.req("GET", "/api/v1/records/adab?from=2026-11-03&to=2026-11-03&device=LOG-9")[0], 404)
+        self.assertEqual(self.req("GET", "/api/v1/records/nosite?from=2026-11-03&to=2026-11-03")[0], 404)
 
     def test_quality(self):
         hdr = ("ts,EM01_v1,EM01_v1_min,EM01_v1_max,EM01_v2,EM01_v2_min,EM01_v2_max,EM01_v3,EM01_v3_min,EM01_v3_max,"
@@ -594,6 +650,79 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(json.loads(body), {"version": 1, "settings": {"th1_off_t": "-1.5"}})
         self.assertIn("th1_off_t = 0", self.manage("show-config", "LOG-0001"))
 
+    def test_login_limited_to_one_site(self):
+        import http.client
+        self.assertEqual(server_mod.parse_user_sites(" tech:adab, ops:adab,ops:villa , typo:Adab, alone ,, :adab"),
+                         {"tech": {"adab"}, "ops": {"adab", "villa"}, "typo": set(), "alone": set()})
+        self.manage("add-site", "villa", "--name", "Villa")
+        out = self.manage("add-device", "villa", "LOG-0002")
+        token2 = [ln for ln in out.splitlines() if ln.startswith("TOKEN")][0].split(": ", 1)[1]
+        server_mod.Handler.user_sites = server_mod.parse_user_sites("tech:adab, typo:Adab")
+        server_mod.Handler.admin_users = "julien, tech"
+        self.addCleanup(setattr, server_mod.Handler, "user_sites", {})
+        self.addCleanup(setattr, server_mod.Handler, "admin_users", "")
+        tech, owner = {"X-Auth-User": "tech"}, {"X-Auth-User": "julien"}
+        post = dict(tech, **{"X-Requested-With": "arkan"})
+
+        def raw(path, who):   # without following redirects
+            c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+            c.request("GET", path, headers=who)
+            r = c.getresponse()
+            r.read()
+            c.close()
+            return r.status, r.getheader("Location")
+
+        # Pages: the list of all sites and another site's page send the login to its own site.
+        self.assertEqual(raw("/live/", tech), (302, "/live/adab/"))
+        self.assertEqual(raw("/live", tech), (302, "/live/adab/"))
+        self.assertEqual(raw("/live/villa/", tech), (302, "/live/adab/"))
+        self.assertEqual(raw("/live/adab/", tech)[0], 200)
+        self.assertEqual(raw("/live/_ui/arkan-ui.css", tech)[0], 200)
+        self.assertEqual(raw("/live/", owner)[0], 200)                       # not in USER_SITES: every site
+        self.assertEqual(raw("/live/", {"X-Auth-User": "typo"})[0], 403)      # bad site name: no site, never all
+        # Lists and the login's own description.
+        self.assertEqual(list(json.loads(self.req("GET", "/api/v1/status", headers=tech)[1])["sites"]), ["adab"])
+        self.assertEqual(sorted(json.loads(self.req("GET", "/api/v1/status", headers=owner)[1])["sites"]), ["adab", "villa"])
+        self.assertEqual(json.loads(self.req("GET", "/api/v1/status", headers={"X-Auth-User": "typo"})[1])["sites"], {})
+        me = json.loads(self.req("GET", "/api/v1/admin/me", headers=tech)[1])
+        self.assertEqual((me["user"], me["admin"], me["sites"]), ("tech", True, ["adab"]))
+        self.assertIsNone(json.loads(self.req("GET", "/api/v1/admin/me", headers=owner)[1])["sites"])
+        # Every site API: the login's site yes, the other no.
+        for p in ("/api/v1/live/{}", "/api/v1/live/{}/day/2026-11-10", "/api/v1/alarms/{}", "/api/v1/versions/{}",
+                  "/api/v1/history/{}", "/api/v1/history/{}/day/2026-11-10", "/api/v1/quality/{}",
+                  "/api/v1/quality/{}/day/2026-11-10", "/api/v1/weather/{}", "/api/v1/weather/{}/log"):
+            self.assertEqual(self.req("GET", p.format("villa"), headers=tech)[0], 403, p)
+            self.assertEqual(self.req("GET", p.format("adab"), headers=tech)[0], 200, p)
+            self.assertEqual(self.req("GET", p.format("villa"), headers=owner)[0], 200, p)
+        # The CSV of the original records is a site API too (404 = allowed, no records in that period).
+        self.assertEqual(self.req("GET", "/api/v1/records/villa", headers=tech)[0], 403)
+        self.assertIn(self.req("GET", "/api/v1/records/adab", headers=tech)[0], (200, 404))
+        self.assertIn(self.req("GET", "/api/v1/records/villa", headers=owner)[0], (200, 404))
+        # Logger pages and actions: only the loggers of the login's site, firmware included (ADMIN_USERS).
+        self.assertEqual(self.req("GET", "/api/v1/admin/registers/LOG-0002", headers=tech)[0], 403)
+        self.assertEqual(self.req("GET", "/api/v1/admin/registers/LOG-0001", headers=tech)[0], 200)
+        self.assertEqual(self.req("GET", "/api/v1/admin/registers/LOG-9999", headers=tech)[0], 404)
+        self.assertEqual(self.req("GET", "/api/v1/admin/fw/LOG-0002", headers=tech)[0], 403)
+        self.assertEqual(self.req("GET", "/api/v1/admin/fw/LOG-0001", headers=tech)[0], 200)
+        good = json.dumps({"csv": "name,fc,addr,type,scale,ct,agg\nv1,3,0x0000,u16,0.1,0,minmax\n"})
+        self.assertEqual(self.req("POST", "/api/v1/admin/registers/LOG-0002/check", good, ctype="application/json",
+                                  headers=tech)[0], 403)
+        self.assertEqual(self.req("POST", "/api/v1/admin/registers/LOG-0002", good, ctype="application/json",
+                                  headers=tech)[0], 403)
+        self.assertEqual(self.req("POST", "/api/v1/admin/registers/LOG-0001/check", good, ctype="application/json",
+                                  headers=tech)[0], 200)
+        self.assertEqual(self.req("POST", "/api/v1/admin/meter-settings/LOG-0002", json.dumps({"mb_baud": "9600"}),
+                                  ctype="application/json", headers=tech)[0], 403)
+        self.assertEqual(self.req("POST", "/api/v1/admin/fw/LOG-0002/cancel", "{}", ctype="application/json",
+                                  headers=post)[0], 403)
+        self.assertEqual(self.req("POST", "/api/v1/admin/fw/LOG-0001/cancel", "{}", ctype="application/json",
+                                  headers=post)[0], 200)
+        self.assertEqual(self.req("POST", "/api/v1/admin/fw/LOG-0002/cancel", "{}", ctype="application/json",
+                                  headers=dict(owner, **{"X-Requested-With": "arkan"}))[0], 200)
+        # The loggers themselves are not concerned (no web login on their paths).
+        snap = json.dumps({"ts": ts(0), "values": {"EM01_p": 1}})
+        self.assertEqual(self.req("POST", "/api/v1/live", snap, token2, "application/json")[0], 204)
+
     def test_register_table_page_to_logger(self):
         good = "name,fc,addr,type,scale,ct,agg\nv1,3,0x0000,u16,0.1,0,minmax\ne,3,24,U32,0.01,0,last\n"
         code, _ = self.req("GET", "/api/v1/registers", token=self.token)
@@ -718,6 +847,47 @@ class ToolsAndHttpTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MeterLinkTest(unittest.TestCase):
+    """meter_links: the Modbus link line of the open alarms card (server.py)."""
+
+    def snaps(self, pattern, t0=1_800_000_000):
+        """One 15 s snapshot per character: "1" = the meter answered (values), "0" = no value."""
+        return [{"ts": server_mod._iso(t0 + 15 * i), "values": {"EM01_p": 5.0} if c == "1" else {"TH1_t": 30.0}}
+                for i, c in enumerate(pattern)], t0 + 15 * (len(pattern) - 1)
+
+    def test_from_the_logger(self):
+        last = {"ts": "2026-11-10T03:00:00Z", "sys": {"up_s": 600, "mb": {"EM01": {"ok": True, "id": 1, "req": 4, "req_ok": 3,
+                                                                                    "err": "illegal_address"}}}}
+        (m,) = server_mod.meter_links(last, 5, [], now=server_mod._epoch("2026-11-10T03:00:05Z"))
+        self.assertEqual((m["state"], m["req_ok"], m["err"], m["stale"]), ("ok", 3, "illegal_address", False))
+        # no "since" (the clock was not set at the change): the logger's start, from up_s
+        self.assertEqual((m["since"], m["since_boot"], m["for_s"]), ("2026-11-10T02:50:00Z", True, 605))
+
+    def test_stale_and_not_configured(self):
+        last = {"ts": "2026-11-10T03:00:00Z", "sys": {"mb": {"EM01": {"ok": True, "since": "2026-11-10T01:00:00Z"}}}}
+        links = server_mod.meter_links(last, 300, [], expected=["EM01", "EM02"])
+        self.assertEqual([(m["meter"], m["state"], m["stale"]) for m in links],
+                         [("EM01", "ok", True), ("EM02", "not_configured", True)])
+        # firmware 0.5.0 with no meter in its settings: sys.mb is empty
+        (m,) = server_mod.meter_links({"sys": {"mb": {}}}, 5, [], expected=["EM01"])
+        self.assertEqual((m["state"], m["source"]), ("not_configured", "logger"))
+
+    def test_older_firmware_from_the_values(self):
+        hist, now = self.snaps("1111000")
+        (m,) = server_mod.meter_links(hist[-1], 5, hist, expected=["EM01"], now=now)
+        self.assertEqual((m["state"], m["source"], m["fail_run"]), ("no_answer", "values", 3))
+        self.assertEqual((m["since"], m["last_ok"]), (hist[4]["ts"], hist[3]["ts"]))
+        hist, now = self.snaps("0011")
+        (m,) = server_mod.meter_links(hist[-1], 5, hist, now=now)
+        self.assertEqual((m["state"], m["since"], m["for_s"], m["last_ok"]), ("ok", hist[2]["ts"], 15, hist[3]["ts"]))
+        hist, now = self.snaps("111")
+        self.assertIsNone(server_mod.meter_links(hist[-1], 5, hist, now=now)[0]["since"])   # the whole 60 minutes
+        # a meter of site.json that sent nothing in the 60 minutes
+        hist, now = self.snaps("000")
+        (m,) = server_mod.meter_links(hist[-1], 5, hist, expected=["EM01"], now=now)
+        self.assertEqual((m["state"], m["last_ok"]), ("no_answer", None))
 
 
 class RegisterTableTest(unittest.TestCase):

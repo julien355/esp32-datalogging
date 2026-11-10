@@ -1,5 +1,7 @@
 # /opt/edge/sites/monitoring.caddy on hermes-vps (native Caddy, imported by the main Caddyfile).
-# Same logins as the other Arkan dashboards: /opt/edge/secrets/hub-users.caddy.
+# Logins: the Arkan logins of every dashboard (/opt/edge/secrets/hub-users.caddy) and the logins for this
+# platform only (/opt/edge/secrets/monitoring-users.caddy, technicians: docs/LIVE.md "Logins"). Both files
+# must exist (the second may be empty). USER_SITES in server/.env limits a login to some sites.
 # The loggers' endpoints are open (no basicauth): the device token is checked by the service.
 # After any change: caddy validate, then the owner approves the reload.
 
@@ -34,10 +36,11 @@ arkan-monitoring.duckdns.org {
 		reverse_proxy 127.0.0.1:8800
 	}
 
-	# People: Arkan login.
+	# People: Arkan login, or a login for this platform only.
 	handle {
 		basicauth {
 			import /opt/edge/secrets/hub-users.caddy
+			import /opt/edge/secrets/monitoring-users.caddy
 		}
 		# Until Open Energy Dashboard is deployed, the start page is the live overview.
 		redir / /live/ 302

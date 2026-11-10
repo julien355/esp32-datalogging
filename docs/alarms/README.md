@@ -32,7 +32,7 @@ Status: **built and tested with the simulated logger** (7 November 2026). WhatsA
 
 Read the log:
 - in Excel, from the file;
-- on the live page `/live/adab/`, which shows the open alarms at the top and the last 20 log lines at the bottom;
+- on the live page `/live/adab/`, which shows the open alarms at the top and the last 20 log lines at the bottom; above the open alarms, one line per meter says whether it answers on Modbus right now (connected or not, since service 0.8.0), before A03 opens;
 - `docker compose exec ingest python tools/manage.py alarms adab`;
 - `GET /api/v1/alarms/adab` (JSON, with the Arkan login).
 

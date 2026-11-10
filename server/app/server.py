@@ -12,20 +12,24 @@ Device endpoints (token in "Authorization: Bearer <token>", no web login in Cadd
 People endpoints (behind the Caddy web login, never published without it):
   GET  /health                 {"ok": true}
   GET  /api/v1/status          every site and logger: last record, last live, firmware
-  GET  /api/v1/live/<site>     live values, 60-minute history and open alarms of a site
+  GET  /api/v1/live/<site>     live values, 60-minute history, Modbus link of each meter and open alarms of a site
   GET  /api/v1/live/<site>/day/<YYYY-MM-DD>?device=   every saved 15 s snapshot of that UTC day
   GET  /api/v1/alarms/<site>   open alarms and the last 200 lines of the alarm log
   GET  /api/v1/versions/<site> firmware of each logger: running, since, offer, every change and restart,
                                GitHub releases (asked once an hour), files on the server (read only, everyone)
   GET  /api/v1/history/<site>?days=15        one row per local hour: kWh, kW, sensors (from the day files)
   GET  /api/v1/history/<site>/day/<date>     the 1-minute power of one local day
+  GET  /api/v1/records/<site>?from=&to=      the original 1-minute records of those local dates as one CSV: the day
+                                             files (UTC days) that hold them, every column and row (&device=)
   GET  /api/v1/quality/<site>?days=14        power quality per local hour: voltage per phase (mean, lowest, highest),
                                              frequency, power factor, kW, kvar, kWh, kVArh, unbalance, dips, swells,
                                              the limits of the alarm register and the power quality alarm lines
   GET  /api/v1/quality/<site>/day/<date>     the 1-minute voltage (mean, lowest, highest), frequency, power factor
   GET  /api/v1/weather/<site>                Open-Meteo forecast (fetched every hour): today and tomorrow per hour
   GET  /api/v1/weather/<site>/log?days=7     actual weather per hour with the day-ahead forecast (&format=csv)
-  GET  /live/  /live/<site>/   site page: live now (refresh every 15 s) and the history graphs
+  Every ?days=N above (the last N local days, today included) can be ?from=YYYY-MM-DD&to=YYYY-MM-DD instead:
+  local dates, both included, at most 92 days.
+  GET  /live/  /live/<site>/   site page: live now (refresh every 15 s) and the history graphs; /live/ lists every site
   GET  /live/<site>/register   meter register table page of the site's logger (?device=LOG-0002 if several):
                                see, edit, import, send to the logger
   GET  /api/v1/admin/registers/<device>          table on the logger, table asked, history
@@ -35,8 +39,12 @@ People endpoints (behind the Caddy web login, never published without it):
   Admin POSTs must be JSON (Content-Type application/json) and same-origin: a page on another site
   cannot make a logged-in browser send them.
 
+Logins limited to some sites (USER_SITES, see docs/LIVE.md "Logins"): /api/v1/status lists only their sites,
+/live/ and the page of another site send them to their own (302), every other path of another site or of
+a logger of another site answers 403. Everyone else sees every site.
+
 Firmware update from the site page (people in ADMIN_USERS only, see docs/OTA.md):
-  GET  /api/v1/admin/me                     {"user", "admin", "github"}
+  GET  /api/v1/admin/me                     {"user", "admin", "github", "sites": null = every site, or [the login's sites]}
   GET  /api/v1/admin/fw/<device>            running firmware, what is offered, stored files, recent events
   GET  /api/v1/admin/github/releases        logger-*.bin assets of the repository's releases
   POST /api/v1/admin/fw/<device>/upload     body: the .bin (application/octet-stream), ?force=1
@@ -47,7 +55,9 @@ Firmware update from the site page (people in ADMIN_USERS only, see docs/OTA.md)
 
 Settings (environment): DATA_DIR (/data), PORT (8800), BIND (0.0.0.0 in the container),
 MAX_BODY (262144 bytes), ADMIN_USERS (Caddy login names allowed to update firmware, comma separated,
-"*" = everyone who can log in, empty = nobody), FW_GITHUB_REPO (owner/name), FW_GITHUB_TOKEN,
+"*" = everyone who can log in, empty = nobody), USER_SITES (logins limited to some sites, "login:site" comma
+separated, a login may come back for a second site; empty = every login sees every site),
+FW_GITHUB_REPO (owner/name), FW_GITHUB_TOKEN,
 WEATHER (on; off = never fetch the forecast), WEATHER_EVERY_MIN (60), LIVE_KEEP_DAYS (7). Weather per site: site.json "weather"
 (app/weather.py, manage.py weather).
 """
@@ -72,7 +82,7 @@ from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, IngestError, atomic_write, iso_now  # noqa: E402
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
@@ -88,6 +98,106 @@ FORMATS = ("8N1", "8E1", "8O1", "8N2")
 METERS_RE = re.compile(r"^[A-Za-z0-9]{1,7}:\d{1,3}(,[A-Za-z0-9]{1,7}:\d{1,3}){0,3}$")
 # Register page endpoints (JSON, same origin); every other /api/v1/admin/ POST is a firmware update.
 REGISTERS_ADMIN_RE = re.compile(r"^/api/v1/admin/(registers|meter-settings)/")
+# People paths of one site, or of one logger, for the logins limited to some sites (USER_SITES).
+SITE_PAGE_RE = re.compile(r"^/live(?:/([a-z0-9-]+))?/?$")
+SITE_API_RE = re.compile(r"^/api/v1/(?:live|versions|alarms|history|quality|weather|records)/([a-z0-9-]+)(?:/|$)")
+DEVICE_API_RE = re.compile(r"^/api/v1/admin/(?:registers|meter-settings|fw)/([A-Za-z0-9_-]+)(?:/|$)")
+
+
+def parse_user_sites(spec):
+    """USER_SITES "tech-adab:adab, ops:adab, ops:villa" -> {"tech-adab": {"adab"}, "ops": {"adab", "villa"}}.
+    A login with a bad site name still counts as limited (to no site): a typo never opens every site."""
+    out = {}
+    for item in (spec or "").split(","):
+        login, _, site = (x.strip() for x in item.strip().partition(":"))
+        if not login:
+            continue
+        sites = out.setdefault(login, set())
+        if CODE_RE.match(site):
+            sites.add(site)
+        else:
+            sys.stderr.write(f"{iso_now()} USER_SITES: '{item.strip()}' is not login:site, {login} sees no site\n")
+    return out
+
+
+LINK_STALE_S = 60   # no snapshot for this long: the meter link is "unknown" (the page's "No data for" pill too)
+METER_ID_RE = re.compile(r"^(EM\d+)_")
+
+
+def _epoch(iso):
+    try:
+        return datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def _iso(t):
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def meter_links(last, age_s, history, expected=(), now=None):
+    """The Modbus link of each meter of one logger, for the open alarms card of the site page.
+
+    From sys.mb of the last snapshot (firmware 0.5.0 and later), else from the live values (older firmware: a
+    meter answers when the snapshot has values of it). One dict per meter, sorted by meter:
+      state       "ok" (answering), "no_answer", or "not_configured" (in site.json, not in the logger's meter list)
+      stale       true when the last snapshot is older than LINK_STALE_S: the state is the last one known
+      since       when the state started (UTC); since_boot: true when that is the logger's start (clock not set
+                  at the change); null when it is older than the 60 minutes kept (older firmware only)
+      for_s       seconds in that state, up to now
+      last_ok     last read that answered; fail_run: reads in a row without an answer
+      req, req_ok requests of the last read and answered (fewer answered: some registers are refused)
+      err         why the last read had a failed request: timeout, crc, illegal_address... (firmware 0.5.0)
+      reads, fails reads since the logger's start, of them without an answer (firmware 0.5.0)
+      modbus_id   the meter's Modbus address; source: "logger" (sys.mb) or "values" (older firmware)
+    """
+    now = time.time() if now is None else now
+    stale = age_s is None or age_s > LINK_STALE_S
+    sys_ = last.get("sys") or {}
+    out = {}
+    mb = sys_.get("mb")
+    if isinstance(mb, dict):
+        ts, up = _epoch(last.get("ts")), sys_.get("up_s")
+        for m, o in mb.items():
+            if not isinstance(o, dict):
+                continue
+            since, since_boot = o.get("since"), False
+            if not since and ts and isinstance(up, (int, float)):
+                since, since_boot = _iso(ts - up), True
+            t = _epoch(since)
+            out[m] = {"meter": m, "state": "ok" if o.get("ok") else "no_answer", "source": "logger",
+                      "modbus_id": o.get("id"), "since": since, "since_boot": since_boot,
+                      "for_s": round(now - t) if t else None, "last_ok": o.get("last_ok"),
+                      "fail_run": o.get("fail_run", 0), "req": o.get("req"), "req_ok": o.get("req_ok"),
+                      "err": o.get("err"), "reads": o.get("reads"), "fails": o.get("fails")}
+        missing = "not_configured"
+    else:
+        snaps = [s for s in history if s.get("ts")]
+        seen = set()
+        for s in snaps:
+            seen.update(METER_ID_RE.match(k).group(1) for k in (s.get("values") or {}) if METER_ID_RE.match(k))
+        for m in seen:
+            has = [any(k.startswith(m + "_") for k in (s.get("values") or {})) for s in snaps]
+            ok = has[-1]
+            run = 0   # snapshots at the end in the same state
+            while run < len(has) and has[-1 - run] == ok:
+                run += 1
+            since = snaps[-run]["ts"] if run < len(has) else None   # null: the whole 60 minutes
+            t = _epoch(since)
+            last_ok = next((snaps[i]["ts"] for i in range(len(has) - 1, -1, -1) if has[i]), None)
+            out[m] = {"meter": m, "state": "ok" if ok else "no_answer", "source": "values", "modbus_id": None,
+                      "since": since, "since_boot": False, "for_s": round(now - t) if t else None,
+                      "last_ok": last_ok, "fail_run": 0 if ok else run, "req": None, "req_ok": None, "err": None,
+                      "reads": None, "fails": None}
+        missing = "no_answer"   # older firmware: a meter of site.json without any value in 60 minutes
+    for m in expected:
+        if m not in out:
+            out[m] = {"meter": m, "state": missing, "source": "logger" if isinstance(mb, dict) else "values",
+                      "modbus_id": None, "since": None, "since_boot": False, "for_s": None, "last_ok": None,
+                      "fail_run": None, "req": None, "req_ok": None, "err": None, "reads": None, "fails": None}
+    for v in out.values():
+        v["stale"] = stale
+    return [out[m] for m in sorted(out)]
 
 
 class Live:
@@ -183,7 +293,9 @@ class Live:
                     if fn.endswith(".jsonl") and fn[:10] < oldest:
                         os.unlink(os.path.join(d, fn))
 
-    def site(self, site):
+    def site(self, site, expected=()):
+        """Per device: the last snapshot, its age, the 60-minute history and the Modbus link of each meter
+        (meter_links; expected = the meters of site.json's live values, shown even when they never answered)."""
         with self.lock:
             devs = self.data.get(site, {})
             out = {}
@@ -191,11 +303,9 @@ class Live:
                 if not q:
                     continue
                 recv, last = q[-1]
-                out[dev] = {
-                    "last": last,
-                    "age_s": round(time.time() - recv),
-                    "history": [{"ts": s.get("ts"), "values": s.get("values", {})} for _, s in q],
-                }
+                age = round(time.time() - recv)
+                hist = [{"ts": s.get("ts"), "values": s.get("values", {})} for _, s in q]
+                out[dev] = {"last": last, "age_s": age, "history": hist, "meters": meter_links(last, age, hist, expected)}
             return out
 
     def last_seen(self, site, device):
@@ -212,6 +322,7 @@ class Handler(BaseHTTPRequestHandler):
     fw: Firmware = None
     github: GitHub = None
     admin_users = ""
+    user_sites = {}      # login -> set of sites (USER_SITES); a login not in it sees every site
 
     # ------------------------------------------------------------------ helpers
     def log_message(self, fmt, *args):   # one short line per request, no tokens
@@ -226,6 +337,22 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_chunked(self, ctype, filename, chunks):
+        """A download sent piece by piece as it is read (Transfer-Encoding: chunked): little memory for a big file."""
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Transfer-Encoding", "chunked")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            for c in chunks:
+                if c:
+                    self.wfile.write(b"%X\r\n%s\r\n" % (len(c), c))
+            self.wfile.write(b"0\r\n\r\n")
+        except OSError:                     # the download was cancelled, or a file could not be read
+            self.close_connection = True
+
     def send_empty(self, code):
         self.send_response(code)
         self.send_header("Content-Length", "0")
@@ -238,6 +365,43 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
             return None
         return self.rfile.read(n) if n else b""
+
+    def login_sites(self):
+        """The sites this Caddy login may see (USER_SITES), or None = every site."""
+        return self.user_sites.get(self.headers.get("X-Auth-User", "").strip())
+
+    def may_see(self, site):
+        sites = self.login_sites()
+        return sites is None or site in sites
+
+    def refuse_site(self):
+        return self.send_json(403, {"ok": False, "error": "your login may not see this site (USER_SITES)"})
+
+    def site_scope(self, path):
+        """For a login limited to some sites: True when the answer was sent (redirect or refusal)."""
+        sites = self.login_sites()
+        if sites is None:
+            return False
+        m = SITE_PAGE_RE.match(path)
+        if m and m.group(1) not in sites:       # the list of all sites, or another site's page
+            if not sites:
+                self.refuse_site()
+                return True
+            self.send_response(302)
+            self.send_header("Location", f"/live/{min(sites)}/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return True
+        m = SITE_API_RE.match(path)
+        if m and m.group(1) not in sites:
+            self.refuse_site()
+            return True
+        m = DEVICE_API_RE.match(path)
+        site = self.device_site(m.group(1)) if m else None
+        if site and site not in sites:          # an unknown logger gets the usual 404 from its route
+            self.refuse_site()
+            return True
+        return False
 
     def device(self):
         auth = self.headers.get("Authorization", "")
@@ -302,11 +466,16 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True, "version": VERSION, "time": iso_now()})
         if path == "/api/v1/status":
             return self.send_json(200, self.status())
+        if self.site_scope(path):
+            return
         m = re.match(r"^/api/v1/live/([a-z0-9-]+)$", path)
         if m and CODE_RE.match(m.group(1)):
             site = m.group(1)
-            return self.send_json(200, {"site": site, "profile": self.public_profile(site),
-                                        "devices": self.live.site(site),
+            prof = self.public_profile(site)
+            expected = sorted({m.group(1) for k in ((prof.get("live") or {}).get("values") or [])
+                               if isinstance(k, str) and (m := METER_ID_RE.match(k))})
+            return self.send_json(200, {"site": site, "profile": prof,
+                                        "devices": self.live.site(site, expected),
                                         "alarms": self.store.alarms.open_alarms(site), "time": iso_now()})
         m = re.match(r"^/api/v1/live/([a-z0-9-]+)/day/(\d{4}-\d{2}-\d{2})$", path)
         if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
@@ -326,6 +495,9 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/v1/(history|quality)/([a-z0-9-]+)(?:/day/(\d{4}-\d{2}-\d{2}))?$", path)
         if m and CODE_RE.match(m.group(2)) and m.group(2) in self.store.sites():
             return self.history(m.group(2), m.group(3), parse_qs(u.query), m.group(1))
+        m = re.match(r"^/api/v1/records/([a-z0-9-]+)$", path)
+        if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
+            return self.records(m.group(1), parse_qs(u.query))
         m = re.match(r"^/api/v1/weather/([a-z0-9-]+)(/log)?$", path)
         if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
             return self.weather_view(m.group(1), bool(m.group(2)), parse_qs(u.query))
@@ -454,6 +626,8 @@ class Handler(BaseHTTPRequestHandler):
         site = self.device_site(m.group(2)) if m else None
         if not site:
             return self.send_json(404, {"ok": False, "error": "not found"})
+        if not self.may_see(site):
+            return self.refuse_site()
         device = m.group(2)
         if m.group(1) == "meter-settings" and not m.group(3):
             return self.save_meter_settings(site, device, req)
@@ -510,10 +684,22 @@ class Handler(BaseHTTPRequestHandler):
                 "nominal_v")
         return {k: p.get(k) for k in keys if k in p}
 
-    def history(self, site, day, q, kind="history"):
+    @staticmethod
+    def period(q, days):
+        """?days=N (the last N local days), or ?from=YYYY-MM-DD&to=YYYY-MM-DD (local dates, both included).
+        ValueError for a days that is not a number; the dates are checked by history.period()."""
+        return int(q.get("days", [str(days)])[0]), q.get("from", [""])[0] or None, q.get("to", [""])[0] or None
+
+    PERIOD_ERROR = f"bad date or period: days=N, or from=YYYY-MM-DD&to=YYYY-MM-DD, at most {history.MAX_DAYS} days"
+
+    def site_device(self, site, q):
         devs = self.store.site_devices(site)
         dev = q.get("device", [devs[0] if devs else ""])[0]
-        if dev not in devs:
+        return dev if dev in devs else None
+
+    def history(self, site, day, q, kind="history"):
+        dev = self.site_device(site, q)
+        if not dev:
             return self.send_json(404, {"ok": False, "error": "no such logger on this site"})
         meter = q.get("meter", ["EM01"])[0]
         if not re.match(r"^[A-Z]{2}\d{2}$", meter):
@@ -522,13 +708,35 @@ class Handler(BaseHTTPRequestHandler):
             if kind == "quality":
                 if day:
                     return self.send_json(200, quality.minutes(self.store, site, dev, day, meter))
-                return self.send_json(200, quality.hourly(self.store, self.store.alarms, site, dev,
-                                                          int(q.get("days", ["14"])[0]), meter))
+                days, start, end = self.period(q, 14)
+                return self.send_json(200, quality.hourly(self.store, self.store.alarms, site, dev, days, meter, start, end))
             if day:
                 return self.send_json(200, history.minutes(self.store, site, dev, day, meter))
-            return self.send_json(200, history.hourly(self.store, site, dev, int(q.get("days", ["15"])[0]), meter))
+            days, start, end = self.period(q, 15)
+            return self.send_json(200, history.hourly(self.store, site, dev, days, meter, start, end))
         except ValueError:
-            return self.send_json(400, {"ok": False, "error": "bad date or days"})
+            return self.send_json(400, {"ok": False, "error": self.PERIOD_ERROR})
+
+    def records(self, site, q):
+        """GET /api/v1/records/<site>: the original 1-minute records of a period as one CSV, streamed from the day
+        files (history.open_records and csv_chunks): every column and every row of the files, UTC times."""
+        dev = self.site_device(site, q)
+        if not dev:
+            return self.send_json(404, {"ok": False, "error": "no such logger on this site"})
+        try:
+            d0, d1, files = history.open_records(self.store, site, dev, *self.period(q, 7))
+        except ValueError:
+            return self.send_json(400, {"ok": False, "error": self.PERIOD_ERROR})
+        except OSError:
+            return self.send_json(503, {"ok": False, "error": "a day file could not be read, try again"})
+        try:
+            if not files:
+                return self.send_json(404, {"ok": False, "error": "no records for these dates"})
+            name = f"{site}-{dev}-{d0}" + (f"-to-{d1}" if d1 != d0 else "") + ".csv"
+            self.send_chunked("text/csv; charset=utf-8", name, history.csv_chunks(files))
+        finally:
+            for _, f, _ in files:
+                f.close()
 
     _releases = {"at": 0, "rel": None, "err": None}
 
@@ -549,15 +757,17 @@ class Handler(BaseHTTPRequestHandler):
         if not log:
             return self.send_json(200, self.weather.view(site))
         try:
-            days = int(q.get("days", ["7"])[0])
+            days, start, end = self.period(q, 7)
+            j = self.weather.log(site, days, start, end)
         except ValueError:
-            return self.send_json(400, {"ok": False, "error": "bad days"})
+            return self.send_json(400, {"ok": False, "error": self.PERIOD_ERROR})
         if q.get("format", [""])[0] != "csv":
-            return self.send_json(200, self.weather.log(site, days))
-        body = self.weather.log_csv(site, days).encode("utf-8")
+            return self.send_json(200, j)
+        body = self.weather.log_csv(site, j=j).encode("utf-8")
+        name = f"weather-{site}-{j['from'][:10]}-to-{j['to']}" if start else f"weather-{site}-{days}d"
         self.send_response(200)
         self.send_header("Content-Type", "text/csv; charset=utf-8")
-        self.send_header("Content-Disposition", f'attachment; filename="weather-{site}-{days}d.csv"')
+        self.send_header("Content-Disposition", f'attachment; filename="{name}.csv"')
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -566,6 +776,8 @@ class Handler(BaseHTTPRequestHandler):
     def status(self):
         out = {"time": iso_now(), "sites": {}}
         for site in self.store.sites():
+            if not self.may_see(site):
+                continue
             devs = {}
             for dev in self.store.site_devices(site):
                 info = self.store.load_devices()["devices"][dev]
@@ -642,8 +854,10 @@ class Handler(BaseHTTPRequestHandler):
     def admin_get(self, path):
         if path == "/api/v1/admin/me":
             user = self.headers.get("X-Auth-User", "")
+            sites = self.login_sites()
             return self.send_json(200, {"user": user, "admin": bool(self.admin_user()),
-                                        "github": self.github.configured()})
+                                        "github": self.github.configured(),
+                                        "sites": sorted(sites) if sites is not None else None})
         if not self.admin_user():
             return self.admin_refused()
         m = re.match(r"^/api/v1/admin/fw/([A-Za-z0-9_-]+)$", path)
@@ -685,6 +899,8 @@ class Handler(BaseHTTPRequestHandler):
         device, action = m.group(1), m.group(2)
         if device not in self.store.load_devices().get("devices", {}):
             return self.send_json(404, {"ok": False, "error": "no such logger"})
+        if not self.may_see(self.device_site(device)):
+            return self.refuse_site()
         try:
             if action == "cancel":
                 gone = self.fw.cancel(device, by=user)
@@ -727,6 +943,7 @@ def make_server(data_dir, bind="127.0.0.1", port=8800):
     Handler.github = GitHub()
     Handler.weather = weather.Weather(store)
     Handler.admin_users = os.environ.get("ADMIN_USERS", "")
+    Handler.user_sites = parse_user_sites(os.environ.get("USER_SITES", ""))
     srv = ThreadingHTTPServer((bind, port), Handler)
     srv.daemon_threads = True
     return srv

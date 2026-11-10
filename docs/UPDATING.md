@@ -1,10 +1,287 @@
 # Updating the VPS and the loggers
 
-How a new version of this repository reaches `hermes-vps` and the loggers. **This release: 10 November 2026, VPS `v0.7.0`** (section N, below): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. Nothing changes for the loggers. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. The detailed tutorial steps are in [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
+How a new version of this repository reaches `hermes-vps` and the loggers. **Next release: VPS `v0.8.0` and firmware `0.5.0`** (section M, below): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
-**Status, 10 November 2026:** `v0.7.0` is to install (section N). Before it: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
+**Status, 10 November 2026:** `v0.7.1` is to install (section L), then `v0.8.0` and firmware `0.5.0` (section M). `v0.7.0` was tagged but not installed: going from `v0.6.0` straight to `v0.7.1` is fine, then do the N4 browser checks too. Before them: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
+
+## M. Release v0.8.0 and firmware 0.5.0: the Modbus link of each meter
+
+### M0. What is in it
+
+| Part | What changed | What it needs |
+|---|---|---|
+| Site page, **Live now** | The **Open alarms** card is always shown. At its top, one line per meter, kept in every state: `Meter EM01 · Modbus connected` (green, for how long, last answer), `not connected` (red, since when and why: timeout, CRC error...), `partial` (amber: some registers refused), `state unknown` (grey: no live data for 60 s). It reacts within 15 s; alarm **A03** still comes after a whole minute record, and still goes on WhatsApp. "No open alarm" moves into the card's title. [`LIVE.md`](LIVE.md#meter-link-modbus-connection-state) | VPS update |
+| API | `GET /api/v1/live/<site>`: each logger gets `meters` (state, since, last answer, reason, counters) | Nothing: same path, same login |
+| Firmware **0.5.0** | The logger keeps the Modbus link of each meter (answering or not, since when, last answer, last error, reads without answer) and sends it in every live snapshot (`sys.mb`). `status` on the console and the setup portal show one line per meter: `Meter EM01 (id 1): answering since ...` or `NO ANSWER for n reads ...: timeout: check wiring, A/B, meter id, baud, meter supply`. Records (CSV) unchanged: `CSV_SCHEMA` stays 3 | Bench test by cable, then the tag `fw-v0.5.0` and the **Firmware update** panel (M5) |
+| Older firmware | A logger on 0.4.1 has no `sys.mb`: the service tells the state from its live values (connected when the snapshot has meter values), without the reason or the counters. The line says "from the live values (logger firmware before 0.5.0)" | Nothing: the VPS can go first |
+| History pages: the period, and a CSV of the records | **Power**, **Energy per day**, **Temperature**, **Humidity**, the three power quality pages and the **Weather log**: 7, 14 or 31 days, or **From … to …** with two calendars (at most 92 days). **CSV** downloads the original 1-minute records of the period (and of the day on **One day**), every column and row of the logger's day files. API: every `?days=N` can be `?from=YYYY-MM-DD&to=YYYY-MM-DD`; new `GET /api/v1/records/<site>?from=&to=` ([`LIVE.md`](LIVE.md), [`DATA-ACCESS.md`](DATA-ACCESS.md)). Pull request #8 | Nothing: behind the same login; a login limited to some sites (`USER_SITES`, section L) gets the records of its own sites only |
+| Simulated logger | Sends `sys.mb` (firmware `sim-0.5.0`); `--meter-off N` makes the meter silent for 5 minutes, N minutes after the start | Nothing |
+| Caddy, `.env`, Docker files, alarm register | No change since `v0.7.1` | Nothing if the VPS runs `v0.7.1`. From `v0.6.0` or `v0.7.0`: the login file and the Caddy file of section L too (M2 to M4) |
+| `v0.7.1` | Included (section L): logins for this platform only, limited to one site | See M2 to M4 |
+
+**Order:** VPS first (it works with 0.4.1), then the firmware. Firmware 0.5.0 on a VPS still on `v0.7.0` or `v0.7.1` is harmless too: the extra field is saved and not shown.
+
+### M1. On GitHub: merge, then tag
+
+1. Merge the pull request into the default branch once CI is green (jobs `firmware`, `server`, `tools`). It brings `v0.7.1` (section L), the history pages (#8) and this release together: tag `v0.7.1` first (L1), then `v0.8.0`.
+2. On the PC, as in N1: `git checkout ccr-a52c0421-oygp4n`, `git pull`, `git log -1 --oneline` (the merge commit), then `git tag v0.8.0` and `git push origin v0.8.0`.
+3. **Not yet** the `fw-v0.5.0` tag: it comes after the bench test (M5).
+
+### M2 to M4. The VPS
+
+Same steps as N2 to N4 ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 2), with `v0.7.1` as the version you start from and go back to, and `v0.8.0` as the new tag. **If the VPS is still on `v0.6.0` or `v0.7.0`:** do section L first, or go straight to `v0.8.0` and do L3.3 (the login file) and L3.4 (the Caddy file) before the rebuild; going back is then as in L4: the service and the Caddy file together. Expected after the update:
+
+```bash
+curl -s http://127.0.0.1:8800/health
+```
+
+**Expected:** `{"ok": true, "version": "0.8.0", ...}`.
+
+```bash
+curl -s http://127.0.0.1:8800/api/v1/live/adab | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['devices']['LOG-0001']['meters'])"
+```
+
+**Expected (LOG-0001 still on 0.4.1):** `[{'meter': 'EM01', 'state': 'ok', 'source': 'values', ...}]` if the meter answers, `'state': 'no_answer'` if it does not.
+
+In the browser, `https://arkan-monitoring.duckdns.org/live/adab/` (Ctrl+F5): the **Open alarms** card is at the top even with no alarm (`✓ No open alarm` in its title), with the line `Meter EM01 · Modbus connected` in green (or `not connected` in red if the meter does not answer: then A03 is open too).
+
+**Going back:** `git checkout v0.7.1`, then `docker compose up -d --build`. Nothing in the data folder or in Caddy is left to undo (from `v0.7.1`; coming from an older tag, see L4).
+
+### M5. The loggers: firmware 0.5.0
+
+Bench first, as in section 5 (the lessons at its end).
+
+1. **Flash 0.5.0 by cable** on the bench logger, from the PC, on the merge commit:
+
+```powershell
+cd C:\dev\esp32-datalogging
+```
+
+```powershell
+git fetch origin
+```
+
+```powershell
+git checkout -B release-0.5.0 v0.8.0
+```
+
+```powershell
+cd firmware
+```
+
+```powershell
+pio run -e logger -t upload
+```
+
+```powershell
+pio device monitor -p COM4 -b 115200 -f esp32_exception_decoder -f time -f log2file
+```
+
+2. **Watch 10 minutes.** Expected: `firmware 0.5.0` at the boot, then no restart. `status` shows the line `Meter EM01 (id 1): ...`: with a meter (or `tools/modbus_sim/`) on the RS485 port, `answering since ...`; with nothing on the port, `NO ANSWER for n reads, since ...: timeout: ...`. On the site page the line `Meter EM01 · Modbus ...` follows within 15 s, without `from the live values`. Disconnect the meter (or stop the simulator): the line goes red within 15 s; reconnect: green again.
+3. **Only then:** tag `fw-v0.5.0` on the commit of `v0.8.0`: `git tag fw-v0.5.0 v0.8.0`, check `git log -1 --oneline fw-v0.5.0` shows the merge commit, then `git push origin fw-v0.5.0`. CI makes the release **Logger firmware 0.5.0** (it stops if the tag and `FW_VERSION` differ).
+4. **Send it to `LOG-0001`** from **Firmware update** on the site page ([`OTA.md`](OTA.md)): **From a GitHub release**, `logger-0.5.0.bin`, **Send to LOG-0001**. Within a minute the logger restarts once; **A35** in the alarm log after 10 minutes; **Firmware versions** shows `0.5.0`.
+
+---
+
+## L. Release v0.7.1 (10 November 2026): logins for this platform only, limited to one site
+
+### L0. What is in it
+
+| Part | What changed | What it needs |
+|---|---|---|
+| Logins for this platform only | A second Caddy login file, `/opt/edge/secrets/monitoring-users.caddy`, for people who need only this platform (a technician). It opens the site pages and their API, not OED and not the other Arkan dashboards | The file must exist before the new Caddy file is installed (L3.3), empty while nobody is in it |
+| `USER_SITES` in `server/.env` | Limits a login to some sites (`tech-adab:adab`): `/live/` and another site's page send it to its own site, **All sites** leaves its menu, every API path of another site or of another site's logger answers `403` (firmware update and register table included). Logins not listed: no change | An optional `.env` line, with the first such login ([`LIVE.md`](LIVE.md#logins)) |
+| Site page | **All sites** hidden for those logins; **Settings** shows the login's sites | VPS update |
+| `GET /api/v1/admin/me` | New field `sites`: `null` (every site) or the login's sites | Nothing |
+| Caddy files | `monitoring.caddy`: the second `import`. `oed/monitoring-oed.caddy` (only if OED is installed): OED takes the Arkan logins only, the platform logins reach only the ingest service. Not tested on a machine yet: `caddy validate` before any reload | The owner installs the file and reloads |
+| `v0.7.0` | Included: if the VPS still runs `v0.6.0`, this release also brings section N0 | The N4 browser checks |
+| Loggers, data folder, firmware, Dockerfile | No change | Nothing |
+
+### L1. On GitHub: tag the release commit
+
+`v0.7.1` came into the default branch with `v0.8.0` and the history pages, in one pull request (M1). It has no merge commit of its own, so the tag goes on its release commit `ce96ffb`, which holds exactly `v0.7.0` plus this release (CI green on its branch). From the PC, after the merge:
+
+```powershell
+cd C:\dev\esp32-datalogging
+```
+
+```powershell
+git checkout ccr-a52c0421-oygp4n
+```
+
+```powershell
+git pull
+```
+
+```powershell
+git log -1 --oneline ce96ffb
+```
+
+**Expected:** `ce96ffb Release v0.7.1: logins for this platform only, limited to one site`. Then:
+
+```powershell
+git tag v0.7.1 ce96ffb
+```
+
+```powershell
+git log -1 --oneline v0.7.1
+```
+
+**Expected:** the same line, now with `(tag: v0.7.1)`.
+
+```powershell
+git push origin v0.7.1
+```
+
+No `fw-v` tag comes with it (no firmware change).
+
+### L2. Before: where you start from
+
+**Where:** VPS, user ai (`ssh hermes-vps`), except the steps marked owner.
+
+```bash
+cd /opt/arkan-monitoring
+```
+
+```bash
+git describe --tags --always
+```
+
+**Expected:** `v0.6.0` (or `v0.7.0` if section N was done). Write it down: it is what you go back to.
+
+```bash
+git status
+```
+
+**Expected:** `nothing to commit, working tree clean` (an untracked `server/.env` is fine). Modified files: stop and ask the owner.
+
+### L3. Update
+
+**L3.1 Backup**
+
+```bash
+/opt/arkan-monitoring/server/deploy/backup.sh
+```
+
+**L3.2 Get the new version**
+
+```bash
+git fetch --tags
+```
+
+```bash
+git log -1 --oneline v0.7.1
+```
+
+**Expected:** a line with `Release v0.7.1`. Anything else: stop and ask the owner.
+
+```bash
+git checkout v0.7.1
+```
+
+**L3.3 The login file for this platform only (owner)**
+
+Create it empty, with the same owner and rights as the Arkan login file (Caddy must be able to read it):
+
+```bash
+sudo touch /opt/edge/secrets/monitoring-users.caddy
+```
+
+```bash
+sudo chown --reference=/opt/edge/secrets/hub-users.caddy /opt/edge/secrets/monitoring-users.caddy
+```
+
+```bash
+sudo chmod --reference=/opt/edge/secrets/hub-users.caddy /opt/edge/secrets/monitoring-users.caddy
+```
+
+```bash
+sudo ls -l /opt/edge/secrets/
+```
+
+**Expected:** `monitoring-users.caddy` with the same owner and rights as `hub-users.caddy`. The technician's line goes in later ([`LIVE.md`](LIVE.md#adding-a-technicians-login-owner-on-hermes-vps), steps 1 to 3), or now.
+
+**L3.4 `.env`, Caddy and Docker files**
+
+```bash
+git diff --stat v0.7.0 v0.7.1 -- server/.env.example server/deploy server/docker-compose.yml server/Dockerfile
+```
+
+**Expected:** `server/.env.example`, `server/deploy/monitoring.caddy`, `server/deploy/oed/monitoring-oed.caddy` and `server/docker-compose.yml` (`v0.7.0` changed none of them, so this is also the list from `v0.6.0`). `.env`: nothing to add now; `USER_SITES` comes with the first login limited to a site.
+
+```bash
+diff /opt/edge/sites/monitoring.caddy /opt/arkan-monitoring/server/deploy/monitoring.caddy
+```
+
+**Expected:** the new comment lines at the top, the comment `# People: Arkan login, or a login for this platform only.`, and one new line, `import /opt/edge/secrets/monitoring-users.caddy`, under the `hub-users.caddy` one. (If OED is installed, compare with `server/deploy/oed/monitoring-oed.caddy` and install that one: there the people part is split in two, see L0.) Other differences: someone changed the live file, stop and compare with the owner.
+
+The owner keeps a copy of the current file, installs the new one and validates:
+
+```bash
+sudo cp /opt/edge/sites/monitoring.caddy /opt/edge/monitoring.caddy.before-v0.7.1
+```
+
+```bash
+sudo cp /opt/arkan-monitoring/server/deploy/monitoring.caddy /opt/edge/sites/monitoring.caddy
+```
+
+If the port is not 8800 (tutorial 2, B14), edit the three `reverse_proxy 127.0.0.1:8800` lines again now.
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+```
+
+**Expected:** `Valid configuration`. **If** an error names `monitoring-users.caddy`: the file is missing (L3.3), or Caddy refuses it empty: add the technician's line first ([`LIVE.md`](LIVE.md#adding-a-technicians-login-owner-on-hermes-vps), steps 1 to 3) and validate again. Nothing has changed on the live site until the reload.
+
+**L3.5 Rebuild, restart and reload (owner approves)**
+
+```bash
+cd /opt/arkan-monitoring/server
+```
+
+```bash
+docker compose up -d --build
+```
+
+**Expected:** the container `Recreated`, `Started`. About 30 s without live data on the page. Then the Caddy reload:
+
+```bash
+sudo systemctl reload caddy
+```
+
+### L4. Checks
+
+```bash
+curl -s http://127.0.0.1:8800/health
+```
+
+**Expected:** `{"ok": true, "version": "0.7.1", ...}`.
+
+```bash
+curl -s -u <your-login> https://arkan-monitoring.duckdns.org/api/v1/admin/me
+```
+
+**Expected:** your login and `"sites": null` (every site).
+
+In the browser, with your login: `https://arkan-monitoring.duckdns.org/live/` lists the sites as before, the Adab page has **All sites** in its menu, and **Settings** shows `Sites: every site`. Coming from `v0.6.0`: the N4 browser checks too.
+
+Then the technician's login: [`LIVE.md`](LIVE.md#adding-a-technicians-login-owner-on-hermes-vps).
+
+**Going back:** the service and the Caddy file go back **together**. Version `v0.7.0` ignores `USER_SITES`, so with the new Caddy file a limited login would see every site; the old Caddy file does not take the platform logins at all.
+
+```bash
+sudo cp /opt/edge/monitoring.caddy.before-v0.7.1 /opt/edge/sites/monitoring.caddy
+```
+
+Then `sudo caddy validate --config /etc/caddy/Caddyfile`, `git checkout <the tag of L2>`, `docker compose up -d --build`, and the owner reloads Caddy. `monitoring-users.caddy` can stay: nothing reads it then.
+
+### L5. The loggers
+
+Nothing in this release.
+
+---
 
 ## N. Release v0.7.0 (10 November 2026): the site page in the Arkan design
 
@@ -598,6 +875,7 @@ docker compose exec ingest python tools/manage.py publish-fw /data/logger-0.4.1.
 
 ## 4. Next releases
 
+The general steps are now in [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md).
 
 - **VPS only:** a new tag `v0.x.y`, then section 2 (2.4 and 2.5 only if `.env.example` or the Caddy file changed: tutorial 2, C5 steps 3a and 3b, tell you).
 - **Firmware only:** change `FW_VERSION`, test on the bench logger, tag `fw-v<version>`, then section 3 from the panel. Every build gets a new version number, never reused ([`OTA.md`](OTA.md) section 2).

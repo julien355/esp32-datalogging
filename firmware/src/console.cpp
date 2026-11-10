@@ -19,7 +19,7 @@ static String line;
 
 static const char HELP[] =
     "Commands:\n"
-    "  status                 state of clock, SD, WiFi, uploads, last sample\n"
+    "  status                 state of clock, SD, meter link, WiFi, uploads, last sample\n"
     "  show                   all settings (secrets hidden)\n"
     "  set <key> <value>      change a setting (then: reboot)\n"
     "  unset <key>            back to the default\n"
@@ -51,6 +51,8 @@ static void cmdStatus() {
                 (unsigned long)st.rowsWritten, (unsigned long)st.sdErrors);
   Serial.printf("Heap: %u free, %u min free\n", ESP.getFreeHeap(), ESP.getMinFreeHeap());
   Serial.println(net::statusText());
+  if (!meter::count()) Serial.println("Meter: none configured (setting meters)");
+  for (int m = 0; m < meter::count(); m++) Serial.println(meter::linkText(m));
   Serial.printf("Portal: %s\n", st.portalOn ? "open" : "closed");
   Serial.printf("Last sample: %s\n", sampler::lastValuesText().c_str());
   Serial.printf("Last record: %s\n", st.lastRowTs ? isoTime(st.lastRowTs).c_str() : "none yet");
