@@ -2,6 +2,8 @@
 
 How a new version of this repository reaches `hermes-vps` and the loggers. **This release: 10 November 2026, VPS `v0.6.0`** (section A, below): the power quality pages. The code now also holds firmware **`0.4.1`**, which replaces the withdrawn `0.4.0`; it reaches the loggers separately, after its bench test (section 5 of the v0.4.0 release, at the end). The steps of the 9 November release (`v0.5.0`, section B) and of the 8 November release (`v0.4.0`) follow, for reference. The detailed tutorial steps are in [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
+**Status, 10 November 2026: done.** The VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
+
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
 
 ## A. Release v0.6.0 (10 November 2026): power quality pages
