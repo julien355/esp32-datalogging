@@ -1,5 +1,7 @@
 # Dashboard mockup
 
+> **New, for review (10 November 2026):** the same pages in the Arkan design of the CMMS, with View as and Settings: [`arkan/`](arkan/README.md).
+
 How `arkan-monitoring.duckdns.org` should look for the Adab hotel, with **simulated data** (14 days).
 Open **[`index.html`](index.html)** in a browser (it needs the `img/` folder beside it).
 
