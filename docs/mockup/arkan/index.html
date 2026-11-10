@@ -711,7 +711,6 @@ table.data th.cen,table.data td.cen{text-align:center}
 .sec{margin:24px 2px 10px}
 .sec span{text-transform:none;letter-spacing:0;font-weight:500}
 .tiles{margin-bottom:0}
-.kpi .eyebrow{min-height:0}
 .headtools{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap}
 .clock{font-size:13px;color:var(--muted);white-space:nowrap}
 .live-pill.off{color:var(--crit-ink);background:var(--crit-bg)}
@@ -720,6 +719,10 @@ table.data th.cen,table.data td.cen{text-align:center}
 .live-pill.idle i{background:var(--muted);animation:none}
 .spk{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 6px;margin-top:6px}
 .spk.tall{margin-top:12px}
+/* Cards of one row: the label keeps two lines (kit), so the figures line up; the chart sits at the bottom, so the charts line up */
+.kpi .spk,.two>.card>.spk{margin-top:auto;padding-top:8px}
+.two>.card{display:flex;flex-direction:column}
+.two>.card>.phase{margin-bottom:6px}
 .spy{display:flex;flex-direction:column;justify-content:space-between;text-align:right}
 .spx{grid-column:2;display:flex;justify-content:space-between}
 .spy,.spx{font-size:10.5px;line-height:1;color:var(--muted);white-space:nowrap}
