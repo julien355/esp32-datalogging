@@ -12,7 +12,7 @@ Device endpoints (token in "Authorization: Bearer <token>", no web login in Cadd
 People endpoints (behind the Caddy web login, never published without it):
   GET  /health                 {"ok": true}
   GET  /api/v1/status          every site and logger: last record, last live, firmware
-  GET  /api/v1/live/<site>     live values, 60-minute history and open alarms of a site
+  GET  /api/v1/live/<site>     live values, 60-minute history, Modbus link of each meter and open alarms of a site
   GET  /api/v1/live/<site>/day/<YYYY-MM-DD>?device=   every saved 15 s snapshot of that UTC day
   GET  /api/v1/alarms/<site>   open alarms and the last 200 lines of the alarm log
   GET  /api/v1/versions/<site> firmware of each logger: running, since, offer, every change and restart,
@@ -82,7 +82,7 @@ from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, IngestError, atomic_write, iso_now  # noqa: E402
 
-VERSION = "0.7.1"
+VERSION = "0.8.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
@@ -118,6 +118,86 @@ def parse_user_sites(spec):
         else:
             sys.stderr.write(f"{iso_now()} USER_SITES: '{item.strip()}' is not login:site, {login} sees no site\n")
     return out
+
+
+LINK_STALE_S = 60   # no snapshot for this long: the meter link is "unknown" (the page's "No data for" pill too)
+METER_ID_RE = re.compile(r"^(EM\d+)_")
+
+
+def _epoch(iso):
+    try:
+        return datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def _iso(t):
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def meter_links(last, age_s, history, expected=(), now=None):
+    """The Modbus link of each meter of one logger, for the open alarms card of the site page.
+
+    From sys.mb of the last snapshot (firmware 0.5.0 and later), else from the live values (older firmware: a
+    meter answers when the snapshot has values of it). One dict per meter, sorted by meter:
+      state       "ok" (answering), "no_answer", or "not_configured" (in site.json, not in the logger's meter list)
+      stale       true when the last snapshot is older than LINK_STALE_S: the state is the last one known
+      since       when the state started (UTC); since_boot: true when that is the logger's start (clock not set
+                  at the change); null when it is older than the 60 minutes kept (older firmware only)
+      for_s       seconds in that state, up to now
+      last_ok     last read that answered; fail_run: reads in a row without an answer
+      req, req_ok requests of the last read and answered (fewer answered: some registers are refused)
+      err         why the last read had a failed request: timeout, crc, illegal_address... (firmware 0.5.0)
+      reads, fails reads since the logger's start, of them without an answer (firmware 0.5.0)
+      modbus_id   the meter's Modbus address; source: "logger" (sys.mb) or "values" (older firmware)
+    """
+    now = time.time() if now is None else now
+    stale = age_s is None or age_s > LINK_STALE_S
+    sys_ = last.get("sys") or {}
+    out = {}
+    mb = sys_.get("mb")
+    if isinstance(mb, dict):
+        ts, up = _epoch(last.get("ts")), sys_.get("up_s")
+        for m, o in mb.items():
+            if not isinstance(o, dict):
+                continue
+            since, since_boot = o.get("since"), False
+            if not since and ts and isinstance(up, (int, float)):
+                since, since_boot = _iso(ts - up), True
+            t = _epoch(since)
+            out[m] = {"meter": m, "state": "ok" if o.get("ok") else "no_answer", "source": "logger",
+                      "modbus_id": o.get("id"), "since": since, "since_boot": since_boot,
+                      "for_s": round(now - t) if t else None, "last_ok": o.get("last_ok"),
+                      "fail_run": o.get("fail_run", 0), "req": o.get("req"), "req_ok": o.get("req_ok"),
+                      "err": o.get("err"), "reads": o.get("reads"), "fails": o.get("fails")}
+        missing = "not_configured"
+    else:
+        snaps = [s for s in history if s.get("ts")]
+        seen = set()
+        for s in snaps:
+            seen.update(METER_ID_RE.match(k).group(1) for k in (s.get("values") or {}) if METER_ID_RE.match(k))
+        for m in seen:
+            has = [any(k.startswith(m + "_") for k in (s.get("values") or {})) for s in snaps]
+            ok = has[-1]
+            run = 0   # snapshots at the end in the same state
+            while run < len(has) and has[-1 - run] == ok:
+                run += 1
+            since = snaps[-run]["ts"] if run < len(has) else None   # null: the whole 60 minutes
+            t = _epoch(since)
+            last_ok = next((snaps[i]["ts"] for i in range(len(has) - 1, -1, -1) if has[i]), None)
+            out[m] = {"meter": m, "state": "ok" if ok else "no_answer", "source": "values", "modbus_id": None,
+                      "since": since, "since_boot": False, "for_s": round(now - t) if t else None,
+                      "last_ok": last_ok, "fail_run": 0 if ok else run, "req": None, "req_ok": None, "err": None,
+                      "reads": None, "fails": None}
+        missing = "no_answer"   # older firmware: a meter of site.json without any value in 60 minutes
+    for m in expected:
+        if m not in out:
+            out[m] = {"meter": m, "state": missing, "source": "logger" if isinstance(mb, dict) else "values",
+                      "modbus_id": None, "since": None, "since_boot": False, "for_s": None, "last_ok": None,
+                      "fail_run": None, "req": None, "req_ok": None, "err": None, "reads": None, "fails": None}
+    for v in out.values():
+        v["stale"] = stale
+    return [out[m] for m in sorted(out)]
 
 
 class Live:
@@ -213,7 +293,9 @@ class Live:
                     if fn.endswith(".jsonl") and fn[:10] < oldest:
                         os.unlink(os.path.join(d, fn))
 
-    def site(self, site):
+    def site(self, site, expected=()):
+        """Per device: the last snapshot, its age, the 60-minute history and the Modbus link of each meter
+        (meter_links; expected = the meters of site.json's live values, shown even when they never answered)."""
         with self.lock:
             devs = self.data.get(site, {})
             out = {}
@@ -221,11 +303,9 @@ class Live:
                 if not q:
                     continue
                 recv, last = q[-1]
-                out[dev] = {
-                    "last": last,
-                    "age_s": round(time.time() - recv),
-                    "history": [{"ts": s.get("ts"), "values": s.get("values", {})} for _, s in q],
-                }
+                age = round(time.time() - recv)
+                hist = [{"ts": s.get("ts"), "values": s.get("values", {})} for _, s in q]
+                out[dev] = {"last": last, "age_s": age, "history": hist, "meters": meter_links(last, age, hist, expected)}
             return out
 
     def last_seen(self, site, device):
@@ -391,8 +471,11 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/v1/live/([a-z0-9-]+)$", path)
         if m and CODE_RE.match(m.group(1)):
             site = m.group(1)
-            return self.send_json(200, {"site": site, "profile": self.public_profile(site),
-                                        "devices": self.live.site(site),
+            prof = self.public_profile(site)
+            expected = sorted({m.group(1) for k in ((prof.get("live") or {}).get("values") or [])
+                               if isinstance(k, str) and (m := METER_ID_RE.match(k))})
+            return self.send_json(200, {"site": site, "profile": prof,
+                                        "devices": self.live.site(site, expected),
                                         "alarms": self.store.alarms.open_alarms(site), "time": iso_now()})
         m = re.match(r"^/api/v1/live/([a-z0-9-]+)/day/(\d{4}-\d{2}-\d{2})$", path)
         if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():

@@ -5,6 +5,7 @@
 #include <WiFi.h>
 
 #include "app.h"
+#include "meter.h"
 #include "net.h"
 #include "sampler.h"
 #include "settings.h"
@@ -52,6 +53,8 @@ static void handleRoot() {
   h += "Firmware " FW_VERSION ", up " + String(millis() / 1000) + " s, boot: " + st.bootReason + "\n";
   h += "Time (UTC): " + (timeValid() ? isoTime(time(nullptr)) : String("NOT SET")) + "\n";
   h += "SD card: " + String(st.sdOk ? "ok" : "FAILED") + ", TH1 chip: " + st.th1Chip + "\n";
+  if (!meter::count()) h += "Meter: none configured (setting meters)\n";
+  for (int m = 0; m < meter::count(); m++) h += esc(meter::linkText(m)) + "\n";
   h += esc(net::statusText()) + "\n";
   h += "Last sample: " + esc(sampler::lastValuesText());
   h += F("</pre><form method='POST' action='/save'>");

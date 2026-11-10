@@ -322,15 +322,83 @@ static double decode(const Reg &r, uint16_t w0, uint16_t w1) {
   return v;
 }
 
+static Link links[MAX_METERS];
+
+const Link &link(int i) { return links[i]; }
+
+// The link state after a read: counters, and the time of a change between answering and not.
+static void noteRead(int i, bool any, uint8_t req, uint8_t reqOk, uint8_t err) {
+  Link &l = links[i];
+  time_t now = timeValid() ? time(nullptr) : 0;
+  if (!l.known || l.ok != any) l.since = now;
+  l.known = true;
+  l.ok = any;
+  l.reads++;
+  if (!any) l.fails++;
+  if (any && now) l.lastOk = now;
+  l.req = req;
+  l.reqOk = reqOk;
+  l.err = err;
+  st.meterFailRun[i] = any ? 0 : st.meterFailRun[i] + 1;
+}
+
+const char *errKey(uint8_t err) {
+  switch (err) {
+    case 0: return "";
+    case 0x01: return "illegal_function";
+    case 0x02: return "illegal_address";
+    case 0x03: return "illegal_value";
+    case 0x04: return "meter_failure";
+    case 0xE0: return "wrong_id";
+    case 0xE1: return "wrong_function";
+    case 0xE2: return "timeout";
+    case 0xE3: return "crc";
+    case ERR_NO_PORT: return "no_rs485_pins";
+    default: return "other";
+  }
+}
+
+const char *errHelp(uint8_t err) {
+  switch (err) {
+    case 0x01: return "illegal function: the meter refuses this function code (fc of the register table)";
+    case 0x02: return "illegal data address: a register the meter does not have (register table)";
+    case 0x03: return "illegal data value: the meter refuses the request (register count of a block)";
+    case 0x04: return "meter failure: the meter reports an internal error";
+    case 0xE0: return "answer from another meter id (two meters with the same id?)";
+    case 0xE1: return "answer to another function (noise on the line?)";
+    case 0xE2: return "timeout: check wiring, A/B, meter id, baud, meter supply";
+    case 0xE3: return "CRC error: noise, signal ground, baud or format (mb_format)";
+    case ERR_NO_PORT: return "RS485 pins not set (pin_rs_tx / pin_rs_rx): the meter is never asked";
+    default: return "Modbus error";
+  }
+}
+
+String linkText(int i) {
+  const Link &l = links[i];
+  String s = String("Meter ") + meters[i].id + " (id " + String(meters[i].slave) + "): ";
+  if (!l.known) return s + "not read yet";
+  String since = l.since ? isoTime(l.since) : String("boot or before the clock was set");
+  if (l.ok) {
+    s += "answering since " + since + ", " + String(l.reqOk) + "/" + String(l.req) + " requests answered";
+    if (l.err) s += String(" (") + errHelp(l.err) + ")";
+  } else {
+    s += "NO ANSWER for " + String((int)st.meterFailRun[i]) + " reads, since " + since + ": " + errHelp(l.err);
+  }
+  s += ", last answer " + (l.lastOk ? isoTime(l.lastOk) : String("none since boot"));
+  s += ", reads " + String((unsigned long)l.reads) + ", no answer " + String((unsigned long)l.fails);
+  return s;
+}
+
 bool read(int i, double *values, bool *ok) {
   for (int j = 0; j < nRegs; j++) ok[j] = false;
   if (i >= nMeters) return false;
   if (!portOk) {
-    st.meterFailRun[i] = st.meterFailRun[i] + 1;
+    noteRead(i, false, 0, 0, ERR_NO_PORT);
     return false;
   }
   node.begin(meters[i].slave, Serial1);
   bool any = false;
+  uint8_t answered = 0, lastErr = 0;
   for (int b = 0; b < nBlocks; b++) {
     const Block &bl = blocks[b];
     uint8_t res = 0xFF;
@@ -339,8 +407,12 @@ bool read(int i, double *values, bool *ok) {
       res = bl.fc == 3 ? node.readHoldingRegisters(bl.start, bl.count)
                        : node.readInputRegisters(bl.start, bl.count);
     }
-    if (res != node.ku8MBSuccess) continue;
+    if (res != node.ku8MBSuccess) {
+      lastErr = res;
+      continue;
+    }
     any = true;
+    answered++;
     for (int j = 0; j < nRegs; j++) {
       const Reg &r = table[j];
       if (r.fc != bl.fc || r.addr < bl.start || r.addr + words(r.type) > bl.start + bl.count) continue;
@@ -352,7 +424,7 @@ bool read(int i, double *values, bool *ok) {
     }
     delay(5);
   }
-  st.meterFailRun[i] = any ? 0 : st.meterFailRun[i] + 1;
+  noteRead(i, any, nBlocks, answered, lastErr);
   return any;
 }
 

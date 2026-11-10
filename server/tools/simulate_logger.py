@@ -11,6 +11,8 @@ Use it to test the VPS before the board is ready, and to rehearse an outage:
 --event dip|hot|ct|ota|sensor  during the backlog, simulates a voltage dip on L2 (A26, then A05 for 6 min),
                    a hot electrical room (A11), a CT fitted backwards on L3 (A30), a remote firmware update
                    (A35), or a failed outdoor sensor (A14): to test the alarm log
+--meter-off N      with --live: the meter stops answering N minutes after the start, for 5 minutes (Modbus
+                   timeout): the meter link line of the site page goes red, then green again; A03 opens and closes
 """
 
 import argparse
@@ -36,6 +38,7 @@ class Sim:
         self.eq = 40210.10
         self.boot = "poweron@0.4.0"
         self.t0 = time.time()
+        self.link = Link()
 
     def values(self, t, advance=False):
         hour = (datetime.fromtimestamp(t, timezone.utc).hour + 8) % 24   # WITA
@@ -61,8 +64,8 @@ class Sim:
                     "TH2_t": outdoor + random.uniform(-.2, .2), "TH2_rh": 75 + random.uniform(-3, 3)})
         return out
 
-    def row(self, minute_ts, backlog):
-        v = self.values(minute_ts, advance=True)
+    def row(self, minute_ts, backlog, meter_on=True):
+        v = self.values(minute_ts, advance=meter_on)
         self.minute_no += 1
         mm = {k: (v[k] * 0.99, v[k] * 1.01) for k in MINMAX}
         mm["f"] = (v["f"] - 0.03, v["f"] + 0.03)
@@ -80,8 +83,8 @@ class Sim:
         ts = datetime.fromtimestamp(minute_ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         parts = []
         for c in MINMAX:
-            parts += [f"{v[c]:.3f}", f"{mm[c][0]:.3f}", f"{mm[c][1]:.3f}"]
-        parts += [f"{v['e']:.2f}", f"{v['eq']:.2f}"]
+            parts += [f"{v[c]:.3f}", f"{mm[c][0]:.3f}", f"{mm[c][1]:.3f}"] if meter_on else ["", "", ""]
+        parts += [f"{v['e']:.2f}", f"{v['eq']:.2f}"] if meter_on else ["", ""]
         # Sensors: 5-minute means on the rows at :00, :05, ... only (logger 0.3.0); "err" = sensor fault
         if minute_ts % 300:
             th = ",,,"
@@ -89,10 +92,36 @@ class Sim:
             th = f"{v['TH1_t']:.2f},{v['TH1_rh']:.1f},err,err"
         else:
             th = f"{v['TH1_t']:.2f},{v['TH1_rh']:.1f},{v['TH2_t']:.2f},{v['TH2_rh']:.1f}"
-        r = (f"{ts},{','.join(parts)},4,{th},"
+        r = (f"{ts},{','.join(parts)},{4 if meter_on else 0},{th},"
              f"-63,180,{int(time.time() - self.t0)},{backlog},1,{self.boot}")
         self.boot = ""
         return r, v
+
+
+class Link:
+    """The meter's Modbus link as firmware 0.5.0 sends it in every live snapshot (sys.mb, firmware/src/sampler.cpp)."""
+
+    def __init__(self):
+        self.ok, self.since, self.last_ok, self.run, self.reads, self.fails = None, None, None, 0, 0, 0
+
+    def read(self, ts, ok):
+        if ok != self.ok:
+            self.since = ts
+        self.ok = ok
+        self.reads += 1
+        if ok:
+            self.last_ok, self.run = ts, 0
+        else:
+            self.fails, self.run = self.fails + 1, self.run + 1
+
+    def json(self):
+        o = {"ok": self.ok, "id": 1, "since": self.since, "fail_run": self.run, "req": 2, "req_ok": 2 if self.ok else 0,
+             "reads": self.reads, "fails": self.fails}
+        if self.last_ok:
+            o["last_ok"] = self.last_ok
+        if not self.ok:
+            o["err"] = "timeout"
+        return {"EM01": o}
 
 
 def post(url, token, path, body, ctype):
@@ -115,6 +144,7 @@ def main():
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--resend", action="store_true")
     ap.add_argument("--event", choices=["dip", "hot", "ct", "ota", "sensor"])
+    ap.add_argument("--meter-off", type=float, metavar="N", help="with --live: no meter answer from minute N, for 5 minutes")
     a = ap.parse_args()
     sim = Sim(a.event)
     now = int(time.time())
@@ -133,18 +163,28 @@ def main():
         return
     print("live: snapshot every 15 s, record every minute (Ctrl-C to stop)")
     last_minute = None
+    live_t0 = time.time()
+
+    def meter_on(t):
+        return a.meter_off is None or not (a.meter_off * 60 <= t - live_t0 < (a.meter_off + 5) * 60)
+
     while True:
         t = time.time()
         minute = int(t) - int(t) % 60
         if last_minute is not None and minute != last_minute:
-            r, _ = sim.row(last_minute, 0)
+            r, _ = sim.row(last_minute, 0, meter_on(last_minute + 59))
             code, resp = post(a.url, a.token, "/api/v1/ingest", HEADER + "\n" + r + "\n", "text/csv")
             print(f"record {r[:20]} -> HTTP {code} {resp}")
         last_minute = minute
         v = sim.values(t)
-        snap = {"device": a.device, "ts": datetime.fromtimestamp(int(t), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "values": {("EM01_" + k if not k.startswith("TH") else k): round(x, 3) for k, x in v.items()},
-                "sys": {"rssi": -63, "backlog_min": 0, "sd": True, "fw": "sim-0.1.0", "up_s": int(t - sim.t0)}}
+        ts = datetime.fromtimestamp(int(t), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        on = meter_on(t)
+        sim.link.read(ts, on)
+        snap = {"device": a.device, "ts": ts,
+                "values": {("EM01_" + k if not k.startswith("TH") else k): round(x, 3) for k, x in v.items()
+                           if on or k.startswith("TH")},
+                "sys": {"rssi": -63, "backlog_min": 0, "sd": True, "fw": "sim-0.5.0", "up_s": int(t - sim.t0),
+                        "mb": sim.link.json()}}
         code, _ = post(a.url, a.token, "/api/v1/live", json.dumps(snap), "application/json")
         print(f"live {snap['ts']} -> HTTP {code}")
         time.sleep(15 - time.time() % 15)

@@ -477,7 +477,7 @@ Each of these takes two minutes and shows a behaviour you will meet on site. Sto
 
 | Start the simulator with | What you should see on the logger and VPS |
 |---|---|
-| `--silent-after 60` | After a minute the meter "dies": `status` shows `EM01: no answer (n in a row)`, `EM01_n` = 0, empty values, and after about a minute **A03 Meter not answering** in the alarm log |
+| `--silent-after 60` | After a minute the meter "dies": `status` shows `Meter EM01 (id 1): NO ANSWER for n reads ... timeout` (firmware 0.5.0) and `EM01: no answer (n in a row)`, the site page `Meter EM01 · Modbus not connected` in red, `EM01_n` = 0, empty values, and after about a minute **A03 Meter not answering** in the alarm log |
 | `--drop-pct 30` | A third of the requests get no answer; the logger retries each request once, so most reads still succeed. `EM01_n` stays 4 or 3. Shows why a flaky cable gives noisy `EM01_n` |
 | `--profile primary-16bit` | The proposed table now reads values 10 times too small (exercise 2), with the `ct_mult` of 50 even 5 times too big. Fix it with the file on the card, not with `ct_mult` |
 | `--profile float32-fc4` | No values at all, `EM01_n` = 0, A03 after a minute (exercise 3). The **boot log** said nothing wrong: a table that does not match the meter is not an error for the logger |

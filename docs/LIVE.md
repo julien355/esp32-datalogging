@@ -51,7 +51,7 @@ Default for Adab:
 **Live page `/live/<site>/`** (content of the dashboard mockup approved 8 November 2026; since service 0.7.0 in the Arkan design of the CMMS, `docs/mockup/arkan/`):
 - A side bar: the Arkan logo, the site (a link to **All sites**, except for a login limited to its sites: [Logins](#logins)), **View as** (who is logged in: `Admin · <login>` for a login in `ADMIN_USERS`, `Viewer · <login>` otherwise; an admin can look at the pages as a viewer), the menu, and at the bottom **Settings** (`#prefs`: light, dark or high contrast, density, text size, motion, saved in the browser; who is logged in; the site details) with the status pill ("Live · updated 4 s ago", or "No data for 2 min" in red). An icon rail on a tablet, bottom tabs and a **More** list on a phone.
 - Every chart shows both axes with their scales; the small charts of the cards cover the last 60 minutes.
-- The open alarms first (severity icon, label and colour), or "No open alarm".
+- The **open alarms** card first, always shown: at its top one line per meter with its **Modbus link** (since service 0.8.0 and firmware 0.5.0, below), then the open alarms (severity icon, label and colour), or "No open alarm" in the card's title.
 - **Power:** total kW, kVA with a bar against the PLN contract (`contracted_kva`), power factor, frequency.
 - **Per phase:** one card for the three voltages and one for the three currents, each with a 3-line sparkline (L1 blue, L2 orange, L3 green); the current card has a bar against the PLN per-phase limit (`contracted_kva` / 3 / `contract_v_ln`, 125 A at Adab).
 - **Environment:** each sensor's temperature and humidity, the room-minus-outdoor difference and the outdoor dew point (same formula as the alarms).
@@ -193,6 +193,32 @@ curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" -u tech-adab https://ar
 In a private browser window, log in as `tech-adab`: `https://arkan-monitoring.duckdns.org/live/adab/` opens, the menu has no **All sites**, **Settings** shows `Sites: adab only`, and `https://arkan-monitoring.duckdns.org/live/` lands on the Adab page. With your own login, `/live/` still lists every site.
 
 **Removing the login:** delete its line in `monitoring-users.caddy`, validate and reload Caddy (steps 5 and 6), then take the name out of `ADMIN_USERS` and `USER_SITES` and `docker compose up -d`. The Caddy reload alone already locks the login out.
+
+## Meter link: Modbus connection state
+
+Added 10 November 2026 (service 0.8.0, firmware 0.5.0). The site page shows **whether each meter answers the logger**, at the top of the open alarms card, and keeps the line there in every state: it does not wait for alarm A03 (which needs a whole minute record with `EM01_n` = 0, so it comes 1 to 2 minutes later, and goes on WhatsApp).
+
+| Line | Colour | When | Details shown |
+|---|---|---|---|
+| `Meter EM01 · Modbus connected` | green | the last read had an answer | for how long and since when (hotel time), last answer, Modbus id, reads without answer since the logger started (if any) |
+| `Meter EM01 · Modbus connected, 3 of 4 requests answered` | amber, `partial` | some requests of the read refused: values missing | the reason, usually `illegal data address` (a register the meter does not have: **Meter registers**) |
+| `Meter EM01 · Modbus not connected` | red | the last read had no answer | for how long and since when, the reason (`timeout`: wiring, A/B, meter id, baud, meter supply; `CRC error`: noise, signal ground, baud or format; `RS485 pins not set`), last answer |
+| `Meter EM01 · Modbus state unknown` | grey | no live snapshot for 60 s (logger offline), or no live data at all | how long the logger has been silent, the last known state |
+| `Meter EM01 · not read by the logger` | amber | a meter of `site.json`'s live values that is not in the logger's `meters` setting | |
+
+**Logger (firmware 0.5.0).** `meter::read()` (`firmware/src/meter.cpp`) keeps for each meter: answering or not, since when, the last answer, reads and reads without answer since the start, requests answered in the last read, and the ModbusMaster code of the last failed request. A read answers when at least one of its requests answers (each request is tried twice). Every live snapshot carries it in `sys.mb` (empty `{}` when no meter is configured); times are UTC and left out while unknown (clock not set):
+
+```json
+"sys": {"rssi": -63, "up_s": 7200, "backlog_min": 0, "sd": true, "fw": "0.5.0",
+        "mb": {"EM01": {"ok": false, "id": 1, "since": "2026-11-10T06:19:15Z", "last_ok": "2026-11-10T06:19:00Z",
+                        "fail_run": 10, "req": 2, "req_ok": 0, "err": "timeout", "reads": 14, "fails": 10}}}
+```
+
+`err` (only when a request of the last read failed): `timeout`, `crc`, `illegal_function`, `illegal_address`, `illegal_value`, `meter_failure`, `wrong_id`, `wrong_function`, `no_rs485_pins`, `other`. The console's `status` and the setup portal show the same, one line per meter: `Meter EM01 (id 1): answering since ..., 2/2 requests answered, last answer ..., reads 900, no answer 2` or `Meter EM01 (id 1): NO ANSWER for 12 reads, since ...: timeout: check wiring, A/B, meter id, baud, meter supply, last answer ...`.
+
+**Service (0.8.0).** `GET /api/v1/live/<site>` adds `meters` to each logger: one entry per meter (`server.py`, `meter_links`) with `state` (`ok`, `no_answer`, `not_configured`), `stale` (no snapshot for 60 s: the state is the last known), `since`, `for_s`, `last_ok`, `fail_run`, `req`, `req_ok`, `err`, `reads`, `fails`, `modbus_id`, `source`. **A logger on firmware 0.4.1 or older** sends no `sys.mb`: the service then tells the state from the live values (`source` = `values`: the meter answers when the snapshot has values of it; no reason, no counters). The page says so on the line ("from the live values").
+
+Rehearsal without a meter: `simulate_logger.py --live --meter-off 1` (the meter stops answering after a minute, for 5 minutes: the line goes red, A03 opens, then both clear). On the bench with the board: `tools/modbus_sim/` with `--silent-after 60` ([tutorial 4](tutorials/4-MODBUS-REGISTERS.md)).
 
 ## Getting from OED to the live page
 
