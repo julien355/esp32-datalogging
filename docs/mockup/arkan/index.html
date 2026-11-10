@@ -718,8 +718,15 @@ table.data th.cen,table.data td.cen{text-align:center}
 .live-pill.off i{background:var(--crit);animation:none}
 .live-pill.idle{color:var(--muted);background:var(--surface-2)}
 .live-pill.idle i{background:var(--muted);animation:none}
-.spark{display:block;width:100%;height:40px;margin-top:4px;overflow:visible}
-.spark.tall{height:64px;margin-top:10px}
+.spk{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 6px;margin-top:6px}
+.spk.tall{margin-top:12px}
+.spy{display:flex;flex-direction:column;justify-content:space-between;text-align:right}
+.spx{grid-column:2;display:flex;justify-content:space-between}
+.spy,.spx{font-size:10.5px;line-height:1;color:var(--muted);white-space:nowrap}
+.spark{display:block;width:100%;height:44px;overflow:visible;border-left:1px solid var(--line-2);border-bottom:1px solid var(--line-2)}
+.spark.tall{height:72px}
+.spark .sg{stroke:var(--grid)}
+.chart .axl{stroke:var(--line-2);stroke-width:1}
 .spark path{fill:none;stroke-width:2;stroke-linejoin:round}
 .spark .xh{stroke:var(--control);stroke-dasharray:2 2}
 .phase{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:2px 12px;align-items:baseline}
@@ -1230,10 +1237,13 @@ function spark(series, times, {tall = false, unitKey} = {}) {
     s.pts.forEach((v, i) => { if (v !== null) d += `${d && s.pts[i - 1] !== null ? 'L' : 'M'}${X(i).toFixed(2)},${Y(v).toFixed(2)}`; });
     return `<path d="${d}" style="stroke:${s.color}" vector-effect="non-scaling-stroke"/>`;
   }).join('');
-  const id = 'sp' + (++sparkId);
+  const id = 'sp' + (++sparkId), yk = unitKey || series[0].key, hm = i => esc(String(times[i] || '').slice(0, 5));
   SPARKS[id] = {series, times, unitKey};
-  return `<svg class="spark${tall ? ' tall' : ''}" id="${id}" viewBox="0 0 100 ${H}" preserveAspectRatio="none" role="img" aria-label="last 60 minutes">
-    ${paths}<line class="xh" y1="0" y2="${H}" vector-effect="non-scaling-stroke" visibility="hidden"/></svg>`;
+  const grid = [2, H / 2, H - 2].map(y => `<line class="sg" x1="0" x2="100" y1="${y}" y2="${y}" vector-effect="non-scaling-stroke"/>`).join('');
+  return `<div class="spk${tall ? ' tall' : ''}"><div class="spy" aria-hidden="true"><span>${fmt(yk, hi)}</span><span>${fmt(yk, (hi + lo) / 2)}</span><span>${fmt(yk, lo)}</span></div>
+    <svg class="spark${tall ? ' tall' : ''}" id="${id}" viewBox="0 0 100 ${H}" preserveAspectRatio="none" role="img" aria-label="last 60 minutes, ${fmt(yk, lo)} to ${fmt(yk, hi)} ${esc(unitOf(yk))}">
+    ${grid}${paths}<line class="xh" y1="0" y2="${H}" vector-effect="non-scaling-stroke" visibility="hidden"/></svg>
+    <div class="spx" aria-hidden="true"><span>${hm(0)}</span><span>${hm(Math.floor((n - 1) / 2))}</span><span>${hm(n - 1)}</span></div></div>`;
 }
 function showTip(ev, html) {
   const tip = el('tip'); tip.innerHTML = html; tip.style.display = 'block';
@@ -1428,7 +1438,10 @@ function nice(lo, hi, n = 5) {
   return t;
 }
 let CW = 900, CH = 320;
-const CM = {l: 50, r: 14, t: 10, b: 34};
+const CM = {l: 50, r: 14, t: 10, b: 48};
+// The two axis lines and the name of the x axis (the y axis carries its unit, turned, on the left)
+const axes = xName => `<line class="axl" x1="${CM.l}" x2="${CM.l}" y1="${CM.t}" y2="${CH - CM.b}"/><line class="axl" x1="${CM.l}" x2="${CW - CM.r}" y1="${CH - CM.b}" y2="${CH - CM.b}"/>` +
+  `<text class="ax" x="${(CM.l + CW - CM.r) / 2}" y="${CH - 4}" text-anchor="middle">${esc(xName)}</text>`;
 const sizeTo = box => { CW = Math.max(320, Math.round(box.clientWidth)); CH = CW < 600 ? 240 : 320; };
 
 // Line chart, one y axis; series = [{name, color, pts: [[ms, value], ...], width}]
@@ -1454,7 +1467,7 @@ function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits =
   box.innerHTML = `${series.length > 1 ? `<div class="legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('')}</div>` : ''}
     <svg viewBox="0 0 ${CW} ${CH}" role="img" aria-label="${esc(series.map(s => s.name).join(', '))}">
     ${g}<text class="ax" x="12" y="${(CH - CM.b + CM.t) / 2}" transform="rotate(-90 12 ${(CH - CM.b + CM.t) / 2})" text-anchor="middle">${esc(unit)}</text>
-    ${paths}<line class="xh" y1="${CM.t}" y2="${CH - CM.b}" visibility="hidden"/><g class="dots"></g>
+    ${axes(spanD > 1.5 ? 'Day (hotel time)' : 'Hour (hotel time)')}${paths}<line class="xh" y1="${CM.t}" y2="${CH - CM.b}" visibility="hidden"/><g class="dots"></g>
     <rect x="${CM.l}" y="${CM.t}" width="${CW - CM.l - CM.r}" height="${CH - CM.t - CM.b}" fill="transparent"/></svg>`;
   const svg = box.querySelector('svg'), xh = svg.querySelector('.xh'), dots = svg.querySelector('.dots');
   svg.addEventListener('mousemove', ev => {
@@ -1474,7 +1487,7 @@ function lineChart(box, series, {unit, yZero = false, gapMs = 2 * 36e5, digits =
 }
 
 // Bar chart, one bar per item: [{v, l1, l2, tip, light}]
-function barChart(box, bars, unit) {
+function barChart(box, bars, unit, {xName = 'Day', maxW = 1e9} = {}) {
   sizeTo(box);
   if (!bars.length) { box.innerHTML = '<div class="empty">No records for this period.</div>'; return; }
   const yt = nice(0, Math.max(...bars.map(b => b.v)) || 1), y1 = yt[yt.length - 1], bw = (CW - CM.l - CM.r) / bars.length;
@@ -1482,13 +1495,13 @@ function barChart(box, bars, unit) {
   let g = '', b = '';
   for (const v of yt) g += `<line class="grid" x1="${CM.l}" x2="${CW - CM.r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${CM.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
   bars.forEach((d, i) => {
-    const x = CM.l + i * bw + 1, w = Math.max(2, bw - 2), y = Y(d.v), r = Math.max(0, Math.min(4, w / 2, CH - CM.b - y));
+    const w = Math.max(2, Math.min(bw - 2, maxW)), x = CM.l + i * bw + (bw - w) / 2, y = Y(d.v), r = Math.max(0, Math.min(4, w / 2, CH - CM.b - y));
     b += `<path d="M${x},${CH - CM.b}V${y + r}q0,${-r} ${r},${-r}h${w - 2 * r}q${r},0 ${r},${r}V${CH - CM.b}Z" style="fill:var(--s1)${d.light ? ';opacity:.45' : ''}"/>`;
     if (i % Math.ceil(26 / bw) === 0) b += `<text class="ax" x="${x + w / 2}" y="${CH - CM.b + 14}" text-anchor="middle">${esc(d.l1)}</text><text class="ax" x="${x + w / 2}" y="${CH - CM.b + 27}" text-anchor="middle">${esc(d.l2)}</text>`;
     b += `<rect data-i="${i}" x="${CM.l + i * bw}" y="${CM.t}" width="${bw}" height="${CH - CM.t - CM.b}" fill="transparent"/>`;
   });
-  box.innerHTML = `<svg viewBox="0 0 ${CW} ${CH + 6}" role="img" aria-label="${esc(unit)} per bar">${g}
-    <text class="ax" x="12" y="${CH / 2}" transform="rotate(-90 12 ${CH / 2})" text-anchor="middle">${esc(unit)}</text>${b}</svg>`;
+  box.innerHTML = `<svg viewBox="0 0 ${CW} ${CH}" role="img" aria-label="${esc(unit)} per bar">${g}
+    <text class="ax" x="12" y="${(CH - CM.b + CM.t) / 2}" transform="rotate(-90 12 ${(CH - CM.b + CM.t) / 2})" text-anchor="middle">${esc(unit)}</text>${axes(xName)}${b}</svg>`;
   const svg = box.querySelector('svg');
   svg.addEventListener('mousemove', ev => { const i = ev.target.dataset && ev.target.dataset.i; if (i === undefined) return hideTip(); showTip(ev, bars[i].tip); });
   svg.addEventListener('mouseleave', hideTip);
@@ -1572,14 +1585,14 @@ async function renderHistory() {
       : pct === null ? '' : Math.abs(pct) < 0.5 ? `<div class="verdict">About the same as last week (${pct >= 0 ? '+' : ''}${pct.toFixed(1)} %)</div>`
       : `<div class="verdict ${pct > 0 ? 'bad' : 'ok'}">${pct > 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)} % ${pct > 0 ? 'more' : 'less'} than last week</div>`;
     box.innerHTML = head('This week against last week', `Weeks start on Sunday 00:00. The complete hours of this week so far, against the same ${(el_ / 36e5).toFixed(0)} hours of last week.`) +
-      `<section class="card"><div class="cmp">
-        <div><div class="cv">${last.toFixed(0)} kWh</div><div class="cbar prev" style="height:${h(last)}px"></div><div><b class="ink">Last week</b><br><small>${fdate(lw0)} – ${fdate(lw0 + el_)} ${fhm(lw0 + el_)}</small></div></div>
-        <div><div class="cv">${cur.toFixed(0)} kWh</div><div class="cbar" style="height:${h(cur)}px"></div><div><b class="ink">This week so far</b><br><small>${fdate(w0)} – ${fdate(w0 + el_)} ${fhm(w0 + el_)}</small></div></div>
-       </div>${verdict}</section>` + sec('Day by day') +
+      `<section class="card"><div class="chart" id="ch"></div>${verdict}</section>` + sec('Day by day') +
       tableCard(`<tr><th>Day</th><th>Last week</th><th>This week</th><th>Change</th></tr>${perDay.map(r => {
          const ch = r.b === null || !r.a ? '' : ((r.b - r.a) / r.a * 100);
          return `<tr><td>${DAYS[r.i]}</td><td>${r.a ? r.a.toFixed(0) + ' kWh' : '–'}</td><td>${r.b === null ? '–' : r.b.toFixed(0) + ' kWh' + (w0 + (r.i + 1) * 864e5 > now ? ' so far' : '')}</td>
            <td>${ch === '' || w0 + (r.i + 1) * 864e5 > now ? '' : `<span class="${ch > 0.5 ? 'bad' : ch < -0.5 ? 'ok' : ''}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)} %</span>`}</td></tr>`; }).join('')}`);
+    const rng = a => `${fdate(a)} – ${fdate(a + el_)} ${fhm(a + el_)}`;
+    barChart(el('ch'), [{v: last, light: true, l1: 'Last week: ' + last.toFixed(0) + ' kWh', l2: rng(lw0), tip: `<b>Last week</b>${last.toFixed(0)} kWh<br>${rng(lw0)}`},
+      {v: cur, l1: 'This week so far: ' + cur.toFixed(0) + ' kWh', l2: rng(w0), tip: `<b>This week so far</b>${cur.toFixed(0)} kWh<br>${rng(w0)}`}], 'kWh', {xName: 'Same hours of each week', maxW: 150});
   } else if (view === 'temperature' || view === 'humidity') {
     const j = await hourly(span), q = view === 'temperature' ? 't' : 'rh', unit = q === 't' ? '°C' : '% RH';
     const ids = [...new Set(j.hours.flatMap(r => Object.keys(r)).filter(k => /^TH\d+_/.test(k)).map(k => k.split('_')[0]))].sort();
@@ -1653,7 +1666,7 @@ function rainBars(box, rows, nowT) {
   const hr = nowT.slice(0, 13) + ':00';
   barChart(box, rows.map(r => ({v: r.precip_mm ?? 0, light: r.t < hr, l1: r.t.slice(11, 13), l2: r.precip_prob_pct !== null && r.precip_prob_pct !== undefined ? r.precip_prob_pct + '%' : '',
     tip: `<b>${r.t.slice(11)}–${String(+r.t.slice(11, 13) + 1).padStart(2, '0')}:00</b>${wxIcon(r.code, r.is_day)}${esc(r.condition)}<br>${f1(r.precip_mm, 1)} mm` +
-      (r.precip_prob_pct !== null && r.precip_prob_pct !== undefined ? `, chance ${r.precip_prob_pct} %` : '')})), 'mm');
+      (r.precip_prob_pct !== null && r.precip_prob_pct !== undefined ? `, chance ${r.precip_prob_pct} %` : '')})), 'mm', {xName: 'Hour (hotel time), chance of rain under it'});
 }
 async function wxStrip() {   // one line on "Live now"
   try {
