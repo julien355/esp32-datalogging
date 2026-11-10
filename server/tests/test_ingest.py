@@ -306,6 +306,25 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(self.req("GET", "/live/_ui/server.py")[0], 404)
         self.assertEqual(self.req("GET", "/live/")[0], 200)
 
+    def test_meter_link_on_the_live_page(self):
+        # firmware 0.5.0 sends the Modbus link of each meter in sys.mb; the page gets one line per meter
+        ok = {"ok": True, "id": 1, "since": ts(30), "last_ok": ts(0), "fail_run": 0, "req": 4, "req_ok": 4,
+              "reads": 900, "fails": 2}
+        snap = {"ts": ts(0), "values": {"EM01_p": 12.3}, "sys": {"up_s": 7200, "mb": {"EM01": ok}}}
+        self.assertEqual(self.req("POST", "/api/v1/live", json.dumps(snap), self.token, "application/json")[0], 204)
+        code, body = self.req("GET", "/api/v1/live/adab")
+        links = json.loads(body)["devices"]["LOG-0001"]["meters"]
+        self.assertEqual([(m["meter"], m["state"], m["stale"], m["source"]) for m in links], [("EM01", "ok", False, "logger")])
+        self.assertEqual((links[0]["modbus_id"], links[0]["req_ok"], links[0]["since"]), (1, 4, ts(30)))
+        self.assertAlmostEqual(links[0]["for_s"], 1800, delta=70)
+        # the meter stops answering: the line stays, now "no_answer" with the reason
+        bad = dict(ok, ok=False, since=ts(0), last_ok=ts(1), fail_run=5, req_ok=0, err="timeout", fails=7)
+        snap = {"ts": ts(0), "values": {}, "sys": {"up_s": 7215, "mb": {"EM01": bad}}}
+        self.assertEqual(self.req("POST", "/api/v1/live", json.dumps(snap), self.token, "application/json")[0], 204)
+        links = json.loads(self.req("GET", "/api/v1/live/adab")[1])["devices"]["LOG-0001"]["meters"]
+        self.assertEqual((links[0]["state"], links[0]["err"], links[0]["fail_run"], links[0]["last_ok"]),
+                         ("no_answer", "timeout", 5, ts(1)))
+
     def test_live_saved_and_restored(self):
         # every snapshot is saved in the data folder: another dashboard reads the same data, a restart keeps it
         for i in range(3):
@@ -718,6 +737,47 @@ class ToolsAndHttpTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MeterLinkTest(unittest.TestCase):
+    """meter_links: the Modbus link line of the open alarms card (server.py)."""
+
+    def snaps(self, pattern, t0=1_800_000_000):
+        """One 15 s snapshot per character: "1" = the meter answered (values), "0" = no value."""
+        return [{"ts": server_mod._iso(t0 + 15 * i), "values": {"EM01_p": 5.0} if c == "1" else {"TH1_t": 30.0}}
+                for i, c in enumerate(pattern)], t0 + 15 * (len(pattern) - 1)
+
+    def test_from_the_logger(self):
+        last = {"ts": "2026-11-10T03:00:00Z", "sys": {"up_s": 600, "mb": {"EM01": {"ok": True, "id": 1, "req": 4, "req_ok": 3,
+                                                                                    "err": "illegal_address"}}}}
+        (m,) = server_mod.meter_links(last, 5, [], now=server_mod._epoch("2026-11-10T03:00:05Z"))
+        self.assertEqual((m["state"], m["req_ok"], m["err"], m["stale"]), ("ok", 3, "illegal_address", False))
+        # no "since" (the clock was not set at the change): the logger's start, from up_s
+        self.assertEqual((m["since"], m["since_boot"], m["for_s"]), ("2026-11-10T02:50:00Z", True, 605))
+
+    def test_stale_and_not_configured(self):
+        last = {"ts": "2026-11-10T03:00:00Z", "sys": {"mb": {"EM01": {"ok": True, "since": "2026-11-10T01:00:00Z"}}}}
+        links = server_mod.meter_links(last, 300, [], expected=["EM01", "EM02"])
+        self.assertEqual([(m["meter"], m["state"], m["stale"]) for m in links],
+                         [("EM01", "ok", True), ("EM02", "not_configured", True)])
+        # firmware 0.5.0 with no meter in its settings: sys.mb is empty
+        (m,) = server_mod.meter_links({"sys": {"mb": {}}}, 5, [], expected=["EM01"])
+        self.assertEqual((m["state"], m["source"]), ("not_configured", "logger"))
+
+    def test_older_firmware_from_the_values(self):
+        hist, now = self.snaps("1111000")
+        (m,) = server_mod.meter_links(hist[-1], 5, hist, expected=["EM01"], now=now)
+        self.assertEqual((m["state"], m["source"], m["fail_run"]), ("no_answer", "values", 3))
+        self.assertEqual((m["since"], m["last_ok"]), (hist[4]["ts"], hist[3]["ts"]))
+        hist, now = self.snaps("0011")
+        (m,) = server_mod.meter_links(hist[-1], 5, hist, now=now)
+        self.assertEqual((m["state"], m["since"], m["for_s"], m["last_ok"]), ("ok", hist[2]["ts"], 15, hist[3]["ts"]))
+        hist, now = self.snaps("111")
+        self.assertIsNone(server_mod.meter_links(hist[-1], 5, hist, now=now)[0]["since"])   # the whole 60 minutes
+        # a meter of site.json that sent nothing in the 60 minutes
+        hist, now = self.snaps("000")
+        (m,) = server_mod.meter_links(hist[-1], 5, hist, expected=["EM01"], now=now)
+        self.assertEqual((m["state"], m["last_ok"]), ("no_answer", None))
 
 
 class RegisterTableTest(unittest.TestCase):

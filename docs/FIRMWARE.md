@@ -81,7 +81,7 @@ One CSV file per UTC day, same columns as the server's files. **The day files ar
 
 ### 2.7 Upload and live
 - `POST {srv_url}/api/v1/ingest`, `Content-Type: text/csv`, `Authorization: Bearer <dev_token>`: the day file's header line + up to 60 rows. Answer 200 with `stored`, `duplicates`, `rejected_rows`.
-- `POST {srv_url}/api/v1/live`: JSON snapshot after every sample (15 s), not stored on the card, about 2 MB a day.
+- `POST {srv_url}/api/v1/live`: JSON snapshot after every sample (15 s), not stored on the card, about 2 MB a day. Since 0.5.0 it carries `sys.mb`, the Modbus link of each meter (answering or not, since when, last answer, last error), shown at the top of the open alarms on the site page: [`LIVE.md`](LIVE.md#meter-link-modbus-connection-state).
 - HTTPS with certificate check (Let's Encrypt and ZeroSSL roots built in). `tls_verify=0` only on the bench. `http://` URLs work for an office test against a laptop.
 - Connection kept open between requests (keep-alive).
 
@@ -95,7 +95,7 @@ With `ota_on=1` (default), every `ota_check_h` hours the logger asks `GET /api/v
 ### 2.9 Setup without a laptop: the portal
 - Opens when **no WiFi is set**, when the **BOOT button is held 3 s**, or with the console command `portal`.
 - WiFi name **`ARKAN-<dev_id>`** (for example `ARKAN-LOG-0001`), password **`portal_pass`** (default `arkan-setup`: change it).
-- Page **http://192.168.4.1** (a phone usually opens it by itself): status, WiFi networks seen with their RSSI, and every setting. Secrets are never displayed; an empty secret field keeps the stored value. "Save and restart".
+- Page **http://192.168.4.1** (a phone usually opens it by itself): status (with one line per meter: answering or not, since when, last answer; since 0.5.0), WiFi networks seen with their RSSI, and every setting. Secrets are never displayed; an empty secret field keeps the stored value. "Save and restart".
 - Logging goes on while the portal is open. It closes after `portal_min` minutes without activity.
 
 ### 2.9.1 Remote settings (on by default since 0.2.0)

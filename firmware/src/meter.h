@@ -39,6 +39,24 @@ int regCount();
 const Reg &reg(int i);
 // Reads every register of meter i. ok[j] false for values that failed.
 bool read(int i, double *values, bool *ok);
+
+// Modbus link of one meter, kept by read() since boot. Shown by the console's status and the setup
+// portal, and sent in every live snapshot as sys.mb (sampler.cpp), so the site page shows whether the
+// meter answers. A read "answers" when at least one of its requests (register blocks) is answered.
+const uint8_t ERR_NO_PORT = 0xF0;   // err: RS485 pins not set, the meter is never asked
+struct Link {
+  bool known;               // read at least once since boot
+  bool ok;                  // the last read answered
+  time_t since;             // when ok last changed (0: the clock was not set then)
+  time_t lastOk;            // last read that answered (0: none since boot, or the clock was not set)
+  uint32_t reads, fails;    // reads since boot, of them with no answer at all
+  uint8_t req, reqOk;       // requests of the last read, of them answered
+  uint8_t err;              // ModbusMaster code of the last read's failed request, 0 = every request answered
+};
+const Link &link(int i);
+const char *errKey(uint8_t err);    // short name for the live snapshot: "timeout", "crc", "illegal_address"...
+const char *errHelp(uint8_t err);   // for a person: what it means and what to check
+String linkText(int i);             // one line for the console and the portal
 // Console helper: raw dump of registers.
 void dump(uint8_t slave, uint8_t fc, uint16_t start, uint16_t count, Print &out);
 String describeTable();

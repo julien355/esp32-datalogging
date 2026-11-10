@@ -1,10 +1,87 @@
 # Updating the VPS and the loggers
 
-How a new version of this repository reaches `hermes-vps` and the loggers. **This release: 10 November 2026, VPS `v0.7.0`** (section N, below): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. Nothing changes for the loggers. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. The detailed tutorial steps are in [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
+How a new version of this repository reaches `hermes-vps` and the loggers. **Next release: VPS `v0.8.0` and firmware `0.5.0`** (section M, below): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page. **Before it, 10 November 2026, VPS `v0.7.0`** (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. The detailed tutorial steps are in [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
-**Status, 10 November 2026:** `v0.7.0` is to install (section N). Before it: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
+**Status, 10 November 2026:** `v0.7.0` is to install (section N), then `v0.8.0` and firmware `0.5.0` (section M) once merged. Before them: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
+
+## M. Release v0.8.0 and firmware 0.5.0: the Modbus link of each meter
+
+### M0. What is in it
+
+| Part | What changed | What it needs |
+|---|---|---|
+| Site page, **Live now** | The **Open alarms** card is always shown. At its top, one line per meter, kept in every state: `Meter EM01 · Modbus connected` (green, for how long, last answer), `not connected` (red, since when and why: timeout, CRC error...), `partial` (amber: some registers refused), `state unknown` (grey: no live data for 60 s). It reacts within 15 s; alarm **A03** still comes after a whole minute record, and still goes on WhatsApp. "No open alarm" moves into the card's title. [`LIVE.md`](LIVE.md#meter-link-modbus-connection-state) | VPS update |
+| API | `GET /api/v1/live/<site>`: each logger gets `meters` (state, since, last answer, reason, counters) | Nothing: same path, same login |
+| Firmware **0.5.0** | The logger keeps the Modbus link of each meter (answering or not, since when, last answer, last error, reads without answer) and sends it in every live snapshot (`sys.mb`). `status` on the console and the setup portal show one line per meter: `Meter EM01 (id 1): answering since ...` or `NO ANSWER for n reads ...: timeout: check wiring, A/B, meter id, baud, meter supply`. Records (CSV) unchanged: `CSV_SCHEMA` stays 3 | Bench test by cable, then the tag `fw-v0.5.0` and the **Firmware update** panel (M5) |
+| Older firmware | A logger on 0.4.1 has no `sys.mb`: the service tells the state from its live values (connected when the snapshot has meter values), without the reason or the counters. The line says "from the live values (logger firmware before 0.5.0)" | Nothing: the VPS can go first |
+| Simulated logger | Sends `sys.mb` (firmware `sim-0.5.0`); `--meter-off N` makes the meter silent for 5 minutes, N minutes after the start | Nothing |
+| Caddy, `.env`, Docker files, alarm register | No change | Nothing (checked as in N3.3) |
+
+**Order:** VPS first (it works with 0.4.1), then the firmware. Firmware 0.5.0 on a VPS still on `v0.7.0` is harmless too: the extra field is saved and not shown.
+
+### M1. On GitHub: merge, then tag
+
+1. Merge the pull request into the default branch once CI is green (jobs `firmware`, `server`, `tools`).
+2. On the PC, as in N1: `git checkout ccr-a52c0421-oygp4n`, `git pull`, `git log -1 --oneline` (the merge commit), then `git tag v0.8.0` and `git push origin v0.8.0`.
+3. **Not yet** the `fw-v0.5.0` tag: it comes after the bench test (M5).
+
+### M2 to M4. The VPS
+
+Same steps as N2 to N4, with `v0.7.0` as the version you start from and go back to, and `v0.8.0` as the new tag. Expected after the update:
+
+```bash
+curl -s http://127.0.0.1:8800/health
+```
+
+**Expected:** `{"ok": true, "version": "0.8.0", ...}`.
+
+```bash
+curl -s http://127.0.0.1:8800/api/v1/live/adab | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['devices']['LOG-0001']['meters'])"
+```
+
+**Expected (LOG-0001 still on 0.4.1):** `[{'meter': 'EM01', 'state': 'ok', 'source': 'values', ...}]` if the meter answers, `'state': 'no_answer'` if it does not.
+
+In the browser, `https://arkan-monitoring.duckdns.org/live/adab/` (Ctrl+F5): the **Open alarms** card is at the top even with no alarm (`✓ No open alarm` in its title), with the line `Meter EM01 · Modbus connected` in green (or `not connected` in red if the meter does not answer: then A03 is open too).
+
+**Going back:** `git checkout v0.7.0`, then `docker compose up -d --build`. Nothing in the data folder or in Caddy is left to undo.
+
+### M5. The loggers: firmware 0.5.0
+
+Bench first, as in section 5 (the lessons at its end).
+
+1. **Flash 0.5.0 by cable** on the bench logger, from the PC, on the merge commit:
+
+```powershell
+cd C:\dev\esp32-datalogging
+```
+
+```powershell
+git fetch origin
+```
+
+```powershell
+git checkout -B release-0.5.0 v0.8.0
+```
+
+```powershell
+cd firmware
+```
+
+```powershell
+pio run -e logger -t upload
+```
+
+```powershell
+pio device monitor -p COM4 -b 115200 -f esp32_exception_decoder -f time -f log2file
+```
+
+2. **Watch 10 minutes.** Expected: `firmware 0.5.0` at the boot, then no restart. `status` shows the line `Meter EM01 (id 1): ...`: with a meter (or `tools/modbus_sim/`) on the RS485 port, `answering since ...`; with nothing on the port, `NO ANSWER for n reads, since ...: timeout: ...`. On the site page the line `Meter EM01 · Modbus ...` follows within 15 s, without `from the live values`. Disconnect the meter (or stop the simulator): the line goes red within 15 s; reconnect: green again.
+3. **Only then:** tag `fw-v0.5.0` on the commit of `v0.8.0`: `git tag fw-v0.5.0 v0.8.0`, check `git log -1 --oneline fw-v0.5.0` shows the merge commit, then `git push origin fw-v0.5.0`. CI makes the release **Logger firmware 0.5.0** (it stops if the tag and `FW_VERSION` differ).
+4. **Send it to `LOG-0001`** from **Firmware update** on the site page ([`OTA.md`](OTA.md)): **From a GitHub release**, `logger-0.5.0.bin`, **Send to LOG-0001**. Within a minute the logger restarts once; **A35** in the alarm log after 10 minutes; **Firmware versions** shows `0.5.0`.
+
+---
 
 ## N. Release v0.7.0 (10 November 2026): the site page in the Arkan design
 

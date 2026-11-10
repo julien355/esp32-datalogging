@@ -212,6 +212,24 @@ static void tick() {
   sys["backlog_min"] = (int)st.backlogMin;
   sys["sd"] = (bool)st.sdOk;
   sys["fw"] = FW_VERSION;
+  // The Modbus link of each meter (since 0.5.0), always sent so the site page shows it whether the meter
+  // answers or not: docs/LIVE.md "Meter link". Empty when no meter is configured. Times are left out
+  // while they are unknown.
+  JsonObject mb = sys["mb"].to<JsonObject>();
+  for (int m = 0; m < meter::count(); m++) {
+    const meter::Link &l = meter::link(m);
+    JsonObject o = mb[meter::get(m).id].to<JsonObject>();
+    o["ok"] = l.ok;
+    o["id"] = meter::get(m).slave;
+    if (l.since) o["since"] = isoTime(l.since);
+    if (l.lastOk) o["last_ok"] = isoTime(l.lastOk);
+    o["fail_run"] = (int)st.meterFailRun[m];
+    o["req"] = l.req;
+    o["req_ok"] = l.reqOk;
+    if (l.err) o["err"] = meter::errKey(l.err);
+    o["reads"] = l.reads;
+    o["fails"] = l.fails;
+  }
   st.lastSampleTs = now;
 
   if (tv) {

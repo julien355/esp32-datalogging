@@ -118,6 +118,8 @@ pre{background:var(--surface-2);padding:10px 12px;border-radius:var(--r-md);font
 .fwstat{font-size:14px;margin-bottom:10px}
 .fwstat .ev{font-size:12.5px;color:var(--muted);margin-top:2px}
 @container app (max-width:560px){.hide-s{display:none}}
+.alist .ai.neutral{background:var(--surface-2);color:var(--muted)}
+.alist li.mblink small{overflow-wrap:anywhere}
 .mocknote{background:var(--warn-bg);color:var(--warn-ink);font-size:12.5px;font-weight:600;text-align:center;padding:4px 12px}
 </style>
 <script src="/live/_ui/arkan-ui.js"></script>
@@ -402,6 +404,65 @@ function capBar(frac, text) {
   return `<div><div class="capbar"><span class="${cls}" style="width:${Math.min(100, pct).toFixed(1)}%"></span></div><div class="sub">${pct.toFixed(0)} % ${esc(text)}</div></div>`;
 }
 
+// Modbus link of each meter (GET /api/v1/live/<site>: devices.<logger>.meters, server.py meter_links), shown at the
+// top of the open alarms card whether the meter answers or not.
+const MB_ERR = {timeout: 'timeout: check the wiring, A/B, the meter id, the baud and the meter supply',
+  crc: 'CRC error: noise on the line, signal ground, baud or format',
+  illegal_address: 'illegal data address: a register the meter does not have (Meter registers)',
+  illegal_function: 'illegal function: the meter refuses this function code (Meter registers)',
+  illegal_value: 'illegal data value: the meter refuses the request (Meter registers)',
+  meter_failure: 'the meter reports an internal error',
+  wrong_id: 'answer from another meter id: two meters with the same id?',
+  wrong_function: 'answer to another function: noise on the line?',
+  no_rs485_pins: 'RS485 pins not set on the logger (pin_rs_tx, pin_rs_rx): the meter is never asked',
+  other: 'Modbus error'};
+const dur = s => s < 90 ? `${Math.max(0, Math.round(s))} s` : s < 3600 ? `${Math.round(s / 60)} min`
+  : s < 86400 ? `${Math.floor(s / 3600)} h ${String(Math.floor(s % 3600 / 60)).padStart(2, '0')} min` : `${Math.floor(s / 86400)} d ${Math.floor(s % 86400 / 3600)} h`;
+const LINK_WORD = {ok: 'connected', no_answer: 'not connected', not_configured: 'not configured'};
+function linkRows(j, off, wanted) {
+  const today = localTime(j.time, off).slice(0, 10);
+  const at = (iso, sec = false) => { const s = localTime(iso, off), t = sec ? localTime(iso, off, false) : s.slice(11);
+    return s.slice(0, 10) === today ? t : `${fdate(tp(s))} ${t}`; };
+  // sub: the details; more: details hidden on a phone
+  const row = (tone, head, sub, pill, more = []) => { const a = sub.filter(Boolean), b = more.filter(Boolean);
+    return `<li class="mblink"><span class="ai ${tone}">${icon('plug')}</span><div><b>${head}</b><small>${a.join(' · ')}${
+      b.length ? `<span class="hide-s">${a.length ? ' · ' : ''}${b.join(' · ')}</span>` : ''}</small></div><span class="pill ${tone}">${pill}</span></li>`; };
+  const devs = Object.entries(j.devices || {}), many = devs.length > 1;
+  const out = [];
+  for (const [dev, d] of devs) for (const m of d.meters || []) {
+    const who = `Meter ${esc(m.meter)}${many ? ' · ' + esc(dev) : ''}`;
+    const since = m.since ? (m.since_boot ? `since the logger started, ${at(m.since)}` : `since ${at(m.since)}`) : '';
+    const lastOk = m.last_ok ? `last answer ${at(m.last_ok, true)}` : '';
+    const id = m.modbus_id ? `Modbus id ${esc(m.modbus_id)}` : '';
+    const counts = m.reads && m.fails ? `${m.fails || 0} of ${m.reads} reads without answer since the logger started` : '';
+    const old = m.source === 'values' ? 'from the live values (logger firmware before 0.5.0)' : '';
+    const why = m.err ? esc(MB_ERR[m.err] || m.err) : '';
+    if (m.stale) {
+      out.push(row('neutral', `${who} · Modbus state unknown`, [`no live data from ${esc(dev)} for ${dur(d.age_s)}`,
+        `last known: ${LINK_WORD[m.state] || esc(m.state)}`, lastOk], 'unknown', [id]));
+    } else if (m.state === 'ok') {
+      const part = m.req && m.req_ok < m.req;
+      out.push(row(part ? 'warn' : 'good', `${who} · Modbus connected${part ? `, ${m.req_ok} of ${m.req} requests answered` : ''}`,
+        [part ? why : '', m.since ? `for ${dur(m.for_s)}, ${since}` : 'for the last 60 min or more', lastOk],
+        part ? 'partial' : 'connected', [id, counts, old]));
+    } else if (m.state === 'no_answer') {
+      const run = m.fail_run ? `${m.fail_run} read${m.fail_run === 1 ? '' : 's'} in a row` : '';
+      out.push(row('crit', `${who} · Modbus not connected`,
+        [m.since ? `no answer for ${dur(m.for_s)}, ${since}` : m.source === 'values' ? 'no value in the last 60 min' : run, why,
+         lastOk || (m.source === 'logger' ? 'no answer since the logger started' : '')], 'not connected', [id, counts, old]));
+    } else {
+      out.push(row('warn', `${who} · not read by the logger`,
+        [`in the live values of site.json but not in the meter list of ${esc(dev)} (setting meters)`], 'not configured'));
+    }
+  }
+  if (!out.length) {   // no live data at all: one line per meter the site expects
+    const ms = [...new Set((wanted || []).filter(k => /^EM\d+_/.test(k)).map(k => k.split('_')[0]))];
+    for (const m of ms.length ? ms : ['']) out.push(row('neutral', `Meter${m ? ' ' + esc(m) : ''} · Modbus state unknown`,
+      [devs.length ? 'the logger sends no meter state' : 'no live data from the logger of this site'], 'unknown'));
+  }
+  return out.join('');
+}
+
 async function loadSite() {
   for (const k in SPARKS) delete SPARKS[k];
   const j = await getJ(`/api/v1/live/${site}`);
@@ -411,12 +472,14 @@ async function loadSite() {
   document.title = `Live: ${prof.name || site}`;
   let html = '', worst = null;
 
-  // Open alarms first
+  // Open alarms first, always shown: the Modbus link of each meter (connected or not), then the alarms
   const al = j.alarms || [];
-  if (al.length) html += `<section class="card mb-16"><div class="card-head"><h2>Open alarms</h2><span class="pill ${al.some(a => a.severity === 'critical') ? 'crit' : 'warn'}">${al.length} open</span></div><ul class="alist">${
+  html += `<section class="card mb-16"><div class="card-head"><h2>Open alarms</h2>${al.length
+    ? `<span class="pill ${al.some(a => a.severity === 'critical') ? 'crit' : 'warn'}">${al.length} open</span>`
+    : `<span class="state good">${icon('check')}No open alarm</span>`}</div><ul class="alist">${linkRows(j, off, wanted)}${
     al.map(a => `<li><span class="ai ${SEV[a.severity] || 'info'}">${icon(a.severity === 'info' ? 'info' : 'alert')}</span>
       <div><b>${esc(a.id)} ${esc(a.name)}</b><small>since ${localTime(a.since, off)} · worst ${esc(a.worst ?? '–')} ${esc(a.unit)}</small></div>${sevPill(a.severity)}</li>`).join('')}</ul></section>`;
-  html += `<div class="inline">${al.length ? '' : `<span class="state good">${icon('check')}No open alarm</span>`}${await wxStrip()}</div>`;
+  html += `<div class="inline">${await wxStrip()}</div>`;
 
   const devs = Object.keys(j.devices || {});
   if (!devs.length) html += sec('Now') + '<section class="card"><div class="empty">No live data for this site (logger offline or not installed yet).</div></section>';
