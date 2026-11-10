@@ -1511,7 +1511,7 @@ docker compose exec ingest python tools/manage.py list
 
 ### C5. Updating to a new tag, and going back
 
-The VPS only runs tags. An update restarts the container: **the owner approves.**
+The VPS only runs tags. An update restarts the container: **the owner approves.** The same steps, with the tagging on GitHub and the logger updates: [`../HOW-TO-UPDATE.md`](../HOW-TO-UPDATE.md).
 
 > **Three things that went wrong on 8 November 2026** ([`../UPDATING.md`](../UPDATING.md) section 5): (1) `/opt/arkan-monitoring` must be a git clone; if `git describe` says `fatal: not a git repository`, the code was copied by hand: stop and ask the owner (B11 makes the clone). (2) Run every `docker compose` command in `/opt/arkan-monitoring/server`; elsewhere it says `no configuration file provided`. (3) Never `docker rm -f` the container: if `/health` gives no answer and `docker compose ps` lists nothing, `docker compose up -d --build` in that folder creates it again; the data stays in `/srv/arkan-monitoring/data`.
 
@@ -1522,7 +1522,7 @@ cd /opt/arkan-monitoring
 ```
 
 ```bash
-git describe --tags
+git describe --tags --always
 ```
 
 **Expected:** for example `v0.4.0`. Write it down: it is `<previous-tag>`.
@@ -1544,6 +1544,14 @@ git status
 ```
 
 **Expected:** `HEAD detached at <previous-tag>` and `nothing to commit, working tree clean` (an untracked `server/.env` is fine). **If** files are listed as modified, someone edited the code on the VPS: stop and ask the owner.
+
+Check which commit the new tag points to before you use it (on 10 November a wrong `v0.6.0` was on GitHub for a few minutes):
+
+```bash
+git log -1 --oneline <tag>
+```
+
+**Expected:** the release commit, a line like `cae7b85 (tag: v0.7.0) Release v0.7.0: ...`. **If** it is another commit, the tag was moved on GitHub: run `git fetch --tags --force` and check again. Still not the release commit: stop and ask the owner.
 
 ```bash
 git checkout <tag>

@@ -1077,6 +1077,8 @@ Be careful with remote changes of `meters`, `mb_baud`, `mb_format` and the `pin_
 
 ### C5 Firmware updates
 
+The full steps, by cable and over the air, the same for every release: [`../HOW-TO-UPDATE.md`](../HOW-TO-UPDATE.md) parts 3 and 4.
+
 **OTA** (over the air, the normal way, `ota_on` = 1 by default):
 1. A new version is built with a new `FW_VERSION` in [`firmware/include/config.h`](../../firmware/include/config.h), tested on the bench first.
 2. The operator sends it from **Firmware update** in the side menu of the site page `/live/adab/` (logins in `ADMIN_USERS` only; a GitHub release or the `.bin` file, see [../OTA.md](../OTA.md)), or copies `firmware.bin` to the VPS data folder and offers it (the version is read from the file):

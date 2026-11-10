@@ -1,6 +1,6 @@
 # Updating the VPS and the loggers
 
-How a new version of this repository reaches `hermes-vps` and the loggers. **This release: 10 November 2026, VPS `v0.7.0`** (section N, below): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. Nothing changes for the loggers. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. The detailed tutorial steps are in [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
+How a new version of this repository reaches `hermes-vps` and the loggers. **This release: 10 November 2026, VPS `v0.7.0`** (section N, below): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. Nothing changes for the loggers. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
 **Status, 10 November 2026:** `v0.7.0` is to install (section N). Before it: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
@@ -598,6 +598,7 @@ docker compose exec ingest python tools/manage.py publish-fw /data/logger-0.4.1.
 
 ## 4. Next releases
 
+The general steps are now in [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md).
 
 - **VPS only:** a new tag `v0.x.y`, then section 2 (2.4 and 2.5 only if `.env.example` or the Caddy file changed: tutorial 2, C5 steps 3a and 3b, tell you).
 - **Firmware only:** change `FW_VERSION`, test on the bench logger, tag `fw-v<version>`, then section 3 from the panel. Every build gets a new version number, never reused ([`OTA.md`](OTA.md) section 2).

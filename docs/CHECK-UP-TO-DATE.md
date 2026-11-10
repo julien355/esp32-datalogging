@@ -76,7 +76,7 @@ curl -s http://127.0.0.1:8800/health
 
 **Expected:** `{"ok": true, "version": "0.7.0", ...}`.
 
-Older? Update with [`UPDATING.md`](UPDATING.md) section N (backup first, the owner approves the restart).
+Older? Update with [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 2, and the release's section in [`UPDATING.md`](UPDATING.md) (backup first, the owner approves the restart).
 
 ## 5. Logger
 
@@ -96,7 +96,7 @@ docker compose exec ingest python tools/manage.py list
 
 **Expected:** `LOG-0001: fw 0.4.1, last record <a time a few minutes ago, UTC>`.
 
-Older? [`UPDATING.md`](UPDATING.md) section 5 (bench test by cable first, then over the air) and section 3.
+Older? [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md): part 3 (bench test by cable first), then part 4 (over the air).
 
 ## 6. Old copies: archive, do not delete
 
