@@ -19,12 +19,16 @@ People endpoints (behind the Caddy web login, never published without it):
                                GitHub releases (asked once an hour), files on the server (read only, everyone)
   GET  /api/v1/history/<site>?days=15        one row per local hour: kWh, kW, sensors (from the day files)
   GET  /api/v1/history/<site>/day/<date>     the 1-minute power of one local day
+  GET  /api/v1/records/<site>?from=&to=      the original 1-minute records of those local dates as one CSV: the day
+                                             files (UTC days) that hold them, every column and row (&device=)
   GET  /api/v1/quality/<site>?days=14        power quality per local hour: voltage per phase (mean, lowest, highest),
                                              frequency, power factor, kW, kvar, kWh, kVArh, unbalance, dips, swells,
                                              the limits of the alarm register and the power quality alarm lines
   GET  /api/v1/quality/<site>/day/<date>     the 1-minute voltage (mean, lowest, highest), frequency, power factor
   GET  /api/v1/weather/<site>                Open-Meteo forecast (fetched every hour): today and tomorrow per hour
   GET  /api/v1/weather/<site>/log?days=7     actual weather per hour with the day-ahead forecast (&format=csv)
+  Every ?days=N above (the last N local days, today included) can be ?from=YYYY-MM-DD&to=YYYY-MM-DD instead:
+  local dates, both included, at most 92 days.
   GET  /live/  /live/<site>/   site page: live now (refresh every 15 s) and the history graphs; /live/ lists every site
   GET  /live/<site>/register   meter register table page of the site's logger (?device=LOG-0002 if several):
                                see, edit, import, send to the logger
@@ -96,7 +100,7 @@ METERS_RE = re.compile(r"^[A-Za-z0-9]{1,7}:\d{1,3}(,[A-Za-z0-9]{1,7}:\d{1,3}){0,
 REGISTERS_ADMIN_RE = re.compile(r"^/api/v1/admin/(registers|meter-settings)/")
 # People paths of one site, or of one logger, for the logins limited to some sites (USER_SITES).
 SITE_PAGE_RE = re.compile(r"^/live(?:/([a-z0-9-]+))?/?$")
-SITE_API_RE = re.compile(r"^/api/v1/(?:live|versions|alarms|history|quality|weather)/([a-z0-9-]+)(?:/|$)")
+SITE_API_RE = re.compile(r"^/api/v1/(?:live|versions|alarms|history|quality|weather|records)/([a-z0-9-]+)(?:/|$)")
 DEVICE_API_RE = re.compile(r"^/api/v1/admin/(?:registers|meter-settings|fw)/([A-Za-z0-9_-]+)(?:/|$)")
 
 
@@ -253,6 +257,22 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_chunked(self, ctype, filename, chunks):
+        """A download sent piece by piece as it is read (Transfer-Encoding: chunked): little memory for a big file."""
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Transfer-Encoding", "chunked")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            for c in chunks:
+                if c:
+                    self.wfile.write(b"%X\r\n%s\r\n" % (len(c), c))
+            self.wfile.write(b"0\r\n\r\n")
+        except OSError:                     # the download was cancelled, or a file could not be read
+            self.close_connection = True
+
     def send_empty(self, code):
         self.send_response(code)
         self.send_header("Content-Length", "0")
@@ -392,6 +412,9 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/v1/(history|quality)/([a-z0-9-]+)(?:/day/(\d{4}-\d{2}-\d{2}))?$", path)
         if m and CODE_RE.match(m.group(2)) and m.group(2) in self.store.sites():
             return self.history(m.group(2), m.group(3), parse_qs(u.query), m.group(1))
+        m = re.match(r"^/api/v1/records/([a-z0-9-]+)$", path)
+        if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
+            return self.records(m.group(1), parse_qs(u.query))
         m = re.match(r"^/api/v1/weather/([a-z0-9-]+)(/log)?$", path)
         if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
             return self.weather_view(m.group(1), bool(m.group(2)), parse_qs(u.query))
@@ -578,10 +601,22 @@ class Handler(BaseHTTPRequestHandler):
                 "nominal_v")
         return {k: p.get(k) for k in keys if k in p}
 
-    def history(self, site, day, q, kind="history"):
+    @staticmethod
+    def period(q, days):
+        """?days=N (the last N local days), or ?from=YYYY-MM-DD&to=YYYY-MM-DD (local dates, both included).
+        ValueError for a days that is not a number; the dates are checked by history.period()."""
+        return int(q.get("days", [str(days)])[0]), q.get("from", [""])[0] or None, q.get("to", [""])[0] or None
+
+    PERIOD_ERROR = f"bad date or period: days=N, or from=YYYY-MM-DD&to=YYYY-MM-DD, at most {history.MAX_DAYS} days"
+
+    def site_device(self, site, q):
         devs = self.store.site_devices(site)
         dev = q.get("device", [devs[0] if devs else ""])[0]
-        if dev not in devs:
+        return dev if dev in devs else None
+
+    def history(self, site, day, q, kind="history"):
+        dev = self.site_device(site, q)
+        if not dev:
             return self.send_json(404, {"ok": False, "error": "no such logger on this site"})
         meter = q.get("meter", ["EM01"])[0]
         if not re.match(r"^[A-Z]{2}\d{2}$", meter):
@@ -590,13 +625,35 @@ class Handler(BaseHTTPRequestHandler):
             if kind == "quality":
                 if day:
                     return self.send_json(200, quality.minutes(self.store, site, dev, day, meter))
-                return self.send_json(200, quality.hourly(self.store, self.store.alarms, site, dev,
-                                                          int(q.get("days", ["14"])[0]), meter))
+                days, start, end = self.period(q, 14)
+                return self.send_json(200, quality.hourly(self.store, self.store.alarms, site, dev, days, meter, start, end))
             if day:
                 return self.send_json(200, history.minutes(self.store, site, dev, day, meter))
-            return self.send_json(200, history.hourly(self.store, site, dev, int(q.get("days", ["15"])[0]), meter))
+            days, start, end = self.period(q, 15)
+            return self.send_json(200, history.hourly(self.store, site, dev, days, meter, start, end))
         except ValueError:
-            return self.send_json(400, {"ok": False, "error": "bad date or days"})
+            return self.send_json(400, {"ok": False, "error": self.PERIOD_ERROR})
+
+    def records(self, site, q):
+        """GET /api/v1/records/<site>: the original 1-minute records of a period as one CSV, streamed from the day
+        files (history.open_records and csv_chunks): every column and every row of the files, UTC times."""
+        dev = self.site_device(site, q)
+        if not dev:
+            return self.send_json(404, {"ok": False, "error": "no such logger on this site"})
+        try:
+            d0, d1, files = history.open_records(self.store, site, dev, *self.period(q, 7))
+        except ValueError:
+            return self.send_json(400, {"ok": False, "error": self.PERIOD_ERROR})
+        except OSError:
+            return self.send_json(503, {"ok": False, "error": "a day file could not be read, try again"})
+        try:
+            if not files:
+                return self.send_json(404, {"ok": False, "error": "no records for these dates"})
+            name = f"{site}-{dev}-{d0}" + (f"-to-{d1}" if d1 != d0 else "") + ".csv"
+            self.send_chunked("text/csv; charset=utf-8", name, history.csv_chunks(files))
+        finally:
+            for _, f, _ in files:
+                f.close()
 
     _releases = {"at": 0, "rel": None, "err": None}
 
@@ -617,15 +674,17 @@ class Handler(BaseHTTPRequestHandler):
         if not log:
             return self.send_json(200, self.weather.view(site))
         try:
-            days = int(q.get("days", ["7"])[0])
+            days, start, end = self.period(q, 7)
+            j = self.weather.log(site, days, start, end)
         except ValueError:
-            return self.send_json(400, {"ok": False, "error": "bad days"})
+            return self.send_json(400, {"ok": False, "error": self.PERIOD_ERROR})
         if q.get("format", [""])[0] != "csv":
-            return self.send_json(200, self.weather.log(site, days))
-        body = self.weather.log_csv(site, days).encode("utf-8")
+            return self.send_json(200, j)
+        body = self.weather.log_csv(site, j=j).encode("utf-8")
+        name = f"weather-{site}-{j['from'][:10]}-to-{j['to']}" if start else f"weather-{site}-{days}d"
         self.send_response(200)
         self.send_header("Content-Type", "text/csv; charset=utf-8")
-        self.send_header("Content-Disposition", f'attachment; filename="weather-{site}-{days}d.csv"')
+        self.send_header("Content-Disposition", f'attachment; filename="{name}.csv"')
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()

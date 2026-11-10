@@ -120,6 +120,16 @@ class WeatherTest(unittest.TestCase):
         self.assertEqual(day["fc_hours"], day["hours"])
         csv_text = wx.log_csv("adab", 3)
         self.assertIn("fc_temp_c", csv_text.splitlines()[0])
+        # chosen dates, both included
+        lg = wx.log("adab", start="2026-11-08", end="2026-11-08")
+        self.assertEqual({x["t"][:10] for x in lg["hours"]}, {"2026-11-08"})
+        self.assertEqual(([d["date"] for d in lg["days"]], lg["to"]), (["2026-11-08"], "2026-11-08"))
+        two = wx.log("adab", start="2026-11-08", end="2026-11-09")["hours"]
+        self.assertGreater(len(two), len(lg["hours"]))
+        self.assertEqual(len(wx.log_csv("adab", start="2026-11-08", end="2026-11-09").splitlines()), 1 + len(two))
+        for bad in (("2026-11-09", "2026-11-08"), ("2026-01-01", "2026-11-08"), ("2026-11-31", None)):
+            with self.assertRaises(ValueError):
+                wx.log("adab", start=bad[0], end=bad[1])
 
     def test_off_without_position(self):
         self.profile({"weather": {"lat": 200, "lon": 1}})

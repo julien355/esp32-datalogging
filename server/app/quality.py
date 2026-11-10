@@ -25,7 +25,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from alarms import _unbalance
-from history import MAX_DAYS, MAX_GAP_S, _files, _num, _offset, _parse_ts, _read
+from history import MAX_GAP_S, _files, _num, _offset, _parse_ts, _read, first_day, period
 
 PF_LOAD_KW = 1.0          # power factor ignored below this load (as A09)
 I_FLOOR_A = 5.0           # current imbalance ignored below this mean current (as A10)
@@ -195,8 +195,8 @@ def _row(k, parts):
     return r
 
 
-def events(store, engine, site, device, utc_from):
-    """Power quality lines of the alarm log since utc_from (register group "power quality"), oldest first."""
+def events(store, engine, site, device, utc_from, utc_to=None):
+    """Power quality lines of the alarm log from utc_from to utc_to (register group "power quality"), oldest first."""
     try:
         ids = {a["id"] for a in engine.register(site, include_disabled=True)
                if (a.get("group") or "").strip().lower() == "power quality"} if engine else set()
@@ -205,30 +205,30 @@ def events(store, engine, site, device, utc_from):
     ids |= set(LIMITS)
     d = os.path.join(store.site_dir(site), "alarms")
     since = utc_from.strftime("%Y-%m-%dT%H:%M:%SZ")
+    until = (utc_to or datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     out = []
-    for year in range(utc_from.year, datetime.now(timezone.utc).year + 1):
+    for year in range(utc_from.year, (utc_to or datetime.now(timezone.utc)).year + 1):
         p = os.path.join(d, f"{year}.csv")
         if not os.path.exists(p):
             continue
         with open(p, encoding="utf-8", newline="") as f:
             for r in csv.DictReader(f):
-                if r.get("id") in ids and r.get("device") == device and (r.get("ts_utc") or "") >= since:
+                if r.get("id") in ids and r.get("device") == device and since <= (r.get("ts_utc") or "") < until:
                     out.append({k: r.get(k, "") for k in ("ts_utc", "local_time", "id", "name", "severity", "state",
                                                           "value", "unit", "duration_min", "message")})
     out.sort(key=lambda x: x["ts_utc"])
     return out[-MAX_EVENTS:]
 
 
-def hourly(store, engine, site, device, days=14, meter="EM01"):
-    days = max(1, min(int(days), MAX_DAYS))
+def hourly(store, engine, site, device, days=14, meter="EM01", start=None, end=None):
     off = _offset(store, site)
     lim_full = limits(engine, site)
     lim = {k: v["v"] for k, v in lim_full.items()}
     now = datetime.now(timezone.utc)
-    local_start = (now + off).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days - 1)
-    utc_from = local_start - off
+    local_start, local_end = period(off, days, start, end, now)
+    utc_from, utc_to = local_start - off, min(local_end - off, now)
     out, prev = {}, {"e": None, "eq": None}
-    for _, path in _files(store, site, device, utc_from - timedelta(days=1), now):
+    for _, path in _files(store, site, device, utc_from - timedelta(days=1), utc_to):
         s = _summarise(path, meter, off, lim)
         for c, col in (("e", "kwh"), ("eq", "kvarh")):   # the step from the previous file's last record
             first, last = s["ctr"][c]["first"], s["ctr"][c]["last"]
@@ -241,14 +241,15 @@ def hourly(store, engine, site, device, days=14, meter="EM01"):
                 prev[c] = last
         for k, h in s["hours"].items():
             out.setdefault(k, []).append(h)
-    first_key = local_start.strftime("%Y-%m-%d %H:00")
-    rows = [_row(k, out[k]) for k in sorted(out) if k >= first_key]
+    first_key, end_key = local_start.strftime("%Y-%m-%d %H:00"), local_end.strftime("%Y-%m-%d %H:00")
+    rows = [_row(k, out[k]) for k in sorted(out) if first_key <= k < end_key]
     prof = store.site_profile(site)
     return {"site": site, "device": device, "meter": meter, "utc_offset_h": off.total_seconds() / 3600,
-            "from": first_key, "now": (now + off).strftime("%Y-%m-%d %H:%M"),
+            "from": first_key, "to": (local_end - timedelta(days=1)).strftime("%Y-%m-%d"),
+            "now": (now + off).strftime("%Y-%m-%d %H:%M"), "first_day": first_day(store, site, device, off),
             "nominal_v": _num(prof.get("nominal_v")) or 230.0, "nominal_hz": _num(prof.get("nominal_hz")) or 50.0,
             "pf_load_kw": PF_LOAD_KW, "i_floor_a": I_FLOOR_A, "limits": lim_full, "hours": rows,
-            "events": events(store, engine, site, device, utc_from)}
+            "events": events(store, engine, site, device, utc_from, local_end - off)}
 
 
 def minutes(store, site, device, day, meter="EM01"):
