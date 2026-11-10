@@ -2,6 +2,8 @@
 
 One rule: **GitHub is the reference.** Work done on the PC is committed and pushed the same day. If it is not on GitHub, it does not exist.
 
+And before pushing a tag, check which commit it points to: `git log -1 --oneline <tag>`. On 10 November an old local `v0.6.0` on the PC was pushed instead of the release commit (fixed the same day).
+
 ## 1. The four places
 
 | Place | Where | What it must hold |
@@ -17,7 +19,7 @@ One rule: **GitHub is the reference.** Work done on the PC is committed and push
 
 1. <https://github.com/julien355/esp32-datalogging/tags>: the newest `v…` tag is what the VPS must run; the newest `fw-v…` is the logger firmware. Tags named `archive/…` are old branches kept for reference (section 6).
 2. <https://github.com/julien355/esp32-datalogging/actions>: the newest run on `ccr-a52c0421-oygp4n` is green.
-3. <https://github.com/julien355/esp32-datalogging/branches>: only the default branch, plus the branch of a pull request still open.
+3. <https://github.com/julien355/esp32-datalogging/branches>: only the default branch, plus branches of work in progress (for example the dashboard mockup).
 
 ## 3. Our computer (PowerShell)
 
@@ -122,7 +124,7 @@ The cloud session that wrote this guide could not push tags, delete branches or 
 
 | # | Step | Where | Time |
 |---|---|---|---|
-| 1 | Push the tag `v0.6.0`, archive the old branches | PC | 2 min |
+| 1 | ~~Push the tag `v0.6.0`, archive the old branches~~ **Done 10 Nov** | PC | 2 min |
 | 2 | Update the VPS to `v0.6.0` | VPS (owner approves the restart) | 15 min |
 | 3 | Bench test firmware 0.4.1 on `LOG-0001` by cable | PC + logger on USB | 15 min |
 | 4 | Release firmware 0.4.1 (`fw-v0.4.1`) | PC | 5 min |
@@ -134,6 +136,8 @@ The cloud session that wrote this guide could not push tags, delete branches or 
 Steps 2 and 3 do not depend on each other. Step 4 only after step 3 passed.
 
 ### Step 1. Tag `v0.6.0` and archive the old branches (PC, PowerShell)
+
+**Done on 10 November 2026:** `v0.6.0` points to `309d57a`; the twelve branches below are `archive/…` tags; GitHub keeps only the default branch and the dashboard mockup branch (work in progress). Kept here for reference.
 
 Release `v0.6.0` is merged (commit `309d57a`, CI green) but its tag was never pushed, so the VPS cannot check it out yet.
 
@@ -150,6 +154,12 @@ git fetch origin --tags --prune
 ```powershell
 git tag v0.6.0 309d57a
 ```
+
+```powershell
+git log -1 --oneline v0.6.0
+```
+
+**Expected:** a line that starts with `309d57a` (`309d57a (tag: v0.6.0) Release v0.6.0: ...`). If `git tag` said `already exists`, an old local tag has that name: `git tag -d v0.6.0`, then tag again.
 
 ```powershell
 git push origin v0.6.0
@@ -170,7 +180,7 @@ foreach ($b in $old) { git tag "archive/$b" "origin/$b"; git push origin "archiv
 
 ### Step 2. Update the VPS to `v0.6.0` (`ssh hermes-vps`)
 
-Follow [`UPDATING.md`](UPDATING.md) section A, A2 to A4: write down where you start from, backup, `git fetch --tags`, `git checkout v0.6.0`, the checks of A3.3, then `docker compose up -d --build` once the owner approves.
+Follow [`UPDATING.md`](UPDATING.md) section A, A2 to A4: write down where you start from, backup, `git fetch --tags`, check that `git log -1 --oneline v0.6.0` starts with `309d57a` (A3.2), `git checkout v0.6.0`, the checks of A3.3, then `docker compose up -d --build` once the owner approves.
 
 **Done when:** `curl -s http://127.0.0.1:8800/health` answers `"version": "0.6.0"`, and the site page <https://arkan-monitoring.duckdns.org/live/adab/> has the menu group **Power quality**.
 
@@ -195,6 +205,12 @@ git pull
 ```powershell
 git tag fw-v0.4.1 v0.6.0
 ```
+
+```powershell
+git log -1 --oneline fw-v0.4.1
+```
+
+**Expected:** a line that starts with `309d57a` (the firmware code of 0.4.1 is in that commit). Anything else: `git tag -d fw-v0.4.1` and stop.
 
 ```powershell
 git push origin fw-v0.4.1
