@@ -87,7 +87,7 @@ FW_GITHUB_REPO=julien355/esp32-datalogging
 FW_GITHUB_TOKEN=
 ```
 
-- `ADMIN_USERS`: the login names of `hub-users.caddy` that may send firmware, comma separated. Empty = the panel is off. `*` = everyone who can log in.
+- `ADMIN_USERS`: the login names (of `hub-users.caddy` or `monitoring-users.caddy`) that may send firmware, comma separated. Empty = the panel is off. `*` = everyone who can log in. A login limited to some sites by `USER_SITES` sends firmware only to the loggers of its sites ([`LIVE.md`](LIVE.md#logins)).
 - `FW_GITHUB_REPO`: where the releases are.
 - `FW_GITHUB_TOKEN`: only if the repository is private. On GitHub: Settings, Developer settings, Fine-grained tokens, "Only select repositories" = this one, Permissions "Contents: Read-only". Nothing else.
 

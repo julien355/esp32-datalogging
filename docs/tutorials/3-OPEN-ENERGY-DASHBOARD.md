@@ -103,6 +103,7 @@ What OED gives us:
 | Backups | `/srv/arkan-monitoring/backups/` | `data-*.tar.gz` (ours), `oed-*.sql.gz` (OED database) |
 | Caddy site file | `/opt/edge/sites/monitoring.caddy` | from [`server/deploy/oed/monitoring-oed.caddy`](../../server/deploy/oed/monitoring-oed.caddy) once OED is installed |
 | Shared Arkan logins | `/opt/edge/secrets/hub-users.caddy` | owner only |
+| Logins for the site pages only (technicians) | `/opt/edge/secrets/monitoring-users.caddy` | owner only; never let into OED ([../LIVE.md](../LIVE.md#logins)) |
 | OED image | `arkan-oed:v1.0.0` in the VPS's Docker | built on the laptop (A.3) |
 
 | Container | Port (VPS loopback) | Memory limit | Role |

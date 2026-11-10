@@ -594,6 +594,75 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(json.loads(body), {"version": 1, "settings": {"th1_off_t": "-1.5"}})
         self.assertIn("th1_off_t = 0", self.manage("show-config", "LOG-0001"))
 
+    def test_login_limited_to_one_site(self):
+        import http.client
+        self.assertEqual(server_mod.parse_user_sites(" tech:adab, ops:adab,ops:villa , typo:Adab, alone ,, :adab"),
+                         {"tech": {"adab"}, "ops": {"adab", "villa"}, "typo": set(), "alone": set()})
+        self.manage("add-site", "villa", "--name", "Villa")
+        out = self.manage("add-device", "villa", "LOG-0002")
+        token2 = [ln for ln in out.splitlines() if ln.startswith("TOKEN")][0].split(": ", 1)[1]
+        server_mod.Handler.user_sites = server_mod.parse_user_sites("tech:adab, typo:Adab")
+        server_mod.Handler.admin_users = "julien, tech"
+        self.addCleanup(setattr, server_mod.Handler, "user_sites", {})
+        self.addCleanup(setattr, server_mod.Handler, "admin_users", "")
+        tech, owner = {"X-Auth-User": "tech"}, {"X-Auth-User": "julien"}
+        post = dict(tech, **{"X-Requested-With": "arkan"})
+
+        def raw(path, who):   # without following redirects
+            c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+            c.request("GET", path, headers=who)
+            r = c.getresponse()
+            r.read()
+            c.close()
+            return r.status, r.getheader("Location")
+
+        # Pages: the list of all sites and another site's page send the login to its own site.
+        self.assertEqual(raw("/live/", tech), (302, "/live/adab/"))
+        self.assertEqual(raw("/live", tech), (302, "/live/adab/"))
+        self.assertEqual(raw("/live/villa/", tech), (302, "/live/adab/"))
+        self.assertEqual(raw("/live/adab/", tech)[0], 200)
+        self.assertEqual(raw("/live/_ui/arkan-ui.css", tech)[0], 200)
+        self.assertEqual(raw("/live/", owner)[0], 200)                       # not in USER_SITES: every site
+        self.assertEqual(raw("/live/", {"X-Auth-User": "typo"})[0], 403)      # bad site name: no site, never all
+        # Lists and the login's own description.
+        self.assertEqual(list(json.loads(self.req("GET", "/api/v1/status", headers=tech)[1])["sites"]), ["adab"])
+        self.assertEqual(sorted(json.loads(self.req("GET", "/api/v1/status", headers=owner)[1])["sites"]), ["adab", "villa"])
+        self.assertEqual(json.loads(self.req("GET", "/api/v1/status", headers={"X-Auth-User": "typo"})[1])["sites"], {})
+        me = json.loads(self.req("GET", "/api/v1/admin/me", headers=tech)[1])
+        self.assertEqual((me["user"], me["admin"], me["sites"]), ("tech", True, ["adab"]))
+        self.assertIsNone(json.loads(self.req("GET", "/api/v1/admin/me", headers=owner)[1])["sites"])
+        # Every site API: the login's site yes, the other no.
+        for p in ("/api/v1/live/{}", "/api/v1/live/{}/day/2026-11-10", "/api/v1/alarms/{}", "/api/v1/versions/{}",
+                  "/api/v1/history/{}", "/api/v1/history/{}/day/2026-11-10", "/api/v1/quality/{}",
+                  "/api/v1/quality/{}/day/2026-11-10", "/api/v1/weather/{}", "/api/v1/weather/{}/log"):
+            self.assertEqual(self.req("GET", p.format("villa"), headers=tech)[0], 403, p)
+            self.assertEqual(self.req("GET", p.format("adab"), headers=tech)[0], 200, p)
+            self.assertEqual(self.req("GET", p.format("villa"), headers=owner)[0], 200, p)
+        # Logger pages and actions: only the loggers of the login's site, firmware included (ADMIN_USERS).
+        self.assertEqual(self.req("GET", "/api/v1/admin/registers/LOG-0002", headers=tech)[0], 403)
+        self.assertEqual(self.req("GET", "/api/v1/admin/registers/LOG-0001", headers=tech)[0], 200)
+        self.assertEqual(self.req("GET", "/api/v1/admin/registers/LOG-9999", headers=tech)[0], 404)
+        self.assertEqual(self.req("GET", "/api/v1/admin/fw/LOG-0002", headers=tech)[0], 403)
+        self.assertEqual(self.req("GET", "/api/v1/admin/fw/LOG-0001", headers=tech)[0], 200)
+        good = json.dumps({"csv": "name,fc,addr,type,scale,ct,agg\nv1,3,0x0000,u16,0.1,0,minmax\n"})
+        self.assertEqual(self.req("POST", "/api/v1/admin/registers/LOG-0002/check", good, ctype="application/json",
+                                  headers=tech)[0], 403)
+        self.assertEqual(self.req("POST", "/api/v1/admin/registers/LOG-0002", good, ctype="application/json",
+                                  headers=tech)[0], 403)
+        self.assertEqual(self.req("POST", "/api/v1/admin/registers/LOG-0001/check", good, ctype="application/json",
+                                  headers=tech)[0], 200)
+        self.assertEqual(self.req("POST", "/api/v1/admin/meter-settings/LOG-0002", json.dumps({"mb_baud": "9600"}),
+                                  ctype="application/json", headers=tech)[0], 403)
+        self.assertEqual(self.req("POST", "/api/v1/admin/fw/LOG-0002/cancel", "{}", ctype="application/json",
+                                  headers=post)[0], 403)
+        self.assertEqual(self.req("POST", "/api/v1/admin/fw/LOG-0001/cancel", "{}", ctype="application/json",
+                                  headers=post)[0], 200)
+        self.assertEqual(self.req("POST", "/api/v1/admin/fw/LOG-0002/cancel", "{}", ctype="application/json",
+                                  headers=dict(owner, **{"X-Requested-With": "arkan"}))[0], 200)
+        # The loggers themselves are not concerned (no web login on their paths).
+        snap = json.dumps({"ts": ts(0), "values": {"EM01_p": 1}})
+        self.assertEqual(self.req("POST", "/api/v1/live", snap, token2, "application/json")[0], 204)
+
     def test_register_table_page_to_logger(self):
         good = "name,fc,addr,type,scale,ct,agg\nv1,3,0x0000,u16,0.1,0,minmax\ne,3,24,U32,0.01,0,last\n"
         code, _ = self.req("GET", "/api/v1/registers", token=self.token)
