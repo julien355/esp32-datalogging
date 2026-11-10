@@ -72,7 +72,7 @@ from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, IngestError, atomic_write, iso_now  # noqa: E402
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s

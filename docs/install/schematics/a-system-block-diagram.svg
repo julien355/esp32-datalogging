@@ -54,7 +54,7 @@
   <text x="330" y="442" font-weight="bold">TH2: AM2301 (DHT21)</text>
   <text x="330" y="462">Outdoors, beside panel room</text>
   <text x="330" y="482">In radiation shield, 1.5 m high</text>
-  <text x="330" y="502">1 m cable, GPIO 4 (to verify)</text>
+  <text x="330" y="502">1 m cable, GPIO 1</text>
   <line x1="440" y1="355" x2="440" y2="420" stroke="#000" stroke-width="2" stroke-dasharray="4 3"/>
   <text x="448" y="395" font-size="12">3V3, GND, DATA</text>
 

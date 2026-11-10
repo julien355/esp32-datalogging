@@ -1,6 +1,8 @@
 # Adab Hotel Energy Logger: Installation Plan
 
-Status: **DRAFT v0.14, 8 November 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+Status: **DRAFT v0.16, 10 November 2026.** Review answers of 30 October are in §3; the choice of base repository is in §4 and the full search of what can be reused is in **`docs/REUSE.md`**.
+v0.16 (10 November): **power quality pages** on the site page (Power quality, Voltage, Power factor: limits from the alarm register, kVArh against the PLN 0.85 rule), VPS release `v0.6.0`; firmware 0.4.1 merged into the default branch, its tag `fw-v0.4.1` follows the bench test (`docs/UPDATING.md`).
+v0.15 (9 November): **firmware 0.4.1**: fixes the watchdog restart after empty (204) server replies, found on the bench board (0.4.0 restarted every minute and went back to 0.3.0 by itself; 0.4.0 is withdrawn); AM2301 on **GPIO 1**, confirmed on the board; console `tail` no longer restarts the logger on a big file. The VPS runs `v0.4.0` from a git clone of the repository (`docs/UPDATING.md`).
 v0.14 (8 November, the day's work merged): **firmware 0.4.0**: the meter register table can be sent from the platform's page `/live/<site>/register` (with `meters`, `mb_baud`, `mb_format`, `ct_mult`); **firmware update per logger from the site page** (GitHub release made by CI from a `fw-v` tag, or a `.bin`; logins in `ADMIN_USERS`, `docs/OTA.md`); **Modbus meter simulator** and tutorial 4; CT **250/5** (ratio 50); OED deploy files tested on a test machine. How the VPS and the loggers are updated: `docs/UPDATING.md`.
 v0.13 (owner, 8 November): **site page design approved** from the dashboard mockup (`docs/mockup/`): `/live/<site>/` gets a side menu with Live now and **history pages** (power, one day, energy per day, this week vs last, temperature, humidity) read from the day files (`docs/LIVE.md`). OED stays for groups, export, maps and any-period comparison.
 v0.12 (owner, 7 November, second round): **sensors as 5-minute averages** (logger 0.3.0); **firmware updates in the alarm log** (A35, A36); PLN 3-phase supply 230/400 V, **82.5 kVA contract** (new A37 per-phase limit 3 x 125 A), **200 A main breaker**; CT ratio set in the meter; **daily count of dips and swells**.
@@ -68,8 +70,8 @@ and the repositories `arkan-cmms`, `arkan-hub`, `arkan-solar-desk`, `arkan-skill
 |---|---|
 | I2C SDA / SCL | 8 / 9 |
 | SD SCK / MISO / MOSI / CS | 12 / 13 / 11 / 10 or 21 |
-| RS485 TX / RX / DE-RE | top 3 rows of the back table, to verify |
-| AM2301 data | **GPIO 4** proposed (free on the header, not a strapping pin); to confirm in S4 |
+| RS485 TX / RX / DE-RE | **17 / 18 / none** from the board's pin table (9 Nov 2026); to confirm with a Modbus answer |
+| AM2301 data | **GPIO 1** (free on the header, not a strapping pin); confirmed on the board 8 Nov 2026 |
 
 **The AM2301 (`TH2`)**
 - **Signal:** one data wire with its own timing protocol (DHT family), not I2C or Modbus. It needs one free GPIO and a **pull-up resistor of 4.7 to 10 kohm from the data line to 3.3 V**. Many cased AM2301 have no pull-up inside; fit one at the board end.

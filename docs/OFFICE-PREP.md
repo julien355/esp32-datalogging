@@ -4,7 +4,7 @@ Everything here is done **at the office, on the bench**, before the logger goes 
 
 Reference: functions and settings [`FIRMWARE.md`](FIRMWARE.md), data format [`DATA-FORMAT.md`](DATA-FORMAT.md), VPS [`VPS-SETUP.md`](VPS-SETUP.md), questions still open [`QUESTIONS.md`](QUESTIONS.md). Hardware theory, wiring drawings and site labs: [`install/README.md`](install/README.md).
 
-> **Status (8 November 2026).** Firmware 0.4.0 (power quality min/max, sensors every 5 min, firmware version logged, remote settings, OTA on with the build marker, register table sent from the platform) and the ingest service with the alarm log are written; CI compiles the firmware and runs the server tests. **Nothing has run on the real board yet.** The pin map is still **to verify** (T2 below); the meter register map is verified **on site** (T4 below, `docs/meter/README.md`). Expect small fixes during the first bench day.
+> **Status (9 November 2026).** Firmware 0.4.1 (power quality min/max, sensors every 5 min, firmware version logged, remote settings, OTA on with the build marker, register table sent from the platform) and the ingest service with the alarm log are written; CI compiles the firmware and runs the server tests. The bench board `LOG-0001` has run firmware 0.3.0 since 8 November (online, uploading; AM2301 on **GPIO 1** confirmed); 0.4.1 is still to test on it (T1 below, by cable). Do not use 0.4.0: it restarts every minute ([`UPDATING.md`](UPDATING.md) section 5). The rest of the pin map is still **to verify** (T2 below); the meter register map is verified **on site** (T4 below, `docs/meter/README.md`). Expect small fixes during the first bench day.
 
 ---
 
