@@ -18,7 +18,7 @@ House rules: the VPS only runs **tags**; the owner approves every container rest
 
 ### A1. On GitHub: merge, then tag
 
-The pull request "Release v0.6.0" was merged into the default branch once CI was green (jobs `firmware`, `server`, `tools`): merge commit `309d57a`. Its tag `v0.6.0` is pushed from the PC ([`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md) section 7): check that `v0.6.0` is listed on <https://github.com/julien355/esp32-datalogging/tags> before A3.2. Its `/health` answers `"version": "0.6.0"`. No `fw-v` tag comes with it (firmware: A0).
+The pull request "Release v0.6.0" was merged into the default branch once CI was green (jobs `firmware`, `server`, `tools`): merge commit `309d57a`. Tagged `v0.6.0` on 10 November, pushed from the PC ([`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md) section 7, step 1). Its `/health` answers `"version": "0.6.0"`. No `fw-v` tag comes with it (firmware: A0).
 
 ### A2. Before: where you start from
 
@@ -53,6 +53,12 @@ git status
 ```bash
 git fetch --tags
 ```
+
+```bash
+git log -1 --oneline v0.6.0
+```
+
+**Expected:** a line that starts with `309d57a`, for example `309d57a (tag: v0.6.0) Release v0.6.0: power quality pages; firmware 0.4.1 merged (#2)`. If it starts with `f4527ba` (a wrong `v0.6.0` was on GitHub for a few minutes on 10 November), run `git fetch --tags --force` and check again. Anything else: stop and ask the owner.
 
 ```bash
 git checkout v0.6.0
@@ -486,7 +492,7 @@ pio device monitor -p COM4 -b 115200 -f esp32_exception_decoder -f time -f log2f
 ```
 
 2. **Watch 10 minutes.** Expected: `firmware 0.4.1` at the boot, `TH2 sensor: AM2301 on GPIO 1`, WiFi connected, then **no** restart. `status` after 10 minutes shows `up 600 s` or more, `Uploads: ok n, failed 0`. If it restarts, keep the monitor text (the `log2file` file in the `firmware` folder) and stop there.
-3. **Only then:** tag `fw-v0.4.1` on the commit of `v0.6.0` (already in the default branch since 10 November; the firmware code is the same), from your copy: `git tag fw-v0.4.1 v0.6.0`, then `git push origin fw-v0.4.1`. No new VPS tag is needed. CI makes the release **Logger firmware 0.4.1**.
+3. **Only then:** tag `fw-v0.4.1` on the commit of `v0.6.0` (already in the default branch since 10 November; the firmware code is the same), from your copy: `git tag fw-v0.4.1 v0.6.0`, check that `git log -1 --oneline fw-v0.4.1` starts with `309d57a`, then `git push origin fw-v0.4.1`. No new VPS tag is needed. CI makes the release **Logger firmware 0.4.1**.
 4. **Mark `fw-v0.4.0` as withdrawn** on GitHub: **Releases**, **Logger firmware 0.4.0**, **Edit**, tick **Set as a pre-release**, add `Withdrawn: restarts every minute behind Caddy. Use 0.4.1.` to the notes, **Update release**. The panel then lists it as `(pre-release)`.
 5. **Put the OTA check back to 6 h** (it was set to 1 h for the test). VPS:
 
