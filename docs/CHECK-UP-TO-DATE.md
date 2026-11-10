@@ -13,7 +13,7 @@ And before pushing a tag, check which commit it points to: `git log -1 --oneline
 | **VPS** | `hermes-vps`, folder `/opt/arkan-monitoring` (a git clone, at a tag). Data: `/srv/arkan-monitoring/data` | The newest `v…` tag |
 | **Logger** | `LOG-0001`, site `adab` | The newest `fw-v…` release that is not marked pre-release |
 
-**Latest, checked on 10 November 2026:** the VPS runs `v0.6.0` (commit `309d57a`); `LOG-0001` runs firmware `0.4.1` (release `fw-v0.4.1`, same commit); `0.4.0` is marked withdrawn (pre-release), never send it.
+**Latest, 10 November 2026:** code `v0.7.0` (the site page in the Arkan design, to install: [`UPDATING.md`](UPDATING.md) section N). Checked the same day before it: the VPS runs `v0.6.0` (commit `309d57a`); `LOG-0001` runs firmware `0.4.1` (release `fw-v0.4.1`, same commit); `0.4.0` is marked withdrawn (pre-release), never send it.
 
 ## 2. GitHub (browser, 1 minute)
 
@@ -68,15 +68,15 @@ cd /opt/arkan-monitoring
 git describe --tags --always
 ```
 
-**Expected:** the newest `v…` tag of section 2 (today `v0.6.0`).
+**Expected:** the newest `v…` tag of section 2 (today `v0.7.0`).
 
 ```bash
 curl -s http://127.0.0.1:8800/health
 ```
 
-**Expected:** `{"ok": true, "version": "0.6.0", ...}`.
+**Expected:** `{"ok": true, "version": "0.7.0", ...}`.
 
-Older? Update with [`UPDATING.md`](UPDATING.md) section A (backup first, the owner approves the restart).
+Older? Update with [`UPDATING.md`](UPDATING.md) section N (backup first, the owner approves the restart).
 
 ## 5. Logger
 

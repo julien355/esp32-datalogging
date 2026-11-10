@@ -1,5 +1,7 @@
 # Dashboard mockup
 
+> **Since release v0.7.0 (10 November 2026)** the pages are in the Arkan design of the CMMS, with View as and Settings: [`arkan/`](arkan/README.md) holds the page as it is now, with saved answers. The screens below are the earlier design.
+
 How `arkan-monitoring.duckdns.org` should look for the Adab hotel, with **simulated data** (14 days).
 Open **[`index.html`](index.html)** in a browser (it needs the `img/` folder beside it).
 

@@ -1,10 +1,165 @@
 # Updating the VPS and the loggers
 
-How a new version of this repository reaches `hermes-vps` and the loggers. **This release: 10 November 2026, VPS `v0.6.0`** (section A, below): the power quality pages. The code now also holds firmware **`0.4.1`**, which replaces the withdrawn `0.4.0`; it reaches the loggers separately, after its bench test (section 5 of the v0.4.0 release, at the end). The steps of the 9 November release (`v0.5.0`, section B) and of the 8 November release (`v0.4.0`) follow, for reference. The detailed tutorial steps are in [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
+How a new version of this repository reaches `hermes-vps` and the loggers. **This release: 10 November 2026, VPS `v0.7.0`** (section N, below): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. Nothing changes for the loggers. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. The detailed tutorial steps are in [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
-**Status, 10 November 2026: done.** The VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
+**Status, 10 November 2026:** `v0.7.0` is to install (section N). Before it: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
+
+## N. Release v0.7.0 (10 November 2026): the site page in the Arkan design
+
+### N0. What is in it
+
+| Part | What changed | What it needs |
+|---|---|---|
+| Site page `/live/<site>/` and `/live/` | Same content, new look: the Arkan UI kit of the CMMS (side bar with the logo, cards, tables, light, dark and high contrast). Icon rail on a tablet, bottom tabs and a **More** list on a phone. Every chart shows both axes with their scales; in a row of cards the figures and the charts line up. The link to Open Energy Dashboard is gone from the menu | VPS update |
+| **View as** (side bar) | Who is logged in and with which rights: `Admin · <login>` for a login in `ADMIN_USERS`, `Viewer · <login>` for the others. An admin can switch to Viewer to see the pages as the others do (Firmware update hidden). It changes that browser only, never the rights on the server | Nothing new: it reads `GET /api/v1/admin/me`, as the firmware panel did |
+| **Settings** (bottom of the side bar, `#prefs`) | Display settings of the kit (mode, density, text size, motion, reset), saved in the browser; who is logged in; the site details of `site.json`, read only | Nothing |
+| Meter registers | Now a page of the site, `/live/<site>/#register`. The old address `/live/<site>/register` sends the browser there. `server/app/registers.html` is removed | Nothing: old links and bookmarks keep working |
+| UI kit files | `server/app/arkan-ui/arkan-ui.css` and `arkan-ui.js`, served at `/live/_ui/<file>` | Nothing: under `/live/`, so behind the Arkan login like the page (checked in N3.3) |
+| API, data folder, firmware, Caddy, `.env`, Docker files | No change | Nothing |
+| Mockup | [`mockup/arkan/`](mockup/arkan/README.md): the same page with saved answers, one file, for reviews | Nothing on the VPS |
+
+### N1. On GitHub: merge, then tag
+
+1. Merge the pull request "Release v0.7.0" into the default branch once CI is green (jobs `firmware`, `server`, `tools`).
+2. Tag the merge commit `v0.7.0` from the PC, after checking what it points to ([`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md), first lines):
+
+```powershell
+cd C:\dev\esp32-datalogging
+```
+
+```powershell
+git checkout ccr-a52c0421-oygp4n
+```
+
+```powershell
+git pull
+```
+
+```powershell
+git log -1 --oneline
+```
+
+**Expected:** a line that ends with `Release v0.7.0: ...`. Then:
+
+```powershell
+git tag v0.7.0
+```
+
+```powershell
+git push origin v0.7.0
+```
+
+No `fw-v` tag comes with it (no firmware change).
+
+### N2. Before: where you start from
+
+**Where:** VPS, user ai (`ssh hermes-vps`), except the steps marked owner.
+
+```bash
+cd /opt/arkan-monitoring
+```
+
+```bash
+git describe --tags --always
+```
+
+**Expected:** `v0.6.0`. Write it down: it is what you go back to.
+
+```bash
+git status
+```
+
+**Expected:** `nothing to commit, working tree clean` (an untracked `server/.env` is fine). Modified files: stop and ask the owner.
+
+### N3. Update
+
+**N3.1 Backup**
+
+```bash
+/opt/arkan-monitoring/server/deploy/backup.sh
+```
+
+**N3.2 Get the new version**
+
+```bash
+git fetch --tags
+```
+
+```bash
+git log -1 --oneline v0.7.0
+```
+
+**Expected:** a line that ends with `Release v0.7.0: ...`. Anything else: stop and ask the owner.
+
+```bash
+git checkout v0.7.0
+```
+
+**N3.3 `.env`, Caddy and Docker files: nothing to change, check only**
+
+```bash
+git diff --stat v0.6.0 v0.7.0 -- server/.env.example server/deploy server/docker-compose.yml server/Dockerfile
+```
+
+**Expected:** no output (none of these files changed).
+
+```bash
+diff /opt/edge/sites/monitoring.caddy /opt/arkan-monitoring/server/deploy/monitoring.caddy
+```
+
+**Expected:** no output (if OED is installed, compare with `server/deploy/oed/monitoring-oed.caddy`). The kit files are under `/live/`, which both files already send to the service behind the Arkan login.
+
+**N3.4 Rebuild and restart (owner approves)**
+
+```bash
+cd /opt/arkan-monitoring/server
+```
+
+```bash
+docker compose up -d --build
+```
+
+**Expected:** the container `Recreated`, `Started`. About 30 s without live data on the page; the loggers keep their records on the SD card and send them after.
+
+### N4. Checks
+
+```bash
+curl -s http://127.0.0.1:8800/health
+```
+
+**Expected:** `{"ok": true, "version": "0.7.0", ...}`.
+
+```bash
+docker compose ps
+```
+
+**Expected:** `Up ... (healthy)` after a minute.
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8800/live/_ui/arkan-ui.css
+```
+
+**Expected:** `200`.
+
+In the browser, `https://arkan-monitoring.duckdns.org/live/adab/` (reload once with Ctrl+F5):
+- the side bar: Arkan logo, the site, **View as** with your login, the menu groups, **Settings** at the bottom with the green pill `Live · updated n s ago`;
+- **Live now** shows the same values as before, each small chart with its scales;
+- **Settings**: Mode **Dark** turns the page dark at once; **Reset display settings** puts it back;
+- **Meter registers** opens in the same page; the old address `https://arkan-monitoring.duckdns.org/live/adab/register` lands on it too;
+- with a login in `ADMIN_USERS`: **Firmware update** is in the menu; **View as**, **Viewer** hides it;
+- `https://arkan-monitoring.duckdns.org/live/` lists the sites in the same design.
+
+If the page shows plain text without any design, the kit files did not load: check the `curl` line above, then the Caddy file (N3.3).
+
+**Going back:** `git checkout v0.6.0`, then `docker compose up -d --build`. This release only changes the page files: nothing in the data folder or in Caddy is left to undo.
+
+### N5. The loggers
+
+Nothing in this release.
+
+---
 
 ## A. Release v0.6.0 (10 November 2026): power quality pages
 
