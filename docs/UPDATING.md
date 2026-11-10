@@ -21,7 +21,7 @@ House rules: the VPS only runs **tags**; the owner approves every container rest
 
 ### W1. On GitHub: merge
 
-1. Merge pull request #PRNUM into the default branch once CI is green (jobs `firmware`, `server`, `tools`). The VPS does not change: no `v0.x` tag.
+1. Merge pull request #13 into the default branch once CI is green (jobs `firmware`, `server`, `tools`). The VPS does not change: no `v0.x` tag.
 2. **Not yet** the `fw-v0.5.1` tag: it comes after the bench test (W3).
 
 ### W2. Bench test by cable
@@ -48,7 +48,7 @@ git pull
 git log -1 --oneline
 ```
 
-**Expected:** `<commit> Firmware 0.5.1: two WiFi networks of equal rank, joins the one in range (#PRNUM)`, the merge commit of pull request #PRNUM. Write the commit (its first 7 characters) on the record sheet: the tag goes on **this** commit (W3). If the first line is a later merge, find the line of #PRNUM with `git log --oneline -10`.
+**Expected:** `<commit> Firmware 0.5.1: two WiFi networks of equal rank, joins the one in range (#13)`, the merge commit of pull request #13. Write the commit (its first 7 characters) on the record sheet: the tag goes on **this** commit (W3). If the first line is a later merge, find the line of #13 with `git log --oneline -10`.
 
 ```powershell
 Select-String '#define FW_VERSION' firmware\include\config.h
@@ -130,7 +130,7 @@ reboot
 
 If anything above fails: keep the `log2file` file, do not tag, and flash the previous release again ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 3.2 with its `fw-v` tag, then 3.3).
 
-### W3. Tag `fw-v0.5.1` on the merge commit of #PRNUM
+### W3. Tag `fw-v0.5.1` on the merge commit of #13
 
 Only after W2 has passed. On the PC:
 
@@ -146,7 +146,7 @@ git tag fw-v0.5.1 <commit written down in W2>
 git log -1 --oneline fw-v0.5.1
 ```
 
-**Expected:** `<commit> (tag: fw-v0.5.1, ...) Firmware 0.5.1: two WiFi networks of equal rank, joins the one in range (#PRNUM)`. Anything else: `git tag -d fw-v0.5.1` and stop.
+**Expected:** `<commit> (tag: fw-v0.5.1, ...) Firmware 0.5.1: two WiFi networks of equal rank, joins the one in range (#13)`. Anything else: `git tag -d fw-v0.5.1` and stop.
 
 ```powershell
 git push origin fw-v0.5.1
