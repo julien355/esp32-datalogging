@@ -137,6 +137,8 @@ Steps 2 and 3 do not depend on each other. Step 4 only after step 3 passed.
 
 Release `v0.6.0` is merged (commit `309d57a`, CI green) but its tag was never pushed, so the VPS cannot check it out yet.
 
+No folder `C:\dev\esp32-datalogging` on the PC yet? Make it first (section 3, `git clone`).
+
 ```powershell
 cd C:\dev\esp32-datalogging
 ```
