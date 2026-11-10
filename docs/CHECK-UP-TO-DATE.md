@@ -13,7 +13,7 @@ And before pushing a tag, check which commit it points to: `git log -1 --oneline
 | **VPS** | `hermes-vps`, folder `/opt/arkan-monitoring` (a git clone, at a tag). Data: `/srv/arkan-monitoring/data` | The newest `v…` tag |
 | **Logger** | `LOG-0001`, site `adab` | The newest `fw-v…` release that is not marked pre-release |
 
-**Latest, 10 November 2026:** code `v0.6.0` (commit `309d57a`), so the VPS runs `v0.6.0`. Logger firmware `0.4.1`, released as `fw-v0.4.1` after its bench test ([`UPDATING.md`](UPDATING.md) section 5). Never `0.4.0` (withdrawn).
+**Latest, checked on 10 November 2026:** the VPS runs `v0.6.0` (commit `309d57a`); `LOG-0001` runs firmware `0.4.1` (release `fw-v0.4.1`, same commit); `0.4.0` is marked withdrawn (pre-release), never send it.
 
 ## 2. GitHub (browser, 1 minute)
 
@@ -48,6 +48,7 @@ git status
 - `Your branch is behind ... by N commits`: run `git pull`.
 - Another branch (for example `release-0.4.1` after a bench flash): `git checkout ccr-a52c0421-oygp4n`, then `git pull`.
 - Modified files listed: commit and push them, or ask before you go on.
+- `needs merge` or `you need to resolve your current index first`: an old merge was left unfinished. Do not resolve it: close VS Code, move the whole folder to `C:\dev\_archive\esp32-datalogging-<date>` (`Move-Item`), clone again (above), then check the archived copy with the command below. Done this way on 10 November 2026.
 
 Is there anything on this PC that GitHub does not have?
 
@@ -125,11 +126,11 @@ The cloud session that wrote this guide could not push tags, delete branches or 
 | # | Step | Where | Time |
 |---|---|---|---|
 | 1 | ~~Push the tag `v0.6.0`, archive the old branches~~ **Done 10 Nov** | PC | 2 min |
-| 2 | Update the VPS to `v0.6.0` | VPS (owner approves the restart) | 15 min |
-| 3 | Bench test firmware 0.4.1 on `LOG-0001` by cable | PC + logger on USB | 15 min |
-| 4 | Release firmware 0.4.1 (`fw-v0.4.1`) | PC | 5 min |
-| 5 | Mark firmware 0.4.0 as withdrawn | GitHub, browser | 1 min |
-| 6 | OTA check back to 6 h | VPS | 1 min |
+| 2 | ~~Update the VPS to `v0.6.0`~~ **Done 10 Nov** | VPS (owner approves the restart) | 15 min |
+| 3 | ~~Bench test firmware 0.4.1 on `LOG-0001` by cable~~ **Done 10 Nov** | PC + logger on USB | 15 min |
+| 4 | ~~Release firmware 0.4.1 (`fw-v0.4.1`)~~ **Done 10 Nov** | PC | 5 min |
+| 5 | ~~Mark firmware 0.4.0 as withdrawn~~ **Done 10 Nov** | GitHub, browser | 1 min |
+| 6 | ~~OTA check back to 6 h~~ **Done 10 Nov** | VPS | 1 min |
 | 7 | Archive the old copies (PC and VPS) | PC, VPS (owner) | 5 min |
 | 8 | Final check: sections 2 to 5 | all | 5 min |
 
@@ -180,11 +181,15 @@ foreach ($b in $old) { git tag "archive/$b" "origin/$b"; git push origin "archiv
 
 ### Step 2. Update the VPS to `v0.6.0` (`ssh hermes-vps`)
 
+**Done on 10 November 2026:** from `v0.5.0` to `v0.6.0`; `/health` answers `0.6.0`, the menu has **Power quality**. Remember: the page changes only after `docker compose up -d --build` in `/opt/arkan-monitoring/server` (the code is copied into the image when it is built; `git checkout` alone changes nothing on the page).
+
 Follow [`UPDATING.md`](UPDATING.md) section A, A2 to A4: write down where you start from, backup, `git fetch --tags`, check that `git log -1 --oneline v0.6.0` starts with `309d57a` (A3.2), `git checkout v0.6.0`, the checks of A3.3, then `docker compose up -d --build` once the owner approves.
 
 **Done when:** `curl -s http://127.0.0.1:8800/health` answers `"version": "0.6.0"`, and the site page <https://arkan-monitoring.duckdns.org/live/adab/> has the menu group **Power quality**.
 
 ### Step 3. Bench test firmware 0.4.1 by cable (PC, `LOG-0001` on USB)
+
+**Done on 10 November 2026:** `LOG-0001` was already on 0.4.1 (flashed by cable) and ran 1 h 45 min without a restart, upload backlog 0, SD card OK, outdoor sensor (AM2301, GPIO 1) reading. Its firmware code is the same as in `v0.6.0`.
 
 Follow [`UPDATING.md`](UPDATING.md) section 5, steps 1 and 2: `git checkout -B release-0.4.1 v0.6.0`, `pio run -e logger -t upload`, then watch the serial monitor for 10 minutes.
 
@@ -201,6 +206,8 @@ git pull
 ```
 
 ### Step 4. Release firmware 0.4.1 (PC)
+
+**Done on 10 November 2026:** `fw-v0.4.1` on `309d57a`; release **Logger firmware 0.4.1** with its four files.
 
 ```powershell
 git tag fw-v0.4.1 v0.6.0
@@ -222,11 +229,15 @@ CI builds the firmware and makes the release (it stops if the tag does not match
 
 ### Step 5. Mark firmware 0.4.0 as withdrawn (GitHub, browser)
 
+**Done on 10 November 2026.** Edit the **0.4.0** release, not 0.4.1: the edit page title must say *Edit Logger firmware 0.4.0*.
+
 **Releases**, **Logger firmware 0.4.0**, **Edit**, tick **Set as a pre-release**, add `Withdrawn: restarts every minute behind Caddy. Use 0.4.1.` to the notes, **Update release**.
 
 **Done when:** the release shows the **Pre-release** label.
 
 ### Step 6. OTA check back to 6 h (VPS)
+
+**Done on 10 November 2026:** settings version 2, the logger reported `ota_check_h = 6` after its restart (`boot sw:remote_cfg`). Every `docker compose` command runs in `/opt/arkan-monitoring/server`.
 
 ```bash
 cd /opt/arkan-monitoring/server
@@ -241,6 +252,8 @@ docker compose exec ingest python tools/manage.py set-config LOG-0001 ota_check_
 **Done when:** within 15 minutes, `docker compose exec ingest python tools/manage.py show-config LOG-0001` shows `ota_check_h = 6` in the lines reported by the logger.
 
 ### Step 7. Archive the old copies
+
+**PC done on 10 November 2026:** the old folder (an unfinished merge from 8 November) is `C:\dev\_archive\esp32-datalogging-2026-11-10`, and `C:\dev\esp32-datalogging` is a fresh clone. VPS copy: see below.
 
 Section 6: other copies on the PC go into `C:\dev\_archive\`; the owner archives and removes `/opt/arkan-monitoring.hand-copy-2026-11-08` on the VPS.
 
