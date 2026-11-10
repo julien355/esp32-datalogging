@@ -1154,7 +1154,7 @@ What to check: 3 batches with `"stored": 60` each, `"rejected_rows": 0`, the res
 
 **1. The live page.** In the browser, open https://arkan-monitoring.duckdns.org/live/adab/.
 
-**Expected:** within 15 s, the green pill `Live · updated N s ago` and `Hotel time HH:MM` in the header; `✓ No open alarm`; the cards **Power** (`Total power`, `Apparent power` with `% of the 82.5 kVA PLN contract`, `Power factor`, `Frequency`), **Per phase** (`Voltage L-N (V)` and `Current (A)`, L1 L2 L3 in each), **Environment** (`Electrical room temperature`, `Outdoor temperature`, humidity, room minus outdoor, outdoor dew point), each with a small line graph that grows every 15 s; then **Logger** (`LOG-0001`, WiFi signal `-63 dBm`, upload backlog `0 min`, SD card `OK`, firmware `sim-0.1.0`) and `Alarm log · last 20, hotel time`. Click **Power** and **Energy per day** in the menu: the hours sent by the simulator are there. The overview `/live/` now shows `adab`, `LOG-0001`, the power now, `● N s ago` in green, a last record time, firmware `0.4.0`.
+**Expected:** within 15 s, the green pill `Live · updated N s ago` and `Hotel time HH:MM` in the header; `✓ No open alarm`; the cards **Power** (`Total power`, `Apparent power` with `% of the 82.5 kVA PLN contract`, `Power factor`, `Frequency`), **Per phase** (`Voltage L-N (V)` and `Current (A)`, L1 L2 L3 in each), **Environment** (`Electrical room temperature`, `Outdoor temperature`, humidity, room minus outdoor, outdoor dew point), each with a small line graph that grows every 15 s; then **Logger** (`LOG-0001`, WiFi signal `-63 dBm`, upload backlog `0 min`, SD card `OK`, firmware `sim-0.1.0`) and `Alarm log · last 20, hotel time`. Click **Power** and **Energy per day** in the menu: the hours sent by the simulator are there. Click **Power quality**: `Dips · swells` shows `6 · 0` in red, and the table *Power quality alarms* has the lines of the simulated dip (A26 Voltage dip and A05 Undervoltage, start and clear). The overview `/live/` now shows `adab`, `LOG-0001`, the power now, `● N s ago` in green, a last record time, firmware `0.4.0`.
 
 **2. The status of every logger.** Where: VPS, user ai, in `/opt/arkan-monitoring/server`.
 
@@ -1513,6 +1513,8 @@ docker compose exec ingest python tools/manage.py list
 
 The VPS only runs tags. An update restarts the container: **the owner approves.**
 
+> **Three things that went wrong on 8 November 2026** ([`../UPDATING.md`](../UPDATING.md) section 5): (1) `/opt/arkan-monitoring` must be a git clone; if `git describe` says `fatal: not a git repository`, the code was copied by hand: stop and ask the owner (B11 makes the clone). (2) Run every `docker compose` command in `/opt/arkan-monitoring/server`; elsewhere it says `no configuration file provided`. (3) Never `docker rm -f` the container: if `/health` gives no answer and `docker compose ps` lists nothing, `docker compose up -d --build` in that folder creates it again; the data stays in `/srv/arkan-monitoring/data`.
+
 **1. Note the current tag:**
 
 ```bash
@@ -1738,27 +1740,27 @@ docker compose exec ingest python tools/manage.py show-config LOG-0001
 
 OTA (over the air): the logger downloads a new firmware from the VPS by itself. With `ota_on=1` (the default) it asks every 6 hours (`ota_check_h`), and at once (within a minute) when it is online and a firmware waits for it. Building the firmware file is covered in [../FIRMWARE.md](../FIRMWARE.md) and tutorial 1 (PlatformIO writes it to `firmware/.pio/build/logger/firmware.bin`: **to verify** on your build).
 
-**1. Upload the file under a new name** (Laptop, PowerShell, in the folder that holds `firmware.bin`; `0.4.1` is an example version):
+**1. Upload the file under a new name** (Laptop, PowerShell, in the folder that holds `firmware.bin`; `0.4.2` is an example version):
 
 ```powershell
-scp .\firmware.bin hermes-vps:/srv/arkan-monitoring/data/firmware-upload-0.4.1.bin
+scp .\firmware.bin hermes-vps:/srv/arkan-monitoring/data/firmware-upload-0.4.2.bin
 ```
 
 **2. Publish it**, first for `LOG-0001` only (VPS, user ai, in `/opt/arkan-monitoring/server`):
 
 ```bash
-docker compose exec ingest python tools/manage.py publish-fw /data/firmware-upload-0.4.1.bin --device LOG-0001
+docker compose exec ingest python tools/manage.py publish-fw /data/firmware-upload-0.4.2.bin --device LOG-0001
 ```
 
-**Expected:** `logger-0.4.1.bin (usb build) offered to LOG-0001. Loggers with ota_on=1 take it within a minute if they are online (live hint), else at their next check (6 h, or console 'ota').` Without `--device`, it is offered to every logger (`offered to every logger`). The version is read from the file (`--version`, if you add it, is only checked against it); a file that is not the logger firmware is refused (`error: ...`).
+**Expected:** `logger-0.4.2.bin (usb build) offered to LOG-0001. Loggers with ota_on=1 take it within a minute if they are online (live hint), else at their next check (6 h, or console 'ota').` Without `--device`, it is offered to every logger (`offered to every logger`). The version is read from the file (`--version`, if you add it, is only checked against it); a file that is not the logger firmware is refused (`error: ...`).
 
 **3. Remove the uploaded copy** (it was copied into `firmware/`):
 
 ```bash
-rm /srv/arkan-monitoring/data/firmware-upload-0.4.1.bin
+rm /srv/arkan-monitoring/data/firmware-upload-0.4.2.bin
 ```
 
-**4. Check within 6 hours:** `manage.py list` shows `fw 0.4.1`, and the alarm log shows **A35 Firmware updated** with `firmware 0.4.0 -> 0.4.1, by remote update (OTA)`. **A36 Firmware update rolled back** means the new firmware kept restarting and the logger went back to the old one: do not publish it to other loggers.
+**4. Check within 6 hours:** `manage.py list` shows `fw 0.4.2`, and the alarm log shows **A35 Firmware updated** with `firmware 0.4.1 -> 0.4.2, by remote update (OTA)`. **A36 Firmware update rolled back** means the new firmware kept restarting and the logger went back to the old one: do not publish it to other loggers.
 
 Rules:
 - **Never publish the same version number with other content**: `publish-fw` refuses if `firmware/logger-<version>.bin` exists with different bytes (the loggers already offered it check its MD5). Build again with a new `FW_VERSION`. A logger is only offered a version **newer** than its own (a logger flashed by hand with a newer firmware is never downgraded). For a deliberate step back to an older version, add `--force`.
@@ -1981,7 +1983,7 @@ VPS commands with `docker compose` run in `/opt/arkan-monitoring/server`. `manag
 | Daily summary | VPS | `manage.py daily adab` |
 | OED files | VPS | `manage.py export-oed adab [--from 2026-11-01] [--to 2026-11-30] [--all] [--out <folder>]` |
 | SD card backfill | VPS | service stopped: `docker compose run --rm ingest python tools/manage.py backfill adab LOG-0001 /data/export/sd-LOG-0001` (C9) |
-| Publish a firmware | VPS | `manage.py publish-fw /data/firmware-upload-0.4.1.bin [--device LOG-0001]` (or the site page, **Firmware update**) |
+| Publish a firmware | VPS | `manage.py publish-fw /data/firmware-upload-0.4.2.bin [--device LOG-0001]` (or the site page, **Firmware update**) |
 | Send a register table | VPS | `manage.py set-registers LOG-0001 /data/export/registers.csv --comment "..."`, `manage.py set-registers LOG-0001 --builtin`, `manage.py show-registers LOG-0001` (or the page `/live/adab/register`) |
 | Remote settings | VPS | `manage.py set-config LOG-0001 key=value ...`, `manage.py show-config LOG-0001` |
 | Backup by hand | VPS | `/opt/arkan-monitoring/server/deploy/backup.sh` |

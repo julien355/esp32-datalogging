@@ -18,6 +18,7 @@ Status: **built and tested with the simulated logger** (7 November 2026). WhatsA
   - **A01 logger offline** is checked every minute on what the VPS **receives**;
   - **A18 clock** is checked on the live snapshots.
 - Nothing is lost by evaluating on the VPS: the logger keeps every record on its SD card, and **`manage.py alarms adab --rebuild` replays the whole history** (service stopped, see the VPS tutorial C6; A01 and A18, which do not come from the records, are kept as they were) against the current register (after an SD backfill, or to see what a new threshold would have given).
+- The **Power quality** pages of the site page (`/live/<site>/#quality`, `#voltage`, `#pf`) count minutes outside the voltage limits, dips, swells, unbalance and low power factor with the thresholds of this register (A04 to A07, A09, A10, A26 to A28): a changed threshold changes those pages too ([`../LIVE.md`](../LIVE.md#option-a-in-detail)).
 
 ## 2. Where the files are
 

@@ -19,6 +19,10 @@ People endpoints (behind the Caddy web login, never published without it):
                                GitHub releases (asked once an hour), files on the server (read only, everyone)
   GET  /api/v1/history/<site>?days=15        one row per local hour: kWh, kW, sensors (from the day files)
   GET  /api/v1/history/<site>/day/<date>     the 1-minute power of one local day
+  GET  /api/v1/quality/<site>?days=14        power quality per local hour: voltage per phase (mean, lowest, highest),
+                                             frequency, power factor, kW, kvar, kWh, kVArh, unbalance, dips, swells,
+                                             the limits of the alarm register and the power quality alarm lines
+  GET  /api/v1/quality/<site>/day/<date>     the 1-minute voltage (mean, lowest, highest), frequency, power factor
   GET  /api/v1/weather/<site>                Open-Meteo forecast (fetched every hour): today and tomorrow per hour
   GET  /api/v1/weather/<site>/log?days=7     actual weather per hour with the day-ahead forecast (&format=csv)
   GET  /live/  /live/<site>/   site page: live now (refresh every 15 s) and the history graphs
@@ -61,13 +65,14 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import history  # noqa: E402
+import quality  # noqa: E402
 import registers  # noqa: E402
 import weather  # noqa: E402
 from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, IngestError, atomic_write, iso_now  # noqa: E402
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
@@ -316,9 +321,9 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/v1/alarms/([a-z0-9-]+)$", path)
         if m and CODE_RE.match(m.group(1)):
             return self.send_json(200, self.alarm_view(m.group(1)))
-        m = re.match(r"^/api/v1/history/([a-z0-9-]+)(?:/day/(\d{4}-\d{2}-\d{2}))?$", path)
-        if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
-            return self.history(m.group(1), m.group(2), parse_qs(u.query))
+        m = re.match(r"^/api/v1/(history|quality)/([a-z0-9-]+)(?:/day/(\d{4}-\d{2}-\d{2}))?$", path)
+        if m and CODE_RE.match(m.group(2)) and m.group(2) in self.store.sites():
+            return self.history(m.group(2), m.group(3), parse_qs(u.query), m.group(1))
         m = re.match(r"^/api/v1/weather/([a-z0-9-]+)(/log)?$", path)
         if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
             return self.weather_view(m.group(1), bool(m.group(2)), parse_qs(u.query))
@@ -496,7 +501,7 @@ class Handler(BaseHTTPRequestHandler):
                 "nominal_v")
         return {k: p.get(k) for k in keys if k in p}
 
-    def history(self, site, day, q):
+    def history(self, site, day, q, kind="history"):
         devs = self.store.site_devices(site)
         dev = q.get("device", [devs[0] if devs else ""])[0]
         if dev not in devs:
@@ -505,6 +510,11 @@ class Handler(BaseHTTPRequestHandler):
         if not re.match(r"^[A-Z]{2}\d{2}$", meter):
             return self.send_json(400, {"ok": False, "error": "bad meter"})
         try:
+            if kind == "quality":
+                if day:
+                    return self.send_json(200, quality.minutes(self.store, site, dev, day, meter))
+                return self.send_json(200, quality.hourly(self.store, self.store.alarms, site, dev,
+                                                          int(q.get("days", ["14"])[0]), meter))
             if day:
                 return self.send_json(200, history.minutes(self.store, site, dev, day, meter))
             return self.send_json(200, history.hourly(self.store, site, dev, int(q.get("days", ["15"])[0]), meter))

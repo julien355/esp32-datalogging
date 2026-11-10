@@ -3,13 +3,15 @@
 Energy and environment datalogger built on a Bluino ESP32-S3 (T/RH, RS485, RTC, analog inputs) board plus an AM2301 temp/RH sensor,
 reading a FORT FCN300 (3E4Y or 3EH4Y, same registers) meter over Modbus RTU. Pilot site: **adab**.
 
+- **Where everything is (GitHub, our computer `C:\dev\esp32-datalogging`, VPS, logger) and how to check it is up to date:** [`docs/CHECK-UP-TO-DATE.md`](docs/CHECK-UP-TO-DATE.md)
 - Plan and work split: [`docs/PLAN.md`](docs/PLAN.md). The monitoring platform (ingest, dashboards, per-site data folders) lives in its own repository, `arkan-monitoring`.
 - What is reused from existing repositories and open-source projects: [`docs/REUSE.md`](docs/REUSE.md)
 - Meter register map and what must be verified: [`docs/meter/`](docs/meter/)
 - Alarm register and the alarm and warning log (which alarms are recorded, which go to WhatsApp): [`docs/alarms/`](docs/alarms/)
 - **Step-by-step tutorials** (logger on site, VPS, Open Energy Dashboard, Modbus registers): [`docs/tutorials/`](docs/tutorials/)
-- **Updating the VPS and the loggers** (and what the 9 November 2026 release, `v0.5.0`, needs): [`docs/UPDATING.md`](docs/UPDATING.md)
+- **Updating the VPS and the loggers** (and what the 10 November 2026 release, `v0.6.0`, needs): [`docs/UPDATING.md`](docs/UPDATING.md)
 - Site page `/live/<site>/`: live data every 15 s, history pages, meter register page, firmware update: [`docs/LIVE.md`](docs/LIVE.md). Design mockup: [`docs/mockup/`](docs/mockup/)
+- **Power quality** pages on the site page: voltage per phase (mean, lowest and highest 15 s sample, one day minute by minute), dips and swells, unbalance, frequency, power factor and the kVArh PLN bills, against the limits of the alarm register: [`docs/LIVE.md`](docs/LIVE.md#option-a-in-detail) (Power quality pages)
 - **Weather** on the site page: today's forecast hour by hour, tomorrow's forecast, and a log of the actual weather against the forecast and the outdoor sensor (Open-Meteo, no key): [`docs/WEATHER.md`](docs/WEATHER.md)
 - **One server, one data folder:** where every piece of data is (live, records, alarms, weather) and how a second dashboard reads it at the same time: [`docs/DATA-ACCESS.md`](docs/DATA-ACCESS.md)
 - Keeping RAM low on the VPS: [`docs/VPS-MEMORY.md`](docs/VPS-MEMORY.md)

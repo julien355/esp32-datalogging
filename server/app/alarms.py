@@ -351,14 +351,14 @@ class AlarmEngine:
         self._reg_cache[path] = (mt, rows)
         return rows
 
-    def register(self, site):
+    def register(self, site, include_disabled=False):
         base = os.path.join(self.store.root, "alarm-register.csv")
         rows = self._read_register(base if os.path.exists(base) else self.default_register)
         over = {r["id"]: r for r in self._read_register(os.path.join(self.store.site_dir(site), "alarm-register.csv"))}
         out = []
         for r in rows:
             r = dict(over.get(r["id"], r))
-            if (r.get("enabled") or "").strip().lower() != "yes":
+            if not include_disabled and (r.get("enabled") or "").strip().lower() != "yes":
                 continue
             out.append(r)
         return out

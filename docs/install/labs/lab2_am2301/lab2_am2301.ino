@@ -3,7 +3,7 @@
 // TO VERIFY in Lab 1 and Lab 2.
 //
 // Wiring (drawing docs/install/schematics/d-am2301-wiring.svg):
-//   AM2301 red (VCC) -> 3V3, black (GND) -> GND, yellow (DATA) -> GPIO 4,
+//   AM2301 red (VCC) -> 3V3, black (GND) -> GND, yellow (DATA) -> GPIO 1,
 //   4.7 kohm resistor from DATA to 3V3 at the board end. NEVER to 5 V.
 //
 // Every 5 s it prints one line:
@@ -20,7 +20,7 @@
 
 const int PIN_SDA = 8;       // TO VERIFY
 const int PIN_SCL = 9;       // TO VERIFY
-const int PIN_AM2301 = 4;    // proposed, TO VERIFY
+const int PIN_AM2301 = 1;    // wired on IO1
 
 // Offsets found in Lab 2, step 6 (reference minus sensor). Start at 0.
 float TH1_T_OFFSET = 0.0, TH1_H_OFFSET = 0.0;
