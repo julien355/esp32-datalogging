@@ -25,7 +25,7 @@ People endpoints (behind the Caddy web login, never published without it):
   GET  /api/v1/quality/<site>/day/<date>     the 1-minute voltage (mean, lowest, highest), frequency, power factor
   GET  /api/v1/weather/<site>                Open-Meteo forecast (fetched every hour): today and tomorrow per hour
   GET  /api/v1/weather/<site>/log?days=7     actual weather per hour with the day-ahead forecast (&format=csv)
-  GET  /live/  /live/<site>/   site page: live now (refresh every 15 s) and the history graphs
+  GET  /live/  /live/<site>/   site page: live now (refresh every 15 s) and the history graphs; /live/ lists every site
   GET  /live/<site>/register   meter register table page of the site's logger (?device=LOG-0002 if several):
                                see, edit, import, send to the logger
   GET  /api/v1/admin/registers/<device>          table on the logger, table asked, history
@@ -35,8 +35,12 @@ People endpoints (behind the Caddy web login, never published without it):
   Admin POSTs must be JSON (Content-Type application/json) and same-origin: a page on another site
   cannot make a logged-in browser send them.
 
+Logins limited to some sites (USER_SITES, see docs/LIVE.md "Logins"): /api/v1/status lists only their sites,
+/live/ and the page of another site send them to their own (302), every other path of another site or of
+a logger of another site answers 403. Everyone else sees every site.
+
 Firmware update from the site page (people in ADMIN_USERS only, see docs/OTA.md):
-  GET  /api/v1/admin/me                     {"user", "admin", "github"}
+  GET  /api/v1/admin/me                     {"user", "admin", "github", "sites": null = every site, or [the login's sites]}
   GET  /api/v1/admin/fw/<device>            running firmware, what is offered, stored files, recent events
   GET  /api/v1/admin/github/releases        logger-*.bin assets of the repository's releases
   POST /api/v1/admin/fw/<device>/upload     body: the .bin (application/octet-stream), ?force=1
@@ -47,7 +51,9 @@ Firmware update from the site page (people in ADMIN_USERS only, see docs/OTA.md)
 
 Settings (environment): DATA_DIR (/data), PORT (8800), BIND (0.0.0.0 in the container),
 MAX_BODY (262144 bytes), ADMIN_USERS (Caddy login names allowed to update firmware, comma separated,
-"*" = everyone who can log in, empty = nobody), FW_GITHUB_REPO (owner/name), FW_GITHUB_TOKEN,
+"*" = everyone who can log in, empty = nobody), USER_SITES (logins limited to some sites, "login:site" comma
+separated, a login may come back for a second site; empty = every login sees every site),
+FW_GITHUB_REPO (owner/name), FW_GITHUB_TOKEN,
 WEATHER (on; off = never fetch the forecast), WEATHER_EVERY_MIN (60), LIVE_KEEP_DAYS (7). Weather per site: site.json "weather"
 (app/weather.py, manage.py weather).
 """
@@ -72,7 +78,7 @@ from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, IngestError, atomic_write, iso_now  # noqa: E402
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
@@ -88,6 +94,26 @@ FORMATS = ("8N1", "8E1", "8O1", "8N2")
 METERS_RE = re.compile(r"^[A-Za-z0-9]{1,7}:\d{1,3}(,[A-Za-z0-9]{1,7}:\d{1,3}){0,3}$")
 # Register page endpoints (JSON, same origin); every other /api/v1/admin/ POST is a firmware update.
 REGISTERS_ADMIN_RE = re.compile(r"^/api/v1/admin/(registers|meter-settings)/")
+# People paths of one site, or of one logger, for the logins limited to some sites (USER_SITES).
+SITE_PAGE_RE = re.compile(r"^/live(?:/([a-z0-9-]+))?/?$")
+SITE_API_RE = re.compile(r"^/api/v1/(?:live|versions|alarms|history|quality|weather)/([a-z0-9-]+)(?:/|$)")
+DEVICE_API_RE = re.compile(r"^/api/v1/admin/(?:registers|meter-settings|fw)/([A-Za-z0-9_-]+)(?:/|$)")
+
+
+def parse_user_sites(spec):
+    """USER_SITES "tech-adab:adab, ops:adab, ops:villa" -> {"tech-adab": {"adab"}, "ops": {"adab", "villa"}}.
+    A login with a bad site name still counts as limited (to no site): a typo never opens every site."""
+    out = {}
+    for item in (spec or "").split(","):
+        login, _, site = (x.strip() for x in item.strip().partition(":"))
+        if not login:
+            continue
+        sites = out.setdefault(login, set())
+        if CODE_RE.match(site):
+            sites.add(site)
+        else:
+            sys.stderr.write(f"{iso_now()} USER_SITES: '{item.strip()}' is not login:site, {login} sees no site\n")
+    return out
 
 
 class Live:
@@ -212,6 +238,7 @@ class Handler(BaseHTTPRequestHandler):
     fw: Firmware = None
     github: GitHub = None
     admin_users = ""
+    user_sites = {}      # login -> set of sites (USER_SITES); a login not in it sees every site
 
     # ------------------------------------------------------------------ helpers
     def log_message(self, fmt, *args):   # one short line per request, no tokens
@@ -238,6 +265,43 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
             return None
         return self.rfile.read(n) if n else b""
+
+    def login_sites(self):
+        """The sites this Caddy login may see (USER_SITES), or None = every site."""
+        return self.user_sites.get(self.headers.get("X-Auth-User", "").strip())
+
+    def may_see(self, site):
+        sites = self.login_sites()
+        return sites is None or site in sites
+
+    def refuse_site(self):
+        return self.send_json(403, {"ok": False, "error": "your login may not see this site (USER_SITES)"})
+
+    def site_scope(self, path):
+        """For a login limited to some sites: True when the answer was sent (redirect or refusal)."""
+        sites = self.login_sites()
+        if sites is None:
+            return False
+        m = SITE_PAGE_RE.match(path)
+        if m and m.group(1) not in sites:       # the list of all sites, or another site's page
+            if not sites:
+                self.refuse_site()
+                return True
+            self.send_response(302)
+            self.send_header("Location", f"/live/{min(sites)}/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return True
+        m = SITE_API_RE.match(path)
+        if m and m.group(1) not in sites:
+            self.refuse_site()
+            return True
+        m = DEVICE_API_RE.match(path)
+        site = self.device_site(m.group(1)) if m else None
+        if site and site not in sites:          # an unknown logger gets the usual 404 from its route
+            self.refuse_site()
+            return True
+        return False
 
     def device(self):
         auth = self.headers.get("Authorization", "")
@@ -302,6 +366,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True, "version": VERSION, "time": iso_now()})
         if path == "/api/v1/status":
             return self.send_json(200, self.status())
+        if self.site_scope(path):
+            return
         m = re.match(r"^/api/v1/live/([a-z0-9-]+)$", path)
         if m and CODE_RE.match(m.group(1)):
             site = m.group(1)
@@ -454,6 +520,8 @@ class Handler(BaseHTTPRequestHandler):
         site = self.device_site(m.group(2)) if m else None
         if not site:
             return self.send_json(404, {"ok": False, "error": "not found"})
+        if not self.may_see(site):
+            return self.refuse_site()
         device = m.group(2)
         if m.group(1) == "meter-settings" and not m.group(3):
             return self.save_meter_settings(site, device, req)
@@ -566,6 +634,8 @@ class Handler(BaseHTTPRequestHandler):
     def status(self):
         out = {"time": iso_now(), "sites": {}}
         for site in self.store.sites():
+            if not self.may_see(site):
+                continue
             devs = {}
             for dev in self.store.site_devices(site):
                 info = self.store.load_devices()["devices"][dev]
@@ -642,8 +712,10 @@ class Handler(BaseHTTPRequestHandler):
     def admin_get(self, path):
         if path == "/api/v1/admin/me":
             user = self.headers.get("X-Auth-User", "")
+            sites = self.login_sites()
             return self.send_json(200, {"user": user, "admin": bool(self.admin_user()),
-                                        "github": self.github.configured()})
+                                        "github": self.github.configured(),
+                                        "sites": sorted(sites) if sites is not None else None})
         if not self.admin_user():
             return self.admin_refused()
         m = re.match(r"^/api/v1/admin/fw/([A-Za-z0-9_-]+)$", path)
@@ -685,6 +757,8 @@ class Handler(BaseHTTPRequestHandler):
         device, action = m.group(1), m.group(2)
         if device not in self.store.load_devices().get("devices", {}):
             return self.send_json(404, {"ok": False, "error": "no such logger"})
+        if not self.may_see(self.device_site(device)):
+            return self.refuse_site()
         try:
             if action == "cancel":
                 gone = self.fw.cancel(device, by=user)
@@ -727,6 +801,7 @@ def make_server(data_dir, bind="127.0.0.1", port=8800):
     Handler.github = GitHub()
     Handler.weather = weather.Weather(store)
     Handler.admin_users = os.environ.get("ADMIN_USERS", "")
+    Handler.user_sites = parse_user_sites(os.environ.get("USER_SITES", ""))
     srv = ThreadingHTTPServer((bind, port), Handler)
     srv.daemon_threads = True
     return srv

@@ -49,7 +49,7 @@ Default for Adab:
 - The live alarms (A04 phase lost, A07 frequency) are checked on the snapshots, so they react within 15 to 30 s.
 
 **Live page `/live/<site>/`** (content of the dashboard mockup approved 8 November 2026; since service 0.7.0 in the Arkan design of the CMMS, `docs/mockup/arkan/`):
-- A side bar: the Arkan logo, the site (a link to **All sites**), **View as** (who is logged in: `Admin · <login>` for a login in `ADMIN_USERS`, `Viewer · <login>` otherwise; an admin can look at the pages as a viewer), the menu, and at the bottom **Settings** (`#prefs`: light, dark or high contrast, density, text size, motion, saved in the browser; who is logged in; the site details) with the status pill ("Live · updated 4 s ago", or "No data for 2 min" in red). An icon rail on a tablet, bottom tabs and a **More** list on a phone.
+- A side bar: the Arkan logo, the site (a link to **All sites**, except for a login limited to its sites: [Logins](#logins)), **View as** (who is logged in: `Admin · <login>` for a login in `ADMIN_USERS`, `Viewer · <login>` otherwise; an admin can look at the pages as a viewer), the menu, and at the bottom **Settings** (`#prefs`: light, dark or high contrast, density, text size, motion, saved in the browser; who is logged in; the site details) with the status pill ("Live · updated 4 s ago", or "No data for 2 min" in red). An icon rail on a tablet, bottom tabs and a **More** list on a phone.
 - Every chart shows both axes with their scales; the small charts of the cards cover the last 60 minutes.
 - The open alarms first (severity icon, label and colour), or "No open alarm".
 - **Power:** total kW, kVA with a bar against the PLN contract (`contracted_kva`), power factor, frequency.
@@ -60,7 +60,7 @@ Default for Adab:
 - Values listed in `site.json` that the page does not group are shown under "Other values", so adding one needs no code.
 - Not yet: the time of the last push to OED (the push service is not written yet).
 - Plain HTML and a few lines of JavaScript that fetch the JSON every 15 s; no chart library.
-- Behind the same login as OED (`hub-users.caddy`).
+- Behind a Caddy login: the Arkan logins (`hub-users.caddy`, as OED) or a login for this platform only (`monitoring-users.caddy`). See [Logins](#logins).
 - Readable on a phone.
 
 **History pages of `/live/<site>/`** (side menu, added 8 November 2026 from the mockup's graph screens):
@@ -105,6 +105,92 @@ Default for Adab:
 | Firmware update | `#firmware` | one panel per logger: send a GitHub release, a `.bin` file or a stored file to that logger, status and recent events. [`OTA.md`](OTA.md) | only the logins in `ADMIN_USERS` (`server/.env`); the menu entry is hidden for the others |
 
 **`/live/`** lists all sites with their status and total kW: the multi-site live overview.
+
+## Logins
+
+Every address for people (the site pages, their API, Open Energy Dashboard) is behind a Caddy login (HTTP basic auth). Two files on hermes-vps hold the logins. Both are owner only: never in git, never copied.
+
+| File | For | Opens |
+|---|---|---|
+| `/opt/edge/secrets/hub-users.caddy` | Arkan staff: the shared Arkan logins | every Arkan dashboard, this platform and OED included |
+| `/opt/edge/secrets/monitoring-users.caddy` (since `v0.7.1`) | people who only need this platform, for example a technician | the site pages and their API only: not OED, not the other Arkan dashboards |
+
+Two lines of `server/.env` give the rights inside the site page:
+
+| Setting | Effect | Example |
+|---|---|---|
+| `ADMIN_USERS` | Logins that may send a firmware to a logger (**Firmware update**, [`OTA.md`](OTA.md)). They show as `Admin` in **View as** | `ADMIN_USERS=julien,tech-adab` |
+| `USER_SITES` (since `v0.7.1`) | Logins limited to some sites: `login:site`, comma separated; a login may come back for a second site (`ops:adab,ops:villa`). `/live/` (the list of all sites) and the page of another site send them to their own site; **All sites** is not in their menu; every API path of another site, or of a logger of another site, answers `403` (firmware update and register table included). A login not listed sees every site. A wrong site name (`tech-adab:Adab`) limits the login to no site, never to all | `USER_SITES=tech-adab:adab` |
+
+Every login can, on the sites it sees: live data, history, power quality, weather, firmware versions, and the **Meter registers** page, which includes sending a new register table and the meter link settings to the logger (each change is written in the register history with the login name). `ADMIN_USERS` adds **Firmware update**. **Settings** shows the login, its rights and its sites.
+
+### Adding a technician's login (owner, on hermes-vps)
+
+The example gives the login `tech-adab` full access to the Adab site page (firmware update included), and nothing else. It needs `v0.7.1` or later on the VPS, with its Caddy file ([`UPDATING.md`](UPDATING.md) section L).
+
+1. Choose the login name (letters, digits, `-`, `_`; it shows in **View as** and in the register history) and a long password. Give the password to the technician in person or through the password manager, never in a chat. One login per person, so it can be removed alone.
+2. The password hash. Caddy asks for the password twice and prints the hash; nothing is saved:
+
+```bash
+caddy hash-password
+```
+
+3. Add a line `tech-adab <the hash, exactly as printed>` to the platform-only file (the file is created by [`UPDATING.md`](UPDATING.md) L3.3). A login name must not be in both files.
+
+```bash
+sudo nano /opt/edge/secrets/monitoring-users.caddy
+```
+
+4. The rights. Add the login to `ADMIN_USERS` after the names already there (leave it out for someone who must not send firmware), and limit it to its site:
+
+```bash
+cd /opt/arkan-monitoring/server
+```
+
+```bash
+nano .env
+```
+
+```
+ADMIN_USERS=julien,tech-adab
+USER_SITES=tech-adab:adab
+```
+
+5. Check the Caddy configuration:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+```
+
+**Expected:** `Valid configuration`. **If** an error names `monitoring-users.caddy` or the login: the line is not `name hash`, or the name is in both files. Nothing has changed on the live site yet: fix the line and validate again.
+
+6. **The owner approves** the service restart (about 30 s without live data on the page) and the Caddy reload:
+
+```bash
+docker compose up -d
+```
+
+```bash
+sudo systemctl reload caddy
+```
+
+7. Checks, with the technician's password:
+
+```bash
+curl -s -u tech-adab https://arkan-monitoring.duckdns.org/api/v1/admin/me
+```
+
+**Expected:** `"user": "tech-adab"`, `"admin": true` and `"sites": ["adab"]` (`"admin": false` if the login is not in `ADMIN_USERS`). **If** nothing is printed (Caddy refused the login): the password or the hash line is wrong, or Caddy was not reloaded. **If** `"sites": null`: `USER_SITES` is not set, or the container was not restarted.
+
+```bash
+curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" -u tech-adab https://arkan-monitoring.duckdns.org/live/
+```
+
+**Expected:** `302 https://arkan-monitoring.duckdns.org/live/adab/`.
+
+In a private browser window, log in as `tech-adab`: `https://arkan-monitoring.duckdns.org/live/adab/` opens, the menu has no **All sites**, **Settings** shows `Sites: adab only`, and `https://arkan-monitoring.duckdns.org/live/` lands on the Adab page. With your own login, `/live/` still lists every site.
+
+**Removing the login:** delete its line in `monitoring-users.caddy`, validate and reload Caddy (steps 5 and 6), then take the name out of `ADMIN_USERS` and `USER_SITES` and `docker compose up -d`. The Caddy reload alone already locks the login out.
 
 ## Getting from OED to the live page
 

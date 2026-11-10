@@ -285,7 +285,9 @@ const VIEWS = [
   {id: 'sites', name: 'All sites', short: 'Sites', ic: 'home', grp: 'Platform', note: 'every site and logger', global: true},
   {id: 'prefs', name: 'Settings', ic: 'sliders', note: 'display, view as', global: true, foot: true},
 ];
-let ME = {user: '', admin: false, github: false};   // from /api/v1/admin/me: the Caddy login and whether it is in ADMIN_USERS
+let ME = {user: '', admin: false, github: false, sites: null};   // from /api/v1/admin/me: the Caddy login, whether it is in ADMIN_USERS,
+                                                                  // its sites if USER_SITES limits it (null = every site)
+const limited = () => Array.isArray(ME.sites);   // a login limited to some sites: no list of all sites (the server sends /live/ to its site)
 let viewAs = 'admin';
 try { viewAs = localStorage.getItem('arkan-mon.viewas') || 'admin'; } catch (e) {}
 const isAdmin = () => ME.admin && viewAs === 'admin';
@@ -294,8 +296,9 @@ const ROLE_NOTE = {admin: 'every page, firmware update included', viewer: 'what 
 const roles = () => ME.admin ? ['admin', 'viewer'] : ['viewer'];
 const role = () => isAdmin() ? 'admin' : 'viewer';
 let view = 'now', span = 14, dayShown = null, PROF = {}, STATUS = '', fwReady = Promise.resolve();
-const visible = () => VIEWS.filter(v => !(v.admin && !isAdmin()) && (site || v.global));
-const known = id => VIEWS.some(v => v.id === id && (site || v.global));
+const forMe = v => !(v.id === 'sites' && limited());
+const visible = () => VIEWS.filter(v => !(v.admin && !isAdmin()) && forMe(v) && (site || v.global));
+const known = id => VIEWS.some(v => v.id === id && forMe(v) && (site || v.global));
 const SITES = MOCK ? '#sites' : '/live/';   // the list of all sites is its own address on the server
 
 const navLink = v => `<a href="${v.id === 'sites' && site ? SITES : '#' + v.id}" title="${esc(v.name + ': ' + v.note)}"${v.id === view ? ' aria-current="page"' : ''}>${icon(v.ic)}<span class="nl">${esc(v.name)}</span><span class="ns">${esc(v.short || v.name)}</span></a>`;
@@ -304,8 +307,8 @@ let chromeName = null;
 function renderChrome() {
   const name = PROF.name || site || 'All sites', cur = VIEWS.find(v => v.id === view) || VIEWS[0];
   chromeName = PROF.name || null;
-  el('prop').href = SITES;
-  el('prop').innerHTML = site ? `<b>${esc(name)}</b><small>${esc(site)} · all sites</small>` : '<b>All sites</b><small>every site and logger</small>';
+  el('prop').href = site && limited() ? '#now' : SITES;
+  el('prop').innerHTML = site ? `<b>${esc(name)}</b><small>${esc(site)}${limited() ? '' : ' · all sites'}</small>` : '<b>All sites</b><small>every site and logger</small>';
   el('tSite').textContent = name; el('tView').textContent = cur.name;
   let h = '';
   for (const v of visible().filter(v => !v.foot)) {
@@ -1237,10 +1240,11 @@ function settingsView(box) {
       <p class="muted small">Saved in this browser only. System follows the device setting.</p>
       <div><button class="btn" id="resetDisplay">Reset display settings</button></div></div></section>
     <section class="card"><div class="card-head"><h2>Logged in</h2></div><div class="stack" style="gap:14px">
-      <dl class="dl" style="padding:0;border:0"><dt>Login</dt><dd>${esc(ME.user || '–')}</dd><dt>Rights</dt><dd>${ME.admin ? 'Admin: listed in ADMIN_USERS on the server' : 'Viewer: not in ADMIN_USERS'}</dd></dl>
+      <dl class="dl" style="padding:0;border:0"><dt>Login</dt><dd>${esc(ME.user || '–')}</dd><dt>Rights</dt><dd>${ME.admin ? 'Admin: listed in ADMIN_USERS on the server' : 'Viewer: not in ADMIN_USERS'}</dd>
+        <dt>Sites</dt><dd>${limited() ? esc(ME.sites.join(', ') || 'none') + ' only (USER_SITES on the server)' : 'every site'}</dd></dl>
       <div class="field-row"><label>View as</label><div>${roleOpts()}</div></div>
       <p class="muted small">${ME.admin ? 'Viewer shows the pages as a login outside ADMIN_USERS sees them: Firmware update is hidden. It changes this browser only, not your rights.'
-        : 'Admin pages (Firmware update) need a login listed in ADMIN_USERS on the server.'} Logins are the shared Arkan logins, managed on the server.</p></div></section></div>
+        : 'Admin pages (Firmware update) need a login listed in ADMIN_USERS on the server.'} Logins are managed on the server.</p></div></section></div>
 ${site ? `<section class="card mt-16"><div class="card-head"><h2>Site</h2><span class="muted small">from site.json on the server, read only</span></div><dl class="dl" style="padding:0;border:0">
       <dt>Name</dt><dd>${esc(p.name || site)} <span class="mono muted">${esc(site)}</span></dd>
       <dt>Time zone</dt><dd>${esc(p.timezone || '–')} (UTC${(p.utc_offset_h ?? 0) >= 0 ? '+' : ''}${esc(p.utc_offset_h ?? '–')})</dd>

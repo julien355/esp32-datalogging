@@ -19,6 +19,8 @@ services:
       MAX_BODY: "262144"
       # Firmware update from the live page (docs/OTA.md): set in server/.env, never in this file.
       ADMIN_USERS: ${ADMIN_USERS:-}
+      # Logins limited to some sites (docs/LIVE.md "Logins"): set in server/.env.
+      USER_SITES: ${USER_SITES:-}
       FW_GITHUB_REPO: ${FW_GITHUB_REPO:-}
       FW_GITHUB_TOKEN: ${FW_GITHUB_TOKEN:-}
       # Weather forecast and log for the sites with lat/lon (docs/WEATHER.md): needs outbound HTTPS to api.open-meteo.com.

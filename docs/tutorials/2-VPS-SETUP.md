@@ -153,6 +153,7 @@ Where the next parts will plug in:
 | `/srv/arkan-monitoring/backups/` | `data-<stamp>.tar.gz` (14 kept) and `backup.log` | `backup.sh` from cron |
 | `/opt/edge/sites/monitoring.caddy` | Our Caddy site file (copied from the repository) | Owner |
 | `/opt/edge/secrets/hub-users.caddy` | The shared Arkan logins (password hashes) | Owner only. Never copy it |
+| `/opt/edge/secrets/monitoring-users.caddy` | The logins for this platform only, for example a technician (password hashes; [../LIVE.md](../LIVE.md#logins)) | Owner only. Never copy it |
 | `/etc/caddy/Caddyfile` | Caddy's main file, which imports the site files (**to verify**, section B8) | Owner only |
 | `/var/log/caddy/arkan-monitoring.log` | Caddy's access log for our site (tokens and cookies removed) | Caddy |
 | Docker image `arkan-monitoring-ingest:local` | Built on the VPS from the Dockerfile | `docker compose up -d --build` |
@@ -755,6 +756,7 @@ nano .env
 ```
 
 - `ADMIN_USERS=`: the Arkan login names (from `hub-users.caddy`, ask the owner) allowed to send a firmware to a logger from the site page, comma separated, for example `ADMIN_USERS=julien`. Empty = **Firmware update** is off for everyone (the command line `manage.py publish-fw` still works). Everyone else with a login still sees the live values, the history and the register page.
+- `USER_SITES=`: logins limited to some sites, `login:site` comma separated, for example `USER_SITES=tech-adab:adab` for a technician who must see only the Adab page ([../LIVE.md](../LIVE.md#logins)). Empty = every login sees every site.
 - `FW_GITHUB_REPO=julien355/esp32-datalogging`: where the firmware releases are. Leave it.
 - `FW_GITHUB_TOKEN=`: only if the repository is private ([../OTA.md](../OTA.md) section 6). Leave it empty otherwise.
 - `INGEST_PORT=8800`: change it **only if B6 showed 8800 taken**, to the port agreed with the owner. The same port must then replace `8800` in the three `reverse_proxy 127.0.0.1:8800` lines of the Caddy site file (B22, done by the owner), and in the `curl` commands of this tutorial. The port inside the container stays 8800.
@@ -762,10 +764,10 @@ nano .env
 Save (Ctrl+O, Enter) and quit (Ctrl+X).
 
 ```bash
-grep -E '^(ADMIN_USERS|FW_GITHUB_REPO|INGEST_PORT)=' .env
+grep -E '^(ADMIN_USERS|USER_SITES|FW_GITHUB_REPO|INGEST_PORT)=' .env
 ```
 
-**Expected:** the three lines with your values. Never paste the token line into a chat or a screenshot.
+**Expected:** the lines with your values (`USER_SITES` only if you set it). Never paste the token line into a chat or a screenshot.
 
 ### B15. Build and start the container (owner approves)
 
@@ -963,14 +965,28 @@ Read [monitoring.caddy](../../server/deploy/monitoring.caddy) before the owner i
 | `@livepost { method POST  path /api/v1/live }` | A matcher for the logger's live snapshots (POST only) |
 | `handle @device { request_body { max_size 256KB } reverse_proxy 127.0.0.1:8800 }` | Logger paths: **no web login** (a logger cannot type one; the service checks the token), body limited to 256 KB, then passed to our container |
 | `handle @livepost { request_body { max_size 16KB } reverse_proxy 127.0.0.1:8800 }` | Same for live snapshots, limited to 16 KB |
-| `handle { basicauth { import /opt/edge/secrets/hub-users.caddy } redir / /live/ 302  reverse_proxy 127.0.0.1:8800 { header_up X-Auth-User {http.auth.user.id} } }` | **Everything else** (the site page `/live/<site>/` and its register page, `/api/v1/status`, `GET /api/v1/live/<site>`, `/api/v1/alarms/<site>`, `/api/v1/history/<site>`, the admin API `/api/v1/admin/...`, `/health`): **Arkan login first** (the shared login file), then `/` is sent to `/live/` until OED takes `/`, then passed to the container with the user's name in `X-Auth-User` (the service uses it for `ADMIN_USERS` and writes it in the register history) |
+| `handle { basicauth { import /opt/edge/secrets/hub-users.caddy  import /opt/edge/secrets/monitoring-users.caddy } redir / /live/ 302  reverse_proxy 127.0.0.1:8800 { header_up X-Auth-User {http.auth.user.id} } }` | **Everything else** (the site page `/live/<site>/` and its register page, `/api/v1/status`, `GET /api/v1/live/<site>`, `/api/v1/alarms/<site>`, `/api/v1/history/<site>`, the admin API `/api/v1/admin/...`, `/health`): **Arkan login first** (the shared login file), then `/` is sent to `/live/` until OED takes `/`, then passed to the container with the user's name in `X-Auth-User` (the service uses it for `ADMIN_USERS` and writes it in the register history) |
 | `log { output file /var/log/caddy/arkan-monitoring.log { roll_size 10mb  roll_keep 5 } format filter { ... } }` | Access log of our site, at most 5 files of 10 MB, with the `Authorization` (token or password) and `Cookie` headers **deleted** before writing |
 
 A `handle` block with a matcher wins over the plain `handle` block, so the logger paths never meet the login.
 
 ### B22. Install the site file, validate, reload (owner)
 
-**Where:** VPS, owner with sudo. Copy it (`-n`: never overwrite an existing file):
+**Where:** VPS, owner with sudo. First the login file for this platform only, which the site file imports: created empty, with the same owner and rights as the Arkan login file (the logins go in later, [../LIVE.md](../LIVE.md#logins)):
+
+```bash
+sudo touch /opt/edge/secrets/monitoring-users.caddy
+```
+
+```bash
+sudo chown --reference=/opt/edge/secrets/hub-users.caddy /opt/edge/secrets/monitoring-users.caddy
+```
+
+```bash
+sudo chmod --reference=/opt/edge/secrets/hub-users.caddy /opt/edge/secrets/monitoring-users.caddy
+```
+
+Then copy the site file (`-n`: never overwrite an existing file):
 
 ```bash
 sudo cp -n /opt/arkan-monitoring/server/deploy/monitoring.caddy /opt/edge/sites/monitoring.caddy
@@ -1091,7 +1107,7 @@ curl.exe -s -u <hub-user> https://arkan-monitoring.duckdns.org/health
 4. Click `adab`. **Expected:** the site page `/live/adab/`: in the side bar `Adab hotel`, **View as** with your login, the menu (**Live now**; **History**: Power, One day, Energy per day, This week vs last, Temperature, Humidity; **Power quality**; **Weather**; **Logger**: Meter registers, Firmware versions, and Firmware update if your login is in `ADMIN_USERS`; **Platform**: All sites), **Settings** and a red pill `No live data` at the bottom, and in the page the message `No live data for this site (logger offline or not installed yet).` (the open alarms and the alarm log are still shown). The history pages say there is nothing yet.
 5. Check the padlock next to the address: it should say the connection is secure.
 
-**If** the sign-in box keeps coming back, the login is wrong or not in `hub-users.caddy`: ask the owner.
+**If** the sign-in box keeps coming back, the login is wrong or not in `hub-users.caddy` (or `monitoring-users.caddy`): ask the owner.
 
 ### B25. Test with the simulated logger (from the laptop)
 
@@ -1922,7 +1938,7 @@ Run the diagnosis commands on the **VPS, user ai, in `/opt/arkan-monitoring/serv
 | **Clock alarm (A18)** | **A18 Clock wrong** in the alarm log; or rows rejected as "in the future" | VPS: `timedatectl` (`System clock synchronized: yes`?); the logger's time in `curl -s http://127.0.0.1:8800/api/v1/live/adab` (`"ts"` of `last`) compared with `date -u` | VPS clock not synchronized: owner. Logger clock wrong: NTP or the RTC on the logger ([../FIRMWARE.md](../FIRMWARE.md), tutorial 1). A18 clears by itself when the clocks agree within 1 minute |
 | **git refuses in /opt/arkan-monitoring** | `detected dubious ownership` or `Permission denied` | `ls -ld /opt/arkan-monitoring` | Owned by root: owner runs `sudo chown -R ai:ai /opt/arkan-monitoring` (B11) |
 | **Docker refuses** | `permission denied while trying to connect to the Docker daemon socket` | `id` | `ai` is not in the `docker` group (B1): owner |
-| **Login box keeps coming back** | Browser asks again and again | | Wrong login, or not in `/opt/edge/secrets/hub-users.caddy`: owner |
+| **Login box keeps coming back** | Browser asks again and again | | Wrong login, or not in `/opt/edge/secrets/hub-users.caddy` or `monitoring-users.caddy`: owner |
 | **No "Firmware update" in the menu** | The side menu of `/live/adab/` has no **Firmware update**, or it says `only for the logins listed in ADMIN_USERS` | `grep ADMIN_USERS /opt/arkan-monitoring/server/.env`; `curl -s -u <hub-user> https://arkan-monitoring.duckdns.org/api/v1/admin/me` | Your login name is not in `ADMIN_USERS` (B14), or `.env` was changed without `docker compose up -d` (owner approves). `"user": ""` in the answer: the Caddy file lacks `header_up X-Auth-User` (B21) |
 | **Register table stays "Waiting"** | The register page shows *Waiting* for more than 15 minutes | `diff /opt/edge/sites/monitoring.caddy /opt/arkan-monitoring/server/deploy/monitoring.caddy`; `manage.py show-registers LOG-0001` | The Caddy file has no `/api/v1/registers` in `@device` (C5 step 3b); the logger is offline; its firmware is older than 0.4.0 (the page then says *Firmware too old*) |
 
@@ -2015,6 +2031,7 @@ VPS commands with `docker compose` run in `/opt/arkan-monitoring/server`. `manag
 | Backups | `/srv/arkan-monitoring/backups/data-<stamp>.tar.gz`, `backup.log` | | script: `server/deploy/backup.sh` |
 | Caddy site file | `/opt/edge/sites/monitoring.caddy` | | `server/deploy/monitoring.caddy` |
 | Arkan logins | `/opt/edge/secrets/hub-users.caddy` (owner only) | | |
+| Logins for this platform only | `/opt/edge/secrets/monitoring-users.caddy` (owner only) | | [../LIVE.md](../LIVE.md#logins) |
 | Caddy log of our site | `/var/log/caddy/arkan-monitoring.log` | | |
 | Laptop SSH config and keys | | | `C:\Users\<you>\.ssh\config`, `id_ed25519`, `id_ed25519.pub` |
 

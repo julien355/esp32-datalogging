@@ -1,10 +1,202 @@
 # Updating the VPS and the loggers
 
-How a new version of this repository reaches `hermes-vps` and the loggers. **This release: 10 November 2026, VPS `v0.7.0`** (section N, below): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. Nothing changes for the loggers. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. The detailed tutorial steps are in [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
+How a new version of this repository reaches `hermes-vps` and the loggers. **This release: 10 November 2026, VPS `v0.7.1`** (section L, below): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. Nothing changes for the loggers. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. The detailed tutorial steps are in [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
-**Status, 10 November 2026:** `v0.7.0` is to install (section N). Before it: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
+**Status, 10 November 2026:** `v0.7.1` is to install (section L). `v0.7.0` was tagged but not installed: going from `v0.6.0` straight to `v0.7.1` is fine, then do the N4 browser checks too. Before it: the VPS runs `v0.6.0`, `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`), `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
+
+## L. Release v0.7.1 (10 November 2026): logins for this platform only, limited to one site
+
+### L0. What is in it
+
+| Part | What changed | What it needs |
+|---|---|---|
+| Logins for this platform only | A second Caddy login file, `/opt/edge/secrets/monitoring-users.caddy`, for people who need only this platform (a technician). It opens the site pages and their API, not OED and not the other Arkan dashboards | The file must exist before the new Caddy file is installed (L3.3), empty while nobody is in it |
+| `USER_SITES` in `server/.env` | Limits a login to some sites (`tech-adab:adab`): `/live/` and another site's page send it to its own site, **All sites** leaves its menu, every API path of another site or of another site's logger answers `403` (firmware update and register table included). Logins not listed: no change | An optional `.env` line, with the first such login ([`LIVE.md`](LIVE.md#logins)) |
+| Site page | **All sites** hidden for those logins; **Settings** shows the login's sites | VPS update |
+| `GET /api/v1/admin/me` | New field `sites`: `null` (every site) or the login's sites | Nothing |
+| Caddy files | `monitoring.caddy`: the second `import`. `oed/monitoring-oed.caddy` (only if OED is installed): OED takes the Arkan logins only, the platform logins reach only the ingest service. Not tested on a machine yet: `caddy validate` before any reload | The owner installs the file and reloads |
+| `v0.7.0` | Included: if the VPS still runs `v0.6.0`, this release also brings section N0 | The N4 browser checks |
+| Loggers, data folder, firmware, Dockerfile | No change | Nothing |
+
+### L1. On GitHub: merge, then tag
+
+As in N1, with `v0.7.1`: merge the pull request "Release v0.7.1" into the default branch once CI is green, then tag the merge commit from the PC.
+
+```powershell
+cd C:\dev\esp32-datalogging
+```
+
+```powershell
+git checkout ccr-a52c0421-oygp4n
+```
+
+```powershell
+git pull
+```
+
+```powershell
+git log -1 --oneline
+```
+
+**Expected:** a line with `Release v0.7.1`. Then:
+
+```powershell
+git tag v0.7.1
+```
+
+```powershell
+git push origin v0.7.1
+```
+
+No `fw-v` tag comes with it (no firmware change).
+
+### L2. Before: where you start from
+
+**Where:** VPS, user ai (`ssh hermes-vps`), except the steps marked owner.
+
+```bash
+cd /opt/arkan-monitoring
+```
+
+```bash
+git describe --tags --always
+```
+
+**Expected:** `v0.6.0` (or `v0.7.0` if section N was done). Write it down: it is what you go back to.
+
+```bash
+git status
+```
+
+**Expected:** `nothing to commit, working tree clean` (an untracked `server/.env` is fine). Modified files: stop and ask the owner.
+
+### L3. Update
+
+**L3.1 Backup**
+
+```bash
+/opt/arkan-monitoring/server/deploy/backup.sh
+```
+
+**L3.2 Get the new version**
+
+```bash
+git fetch --tags
+```
+
+```bash
+git log -1 --oneline v0.7.1
+```
+
+**Expected:** a line with `Release v0.7.1`. Anything else: stop and ask the owner.
+
+```bash
+git checkout v0.7.1
+```
+
+**L3.3 The login file for this platform only (owner)**
+
+Create it empty, with the same owner and rights as the Arkan login file (Caddy must be able to read it):
+
+```bash
+sudo touch /opt/edge/secrets/monitoring-users.caddy
+```
+
+```bash
+sudo chown --reference=/opt/edge/secrets/hub-users.caddy /opt/edge/secrets/monitoring-users.caddy
+```
+
+```bash
+sudo chmod --reference=/opt/edge/secrets/hub-users.caddy /opt/edge/secrets/monitoring-users.caddy
+```
+
+```bash
+sudo ls -l /opt/edge/secrets/
+```
+
+**Expected:** `monitoring-users.caddy` with the same owner and rights as `hub-users.caddy`. The technician's line goes in later ([`LIVE.md`](LIVE.md#adding-a-technicians-login-owner-on-hermes-vps), steps 1 to 3), or now.
+
+**L3.4 `.env`, Caddy and Docker files**
+
+```bash
+git diff --stat v0.7.0 v0.7.1 -- server/.env.example server/deploy server/docker-compose.yml server/Dockerfile
+```
+
+**Expected:** `server/.env.example`, `server/deploy/monitoring.caddy`, `server/deploy/oed/monitoring-oed.caddy` and `server/docker-compose.yml` (`v0.7.0` changed none of them, so this is also the list from `v0.6.0`). `.env`: nothing to add now; `USER_SITES` comes with the first login limited to a site.
+
+```bash
+diff /opt/edge/sites/monitoring.caddy /opt/arkan-monitoring/server/deploy/monitoring.caddy
+```
+
+**Expected:** the new comment lines at the top, the comment `# People: Arkan login, or a login for this platform only.`, and one new line, `import /opt/edge/secrets/monitoring-users.caddy`, under the `hub-users.caddy` one. (If OED is installed, compare with `server/deploy/oed/monitoring-oed.caddy` and install that one: there the people part is split in two, see L0.) Other differences: someone changed the live file, stop and compare with the owner.
+
+The owner keeps a copy of the current file, installs the new one and validates:
+
+```bash
+sudo cp /opt/edge/sites/monitoring.caddy /opt/edge/monitoring.caddy.before-v0.7.1
+```
+
+```bash
+sudo cp /opt/arkan-monitoring/server/deploy/monitoring.caddy /opt/edge/sites/monitoring.caddy
+```
+
+If the port is not 8800 (tutorial 2, B14), edit the three `reverse_proxy 127.0.0.1:8800` lines again now.
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+```
+
+**Expected:** `Valid configuration`. **If** an error names `monitoring-users.caddy`: the file is missing (L3.3), or Caddy refuses it empty: add the technician's line first ([`LIVE.md`](LIVE.md#adding-a-technicians-login-owner-on-hermes-vps), steps 1 to 3) and validate again. Nothing has changed on the live site until the reload.
+
+**L3.5 Rebuild, restart and reload (owner approves)**
+
+```bash
+cd /opt/arkan-monitoring/server
+```
+
+```bash
+docker compose up -d --build
+```
+
+**Expected:** the container `Recreated`, `Started`. About 30 s without live data on the page. Then the Caddy reload:
+
+```bash
+sudo systemctl reload caddy
+```
+
+### L4. Checks
+
+```bash
+curl -s http://127.0.0.1:8800/health
+```
+
+**Expected:** `{"ok": true, "version": "0.7.1", ...}`.
+
+```bash
+curl -s -u <your-login> https://arkan-monitoring.duckdns.org/api/v1/admin/me
+```
+
+**Expected:** your login and `"sites": null` (every site).
+
+In the browser, with your login: `https://arkan-monitoring.duckdns.org/live/` lists the sites as before, the Adab page has **All sites** in its menu, and **Settings** shows `Sites: every site`. Coming from `v0.6.0`: the N4 browser checks too.
+
+Then the technician's login: [`LIVE.md`](LIVE.md#adding-a-technicians-login-owner-on-hermes-vps).
+
+**Going back:** the service and the Caddy file go back **together**. Version `v0.7.0` ignores `USER_SITES`, so with the new Caddy file a limited login would see every site; the old Caddy file does not take the platform logins at all.
+
+```bash
+sudo cp /opt/edge/monitoring.caddy.before-v0.7.1 /opt/edge/sites/monitoring.caddy
+```
+
+Then `sudo caddy validate --config /etc/caddy/Caddyfile`, `git checkout <the tag of L2>`, `docker compose up -d --build`, and the owner reloads Caddy. `monitoring-users.caddy` can stay: nothing reads it then.
+
+### L5. The loggers
+
+Nothing in this release.
+
+---
 
 ## N. Release v0.7.0 (10 November 2026): the site page in the Arkan design
 

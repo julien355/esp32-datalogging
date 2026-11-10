@@ -1,4 +1,5 @@
 # Tested on a test machine on 8 Nov 2026 (tutorial 3, Appendix C); not yet run on hermes-vps.
+# Changed on 10 Nov 2026 (v0.7.1, logins for this platform only, docs/LIVE.md "Logins"): not tested since; caddy validate first.
 # Variant of server/deploy/monitoring.caddy for when Open Energy Dashboard (OED) is installed.
 # It REPLACES /opt/edge/sites/monitoring.caddy on hermes-vps (native Caddy 2.6, imported by the main Caddyfile).
 #   /                 -> OED (127.0.0.1:8810), behind the Arkan login
@@ -6,6 +7,9 @@
 #   logger endpoints  -> our ingest service, NO web login (the device token is checked by the service)
 # OED uses only /api/<name> paths (users, meters, readings, csv, ...), never /api/v1, /live or /health
 # (OED v1.0.0 src/server/app.js), so the two never collide.
+# Logins: our service takes the Arkan logins (hub-users.caddy) and the logins for this platform only
+# (monitoring-users.caddy, technicians, maybe limited to one site by USER_SITES: docs/LIVE.md "Logins").
+# OED shows every site, so it takes the Arkan logins only. Both files must exist (the second may be empty).
 # After any change: caddy validate, then the owner approves the reload.
 
 arkan-monitoring.duckdns.org {
@@ -39,19 +43,24 @@ arkan-monitoring.duckdns.org {
 		reverse_proxy 127.0.0.1:8800
 	}
 
-	# People: Arkan login first, then our ingest service or OED.
+	# People, our ingest service: Arkan login or a login for this platform only.
+	@ingest {
+		path /live /live/* /api/v1/* /health
+	}
+	handle @ingest {
+		basicauth {
+			import /opt/edge/secrets/hub-users.caddy
+			import /opt/edge/secrets/monitoring-users.caddy
+		}
+		reverse_proxy 127.0.0.1:8800 {
+			header_up X-Auth-User {http.auth.user.id}
+		}
+	}
+
+	# People, OED: Arkan login only (a login of monitoring-users.caddy gets the login box again).
 	handle {
 		basicauth {
 			import /opt/edge/secrets/hub-users.caddy
-		}
-
-		@ingest {
-			path /live /live/* /api/v1/* /health
-		}
-		handle @ingest {
-			reverse_proxy 127.0.0.1:8800 {
-				header_up X-Auth-User {http.auth.user.id}
-			}
 		}
 
 		# OED v1.0.0 does not check its own login on these write routes (new or changed units and
