@@ -2,7 +2,7 @@
 
 How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: firmware `0.5.2`** (section D, below, the loggers only): for the technician whose logger does not join the hotel WiFi ([`WIFI-TROUBLESHOOTING.md`](WIFI-TROUBLESHOOTING.md)), the logger records the reason of a failed try, joins the strongest of several access points with one name, appears as `LOG-0001` in the router's list, shows its WiFi MAC address in `status` and the portal, and phones no longer capitalise or autofill the portal's fields. **Before it, firmware `0.5.1`** (section W, the loggers only): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0`** (section M, with firmware `0.5.0`, released as part of `0.5.1`): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
-**Status, 11 November 2026:** section D (firmware 0.5.2) waits for review in its pull request, not merged. **Status, 10 November 2026:** sections L and M are merged into the default branch (pull request #9, merge commit `bc2bb84`), and section W too (pull request #13, merge commit `a4b6812`). **The VPS runs `v0.8.0` since 10 November** (tags `v0.7.1` and `v0.8.0` pushed; the technician's login limited to Adab). **Still to do:** `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`) and goes straight to `0.5.1`, which contains 0.5.0, so `fw-v0.5.0` is never tagged. Steps 5 and 6 of [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md#7-general-update-to-do-now-in-order-10-november-2026) section 7. `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
+**Status, 11 November 2026:** section D (firmware 0.5.2) waits for review in pull request #16, not merged. **Status, 10 November 2026:** sections L and M are merged into the default branch (pull request #9, merge commit `bc2bb84`), and section W too (pull request #13, merge commit `a4b6812`). **The VPS runs `v0.8.0` since 10 November** (tags `v0.7.1` and `v0.8.0` pushed; the technician's login limited to Adab). **Still to do:** `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`) and goes straight to `0.5.1`, which contains 0.5.0, so `fw-v0.5.0` is never tagged. Steps 5 and 6 of [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md#7-general-update-to-do-now-in-order-10-november-2026) section 7. `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
 
@@ -24,7 +24,7 @@ The limits of the firmware listed in [`WIFI-TROUBLESHOOTING.md`](WIFI-TROUBLESHO
 
 ### D1. On GitHub: merge
 
-1. Merge the pull request "Firmware 0.5.2: WiFi diagnosis on site" into the default branch once CI is green (jobs `firmware`, `server`, `tools`). The VPS does not change: no `v0.x` tag.
+1. Merge pull request #16 ("Firmware 0.5.2: WiFi diagnosis on site") into the default branch once CI is green (jobs `firmware`, `server`, `tools`). The VPS does not change: no `v0.x` tag.
 2. **Not yet** the `fw-v0.5.2` tag: it comes after the bench test (D3).
 
 ### D2. Bench test by cable
@@ -42,7 +42,7 @@ You need:
 git log -1 --oneline
 ```
 
-**Expected:** `<commit> Firmware 0.5.2: WiFi diagnosis on site (#..)`, the merge commit of the pull request. Write the commit (its first 7 characters) on the record sheet: the tag goes on **this** commit (D3).
+**Expected:** `<commit> Firmware 0.5.2: WiFi diagnosis on site (#16)`, the merge commit of pull request #16. Write the commit (its first 7 characters) on the record sheet: the tag goes on **this** commit (D3).
 
 ```powershell
 Select-String '#define FW_VERSION' firmware\include\config.h
@@ -113,7 +113,7 @@ Throughout, no restart that you did not ask for: the first line of `status` says
 
 If anything above fails: keep the `log2file` file, do not tag, and flash the previous release again ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 3.2 with its `fw-v` tag, then 3.3).
 
-### D3. Tag `fw-v0.5.2` on the merge commit
+### D3. Tag `fw-v0.5.2` on the merge commit of #16
 
 Only after D2 has passed. On the PC:
 
@@ -129,7 +129,7 @@ git tag fw-v0.5.2 <commit written down in D2>
 git log -1 --oneline fw-v0.5.2
 ```
 
-**Expected:** `<commit> (tag: fw-v0.5.2, ...) Firmware 0.5.2: WiFi diagnosis on site (#..)`. Anything else: `git tag -d fw-v0.5.2` and stop.
+**Expected:** `<commit> (tag: fw-v0.5.2, ...) Firmware 0.5.2: WiFi diagnosis on site (#16)`. Anything else: `git tag -d fw-v0.5.2` and stop.
 
 ```powershell
 git push origin fw-v0.5.2
