@@ -43,7 +43,7 @@ static const char CSS[] PROGMEM =
 static void handleRoot() {
   lastActivity = millis();
   String h;
-  h.reserve(12000);
+  h.reserve(16000);   // about 13 KB with every setting (0.5.2: input attributes)
   h += F("<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
          "<title>Logger setup</title><style>");
   h += FPSTR(CSS);
@@ -76,9 +76,13 @@ static void handleRoot() {
       h += "<h2>" + String(group) + "</h2>";
     }
     bool secret = d.flags & cfg::SECRET;
-    h += "<label>" + String(d.key) + "</label><input name='" + String(d.key) + "' ";
+    // Phones capitalise the first letter of a text field by themselves ("hotel-staff" -> "Hotel-staff"),
+    // and may autocorrect it: the name then never matches.
+    h += "<label>" + String(d.key) + "</label><input name='" + String(d.key) +
+         "' autocapitalize='none' autocorrect='off' spellcheck='false' ";
     if (secret) {
-      h += F("type='password' placeholder='");
+      // new-password: the phone's password manager does not fill in a saved password by itself.
+      h += F("type='password' autocomplete='new-password' placeholder='");
       h += cfg::get(d.key).length() ? F("(set: leave empty to keep)") : F("(not set)");
       h += "'>";
     } else {

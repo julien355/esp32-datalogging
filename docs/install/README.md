@@ -910,7 +910,7 @@ Rules for the tests:
 | Currents 1/20 or 1/100 of the LCD | Meter sends secondary values | Multiply by CT1/CT2 (Lab 3); config change |
 | Huge or random 32-bit values | Wrong word order or wrong pair | Use the other word order; check which word counts up |
 | Negative power | Signed register, or a CT reversed | Read as s16/s32; if one phase is negative at normal load, tell the electrician |
-| WiFi will not connect | Wrong password, 5 GHz-only network, captive portal, RSSI too low | Check the network is 2.4 GHz WPA2 with no login page; RSSI > -70 dBm |
+| WiFi will not connect | Wrong password, 5 GHz-only network, captive portal, RSSI too low | Check the network is 2.4 GHz WPA2 with no login page; RSSI > -70 dBm. Full procedure: [`../WIFI-TROUBLESHOOTING.md`](../WIFI-TROUBLESHOOTING.md) |
 | Records missing on the platform, logger online | Token wrong or revoked, clock wrong, platform down | Check the logger's last HTTP answer; A16 backlog; A18 clock |
 | Live page "No data" but OED updates | Live snapshot not reaching `/api/v1/live` | Live is best effort; check the logger log; history is not affected |
 | Gaps after a power cut | No UPS for the trial (expected) | Gap shows as "logger offline" (A01); data resumes with correct time |

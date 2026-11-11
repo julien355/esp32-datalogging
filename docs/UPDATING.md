@@ -1,10 +1,150 @@
 # Updating the VPS and the loggers
 
-How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: firmware `0.5.1`** (section W, below, the loggers only): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0`** (section M, with firmware `0.5.0`, released as part of `0.5.1`): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
+How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: firmware `0.5.2`** (section D, below, the loggers only): for the technician whose logger does not join the hotel WiFi ([`WIFI-TROUBLESHOOTING.md`](WIFI-TROUBLESHOOTING.md)), the logger records the reason of a failed try, joins the strongest of several access points with one name, appears as `LOG-0001` in the router's list, shows its WiFi MAC address in `status` and the portal, and phones no longer capitalise or autofill the portal's fields. **Before it, firmware `0.5.1`** (section W, the loggers only): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0`** (section M, with firmware `0.5.0`, released as part of `0.5.1`): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
-**Status, 10 November 2026:** sections L and M are merged into the default branch (pull request #9, merge commit `bc2bb84`), and section W too (pull request #13, merge commit `a4b6812`). **The VPS runs `v0.8.0` since 10 November** (tags `v0.7.1` and `v0.8.0` pushed; the technician's login limited to Adab). **Still to do:** `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`) and goes straight to `0.5.1`, which contains 0.5.0, so `fw-v0.5.0` is never tagged. Steps 5 and 6 of [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md#7-general-update-to-do-now-in-order-10-november-2026) section 7. `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
+**Status, 11 November 2026:** section D (firmware 0.5.2) waits for review in pull request #16, not merged. **Status, 10 November 2026:** sections L and M are merged into the default branch (pull request #9, merge commit `bc2bb84`), and section W too (pull request #13, merge commit `a4b6812`). **The VPS runs `v0.8.0` since 10 November** (tags `v0.7.1` and `v0.8.0` pushed; the technician's login limited to Adab). **Still to do:** `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`) and goes straight to `0.5.1`, which contains 0.5.0, so `fw-v0.5.0` is never tagged. Steps 5 and 6 of [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md#7-general-update-to-do-now-in-order-10-november-2026) section 7. `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
+
+## D. Firmware 0.5.2: WiFi diagnosis on site (reason, strongest access point, MAC address, host name, portal fields)
+
+### D0. What is in it
+
+The limits of the firmware listed in [`WIFI-TROUBLESHOOTING.md`](WIFI-TROUBLESHOOTING.md) section 14, removed. The guide keeps the notes for 0.5.1 and older, since loggers in the field may still run them.
+
+| Part | What changed | What it needs |
+|---|---|---|
+| Reason of a failed try | The logger keeps the reason its WiFi driver received during each try. Event log: `WiFi: connection failed (attempt n, status s, reason r NAME, in range: ...), next try in n s`, for example `status 6, reason 15 4WAY_HANDSHAKE_TIMEOUT` (most likely the password). `status` and the portal's status box: `WiFi: down for n s, last try: status s, reason r NAME, in range at the last scan: ...` (`last try: none finished yet` until a try has failed). `reason 0 none`: no refusal, for example joined but no IP address (status 0). Before, the status number only. [`WIFI-TROUBLESHOOTING.md`](WIFI-TROUBLESHOOTING.md#43-what-the-status-number-and-the-reason-mean) 4.3 | Nothing. Write in the bench record which reason a wrong password gives (D2 step 4) |
+| Strongest access point | Each try searches every channel (about 2 s, within the 20 s of a try) and joins the **strongest** access point carrying the name. Before, the first one found in channel order (`WIFI_FAST_SCAN`, the default of the WiFi library), often a far one in a hotel. Once joined it stays on it until the link drops, as before (no roaming). [`WIFI-TROUBLESHOOTING.md`](WIFI-TROUBLESHOOTING.md#74-several-access-points-with-the-same-name) 7.4 | Nothing |
+| Host name | Routers list the logger under its `dev_id`, `LOG-0001`, from the first start. Before, `esp32s3-XXYYZZ` (the name was set after the WiFi had started, so it reached the network only once the setup portal had been opened) | If the hotel IT registered the logger by the name `esp32s3-...`, give them the new name. The MAC address does not change, so a MAC address filter is not affected |
+| WiFi MAC address | `status` and the portal's status box, after the WiFi line: `WiFi MAC: xx:xx:xx:xx:xx:xx, host name LOG-0001`. Event log at each start: `BOOT fw=0.5.2 reason=... boot#n dev=LOG-0001 mac=xx:xx:xx:xx:xx:xx heap=...`. Not a secret | Write it in the bench record and the as-built record |
+| Setup portal | Every field: no automatic capital, autocorrect or spell check on the phone (`wifi_ssid` was often stored with a capital first letter). Secret fields (`wifi_pass`, `wifi_pass2`, `dev_token`, `portal_pass`): the phone's password manager is asked not to fill in a saved password | Nothing |
+| Settings, VPS, records | No new key. No VPS change: no VPS tag. `CSV_SCHEMA` stays 3 | Nothing |
+| 0.5.1 | Included (section W): the two WiFi networks of equal rank, and 0.5.0 | See D2 if the bench logger still runs 0.4.1 |
+
+### D1. On GitHub: merge
+
+1. Merge pull request #16 ("Firmware 0.5.2: WiFi diagnosis on site") into the default branch once CI is green (jobs `firmware`, `server`, `tools`). The VPS does not change: no `v0.x` tag.
+2. **Not yet** the `fw-v0.5.2` tag: it comes after the bench test (D3).
+
+### D2. Bench test by cable
+
+Bench first, as in W2. 0.5.2 contains 0.5.1 and 0.5.0. If the bench logger still runs 0.4.1 and `fw-v0.5.1` is not tagged yet ([`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md) section 7, steps 5 and 6), you can go straight to 0.5.2: do the W2 step 3 checks (two networks) and the M5 step 2 checks (the `Meter EM01` line) in this bench test too. The `fw-v0.5.1` tag is then not needed, as `fw-v0.5.0` was skipped. Whether to do so is the owner's choice: section 7 of `CHECK-UP-TO-DATE.md` still says 0.5.1.
+
+You need:
+- the **office WiFi password** (`show` does not display secrets) and access to the office router's list of devices (or its DHCP leases);
+- for step 5, **two access points with the same network name and password** on 2.4 GHz: two phone hotspots set to the same name and password (on an iPhone, turn on "Maximise Compatibility"; the hotspot's name is the phone's name), or two access points of a mesh;
+- for step 6, an **iPhone** and an **Android phone**.
+
+1. **Flash 0.5.2 by cable** on the merge commit, from the PC, as in W2 step 1 ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 3.2 and 3.3).
+
+```powershell
+git log -1 --oneline
+```
+
+**Expected:** `<commit> Firmware 0.5.2: WiFi diagnosis on site (#16)`, the merge commit of pull request #16. Write the commit (its first 7 characters) on the record sheet: the tag goes on **this** commit (D3).
+
+```powershell
+Select-String '#define FW_VERSION' firmware\include\config.h
+```
+
+**Expected:** `#define FW_VERSION "0.5.2"`. Then `pio run -e logger -t upload`. **Write down the line `MAC: xx:xx:xx:xx:xx:xx`** that the upload prints, then open the monitor with `log2file` ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 3.4).
+
+2. **One network, 10 minutes**, as on site today. Expected: `firmware 0.5.2` at the boot, and the boot line `BOOT fw=0.5.2 reason=... boot#n dev=LOG-0001 mac=xx:xx:xx:xx:xx:xx heap=...` with the address written down in step 1. Then `WiFi connected to "<office network>"` and no restart. `status`:
+   - `WiFi: up, <office network> ...`, then on the next line `WiFi MAC: <the same address>, host name LOG-0001`;
+   - `Uploads: ok n, failed 0`.
+
+3. **Host name.** In the office router's list of connected devices (or its DHCP leases), the logger appears as **`LOG-0001`**, with the MAC address of step 1. If the router still shows `esp32s3-...`, type `reboot` and reload the router's page once the logger is back: some routers keep a name until the address is asked for again. Still `esp32s3-...`: the router may keep names until the lease expires; delete the lease on the router, or note it and check again the next day.
+
+4. **Reason with a wrong password**, then with a wrong name:
+
+```
+set wifi_pass wrong-password-test
+```
+
+```
+reboot
+```
+
+**Expected** within a minute, in the monitor: `WiFi: connection failed (attempt 1, status s, reason r NAME, in range: "<office network>"), next try in 10 s`, with a reason other than `0 none`. Usually `15 4WAY_HANDSHAKE_TIMEOUT`; `204 HANDSHAKE_TIMEOUT`, `2 AUTH_EXPIRE` or `202 AUTH_FAIL` are possible. **Write the status and the reason in the bench record:** they confirm [`WIFI-TROUBLESHOOTING.md`](WIFI-TROUBLESHOOTING.md#43-what-the-status-number-and-the-reason-mean) 4.3 for our board. `status`: `WiFi: down for n s, last try: status s, reason r NAME, in range at the last scan: "<office network>"`, and the `WiFi MAC` line. Then hold **BOOT** 3 s (setup portal) and open http://192.168.4.1 on a phone: the grey status box shows the same `WiFi:` line and the `WiFi MAC:` line. Tap **Close the setup WiFi**.
+
+```
+set wifi_ssid NOT-HERE
+```
+
+```
+reboot
+```
+
+**Expected:** `WiFi: connection failed (attempt 1, status 1, reason 201 NO_AP_FOUND, in range: none of the configured networks (n other networks seen)), next try in 10 s`.
+
+Put the office network back:
+
+```
+set wifi_ssid <office network name>
+```
+
+```
+set wifi_pass <office network password>
+```
+
+```
+reboot
+```
+
+**Expected:** `WiFi connected to "<office network name>"`. Clear the monitor window (the password is on screen).
+
+5. **The strongest of two access points with one name.** Put the two access points of the same name (see "You need") on: one **near** the logger (1 m), one **far** (another room, at least 10 m, or behind a wall). Set the logger to that name and password (`set wifi_ssid ...`, `set wifi_pass ...`, `reboot`), then:
+
+```
+wifi
+```
+
+**Expected:** the name is listed **twice**, with two channels and two dBm. The test only proves something if the **far** (weaker) one is on the **lower** channel, because 0.5.1 would have joined that one: if it is the other way round, swap the places of the two access points (or change a channel on the mesh) and run `wifi` again. Then `reboot` three times. Each time: `WiFi connected to "<name>" ip=... rssi=-nn ch=<n>`, where `ch` is the channel of the **stronger** entry in `wifi` and `rssi` is close to its dBm. Then put the office network back, as at the end of step 4.
+
+6. **Portal fields on an iPhone and an Android phone.** Hold **BOOT** 3 s, join `ARKAN-LOG-0001` with each phone in turn, open http://192.168.4.1. **Do not tap "Save and restart"** in this step.
+   - Tap `wifi_ssid`, clear it and type `hotel staff wifi`: the keyboard starts in **lower case**, the first letter stays small, no word is corrected or underlined.
+   - Tap `wifi_pass`, then `dev_token` and `portal_pass`: the phone does not fill in a saved password by itself. If the iPhone offers a "Strong Password" or the Android phone a suggested password, note it in the bench record and refuse it.
+   - Reload the page (the fields come back as stored), then tap **Close the setup WiFi**.
+
+7. **Settings as on site:** `show` gives the office network in `wifi_ssid` and nothing in `wifi_ssid2` (as before the test), `status` gives `WiFi: up, <office network name>`. Then put the PC folder back ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 3.5).
+
+Throughout, no restart that you did not ask for: the first line of `status` says `boot sw:console` after your `reboot`, never `task_wdt` or `panic`.
+
+If anything above fails: keep the `log2file` file, do not tag, and flash the previous release again ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 3.2 with its `fw-v` tag, then 3.3).
+
+### D3. Tag `fw-v0.5.2` on the merge commit of #16
+
+Only after D2 has passed. On the PC:
+
+```powershell
+cd C:\dev\esp32-datalogging
+```
+
+```powershell
+git tag fw-v0.5.2 <commit written down in D2>
+```
+
+```powershell
+git log -1 --oneline fw-v0.5.2
+```
+
+**Expected:** `<commit> (tag: fw-v0.5.2, ...) Firmware 0.5.2: WiFi diagnosis on site (#16)`. Anything else: `git tag -d fw-v0.5.2` and stop.
+
+```powershell
+git push origin fw-v0.5.2
+```
+
+CI makes the release **Logger firmware 0.5.2** with its four files. It stops if the tag and `FW_VERSION` differ ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 4.1).
+
+### D4. The loggers
+
+- **`LOG-0001`**, the bench logger flashed in D2, already runs 0.5.2 from the cable: nothing to send. **Firmware versions** (<https://arkan-monitoring.duckdns.org/live/adab/#versions>) shows `0.5.2`, and the alarm log has **A35**, marked as flashed by hand.
+- **Any other logger:** from **Firmware update** on the site page ([`OTA.md`](OTA.md)), **From a GitHub release**, `logger-0.5.2.bin`, **Send to ...**. Within a minute the logger restarts once; **A35** in the alarm log after 10 minutes; **Firmware versions** shows `0.5.2`.
+- **A logger that cannot get online on site** (the case of [`WIFI-TROUBLESHOOTING.md`](WIFI-TROUBLESHOOTING.md)) cannot be reached over the air. With the supervisor's agreement, flash `fw-v0.5.2` by cable on site ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 3; the settings are kept): the next failed try then gives its reason.
+- After the update, the hotel's router lists the logger as `LOG-0001` instead of `esp32s3-...`: tell the hotel IT if they registered it by name.
+
+---
 
 ## W. Firmware 0.5.1: two WiFi networks of equal rank, joins the one in range
 

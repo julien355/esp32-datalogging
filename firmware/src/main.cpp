@@ -10,6 +10,7 @@
 
 #include <Arduino.h>
 #include <SD.h>
+#include <WiFi.h>
 #include <Wire.h>
 #include <esp_ota_ops.h>
 #include <esp_task_wdt.h>
@@ -64,6 +65,7 @@ void setup() {
   Serial.printf("\n=== Arkan logger, firmware %s, boot reason %s ===\n", FW_VERSION, st.bootReason);
 
   cfg::begin();
+  net::prepare();   // before the first WiFi.mode() anywhere (portal::start() too)
 
   // Boot-loop guard: the counter is cleared after 10 min of uptime (loop()).
   long boots = cfg::getCounter("bootcnt") + 1;
@@ -92,8 +94,8 @@ void setup() {
       safeRestart("import");
     }
   }
-  evlog("BOOT fw=%s reason=%s boot#%ld dev=%s heap=%u", FW_VERSION, st.bootReason, boots,
-        cfg::get("dev_id").c_str(), ESP.getFreeHeap());
+  evlog("BOOT fw=%s reason=%s boot#%ld dev=%s mac=%s heap=%u", FW_VERSION, st.bootReason, boots,
+        cfg::get("dev_id").c_str(), WiFi.macAddress().c_str(), ESP.getFreeHeap());
 
   sensors::begin();
   meter::begin(st.sdOk ? &SD : nullptr);

@@ -24,6 +24,7 @@ Four tutorials written for beginners: every term explained, where every thing is
 - The data files: [`../DATA-FORMAT.md`](../DATA-FORMAT.md)
 - The alarms and the alarm log: [`../alarms/README.md`](../alarms/README.md)
 - The full bench test list: [`../OFFICE-PREP.md`](../OFFICE-PREP.md)
+- The logger does not connect to the WiFi on site: [`../WIFI-TROUBLESHOOTING.md`](../WIFI-TROUBLESHOOTING.md)
 - The short VPS guide: [`../VPS-SETUP.md`](../VPS-SETUP.md)
 - The site page (live, history, registers, firmware update): [`../LIVE.md`](../LIVE.md); remote firmware update: [`../OTA.md`](../OTA.md)
 - Hardware theory, wiring drawings and lab sheets: [`../install/README.md`](../install/README.md)
