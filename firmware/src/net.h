@@ -4,6 +4,8 @@
 #include <Arduino.h>
 
 namespace net {
+void prepare();             // setup(), right after the settings and before anything starts the WiFi
+                            // (portal included): host name = dev_id, disconnect reason handler
 void begin();               // starts the task
 void uploadNow();           // console: try an upload at once
 void otaCheckNow();         // console: check for a firmware update at once (also retries a

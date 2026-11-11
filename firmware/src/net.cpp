@@ -35,6 +35,11 @@ static uint32_t lastUploadTry = 0, lastOta = 0, authBlockedUntil = 0, liveBlocke
 static uint32_t nextWifiAttempt = 0, lastStackReset = 0;
 static int wifiAttempts = 0, uploadFailRun = 0, rejectRun = 0, liveFailRun = 0;
 static String wifiSeen = "not scanned yet";   // configured networks in range at the last scan (log, status)
+// Reason of the last disconnect event during the current try: an 802.11 reason code (1 to 66) or one
+// of the WiFi driver's (200 to 205), 0 = none. Written by the WiFi event task, reset at each try.
+static volatile uint8_t discReason = 0;
+// The last failed try since the link went down, for the log and status (failStatus -1: none yet).
+static volatile int failStatus = -1, failReason = 0;
 static uint32_t lastLiveSeq = 0;
 static String lastUploadError = "none yet";
 
@@ -51,8 +56,23 @@ static void wdtDelay(uint32_t ms) {
 
 // ---------------------------------------------------------------- WiFi
 
+// "15 4WAY_HANDSHAKE_TIMEOUT". 0 = the network gave no reason during the try: joined but no IP
+// address, or no answer at all.
+static String reasonText(int r) {
+  const char *name = r ? WiFi.disconnectReasonName((wifi_err_reason_t)r) : "none";
+  return String(r) + " " + (*name ? name : "unknown");   // the library gives "" for a code it does not know
+}
+
+// WiFi event task. CORE_DEBUG_LEVEL=1 hides the library's own "Reason: ..." warning, so keep it here.
+static void onDisconnect(arduino_event_id_t, arduino_event_info_t info) {
+  uint8_t r = info.wifi_sta_disconnected.reason;
+  // 8 (ASSOC_LEAVE) is our own WiFi.disconnect() before a scan or a try: it would hide the real reason.
+  if (r != WIFI_REASON_ASSOC_LEAVE) discReason = r;
+}
+
 static bool tryConnect(const String &ssid, const String &pass) {
   Serial.printf("WiFi: connecting to \"%s\"\n", ssid.c_str());
+  discReason = 0;
   WiFi.disconnect(false, false);
   WiFi.begin(ssid.c_str(), pass.c_str());
   for (int i = 0; i < 80; i++) {   // 20 s
@@ -126,6 +146,8 @@ static void handleOffline() {
     wifiAttempts = 0;
     return;
   }
+  failStatus = WiFi.status();   // of the last network tried in this round
+  failReason = discReason;
   wifiAttempts++;
   // Back-off: 10, 20, 40, 80, 160, then every 300 s. Slower while the setup portal is open,
   // because scanning for the network moves the portal's channel.
@@ -133,8 +155,8 @@ static void handleOffline() {
   if (st.portalOn) backoff = max<uint32_t>(backoff, 120);
   nextWifiAttempt = millis() + backoff * 1000;
   if (wifiAttempts == 1 || wifiAttempts % 10 == 0)
-    evlog("WiFi: connection failed (attempt %d, status %d, in range: %s), next try in %lu s", wifiAttempts,
-          WiFi.status(), wifiSeen.c_str(), (unsigned long)backoff);
+    evlog("WiFi: connection failed (attempt %d, status %d, reason %s, in range: %s), next try in %lu s",
+          wifiAttempts, (int)failStatus, reasonText(failReason).c_str(), wifiSeen.c_str(), (unsigned long)backoff);
 }
 
 // ---------------------------------------------------------------- HTTP
@@ -445,8 +467,11 @@ static void task(void *) {
   esp_task_wdt_add(nullptr);
   WiFi.persistent(false);   // credentials come from our settings, not the WiFi driver's flash
   WiFi.setAutoReconnect(false);
-  WiFi.mode(st.portalOn ? WIFI_AP_STA : WIFI_STA);
-  WiFi.setHostname(devId.c_str());
+  // Several access points with one name (hotels): search every channel and join the strongest. The
+  // default (fast scan) joins the first one found in channel order. Kept for every WiFi.begin().
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+  WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+  WiFi.mode(st.portalOn ? WIFI_AP_STA : WIFI_STA);   // host name: set before, in prepare()
   WiFi.setSleep(false);
   st.wifiDownSince = millis();
   for (;;) {
@@ -467,7 +492,8 @@ static void task(void *) {
       st.wifiDownSince = millis();
       st.ip[0] = 0;
       nextWifiAttempt = millis() + 2000;
-      wifiSeen = "not scanned yet";   // the last scan is from before this connection
+      wifiSeen = "not scanned yet";   // the last scan and try are from before this connection
+      failStatus = -1;
       evlog("WiFi lost (status %d)", WiFi.status());
     }
     if (!up) {
@@ -482,6 +508,14 @@ static void task(void *) {
     doOta();
     wdtDelay(200);
   }
+}
+
+void prepare() {
+  // Core 2.0.17 only stores the host name: WiFi.mode() gives it to the interface. Set later, routers
+  // list the logger as "esp32s3-XXYYZZ".
+  WiFi.setHostname(cfg::get("dev_id").c_str());
+  // Registered before the WiFi starts: the event task reads the list of handlers without a lock.
+  WiFi.onEvent(onDisconnect, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
 }
 
 void begin() {
@@ -517,9 +551,14 @@ void configCheckNow() { forceRcfg = true; }
 String statusText() {
   String s;
   s += "WiFi: ";
+  int fs = failStatus, fr = failReason;
   s += st.wifiUp ? String("up, ") + WiFi.SSID() + " " + st.ip + " rssi " + String((int)st.rssi) + " dBm"
                  : String("down for ") + String(st.wifiDownSince ? (millis() - st.wifiDownSince) / 1000 : 0) +
-                       " s, in range at the last scan: " + wifiSeen;
+                       " s, last try: " +
+                       (fs < 0 ? String("none finished yet") : "status " + String(fs) + ", reason " + reasonText(fr)) +
+                       ", in range at the last scan: " + wifiSeen;
+  // For a MAC address filter or a device approval on the hotel network: not a secret.
+  s += "\nWiFi MAC: " + WiFi.macAddress() + ", host name " + WiFi.getHostname();
   s += "\nServer: " + baseUrl + (token.length() ? "" : " (NO TOKEN)");
   s += "\nUploads: ok " + String((unsigned long)st.uploadsOk) + ", failed " + String((unsigned long)st.uploadsFail) +
        ", last ok " + (st.lastUploadOk ? isoTime(st.lastUploadOk) : String("never")) + ", last error " +
