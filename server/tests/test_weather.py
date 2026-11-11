@@ -111,14 +111,14 @@ class WeatherTest(unittest.TestCase):
         nxt = datetime(2026, 11, 9, 4, 0, tzinfo=timezone.utc)     # next day 12:00 WITA
         wx.fetch = fake_open_meteo(nxt)
         wx.update("adab", nxt)
-        lg = wx.log("adab", 3)
+        lg = wx.log("adab", start="2026-11-07", end="2026-11-09")   # dates, not the last days: no clock in the test
         h = next(x for x in lg["hours"] if x["t"] == "2026-11-09 08:00")
         self.assertEqual(h["temp_c"], 28.5)
         self.assertEqual(h["fc_temp_c"], 29.5)
         self.assertIsNone(next(x for x in lg["hours"] if x["t"] == "2026-11-08 08:00")["fc_temp_c"])
         day = next(d for d in lg["days"] if d["date"] == "2026-11-09")
         self.assertEqual(day["fc_hours"], day["hours"])
-        csv_text = wx.log_csv("adab", 3)
+        csv_text = wx.log_csv("adab", start="2026-11-07", end="2026-11-09")
         self.assertIn("fc_temp_c", csv_text.splitlines()[0])
         # chosen dates, both included
         lg = wx.log("adab", start="2026-11-08", end="2026-11-08")

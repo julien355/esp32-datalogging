@@ -18,6 +18,11 @@ Commands:
   export-oed <site> [--from D] [--to D] [--all] [--out DIR]
                                         one CSV per value in Open Energy Dashboard upload format
   backfill <site> <device> <folder>     merge an SD card copy (its /data folder) into the site
+  archive <site> --before "YYYY-MM-DD HH:MM" [--apply]
+                                        move every record before that site-local time (a test period) to
+                                        archive/<site>-before-<time>/, rebuild the alarm log and daily.csv from
+                                        the records kept, and refuse older rows from then on (docs/ARCHIVE.md).
+                                        Without --apply: only says what it would do. Stop the service first
   publish-fw <file.bin> [--version X] [--device D] [--force]
                                         offer a firmware image to the loggers (OTA; only to older versions).
                                         Same as "Firmware update" in the site page menu (docs/OTA.md)
@@ -41,7 +46,9 @@ import os
 import re
 import secrets
 import shutil
+import socket
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app"))
@@ -188,7 +195,9 @@ def cmd_enable(store, a, disabled):
 def cmd_list(store, a):
     for site in store.sites():
         prof = store.site_profile(site)
-        print(f"{site}: {prof.get('name', '')} ({prof.get('timezone', '')})")
+        start = store.records_from(site)
+        print(f"{site}: {prof.get('name', '')} ({prof.get('timezone', '')})"
+              + (f", records from {start} (older ones archived)" if start else ""))
         for dev in store.site_devices(site):
             info = store.load_devices()["devices"][dev]
             flag = " DISABLED" if info.get("disabled") else ""
@@ -366,7 +375,8 @@ def cmd_export_oed(store, a):
 def cmd_backfill(store, a):
     if a.device not in store.site_devices(a.site):
         die(f"{a.device} is not a device of {a.site}")
-    total = dup = bad = 0
+    total = dup = bad = early = 0
+    start = store.records_from(a.site)
     for dirpath, _, fns in sorted(os.walk(a.folder)):
         for fn in sorted(fns):
             if not re.match(r"^\d{4}-\d{2}-\d{2}(_\d+)?\.csv$", fn):
@@ -378,13 +388,215 @@ def cmd_backfill(store, a):
             except ValueError as e:
                 print(f"  {fn}: skipped ({e})")
                 continue
-            s, d, _ = store.store_rows(a.site, a.device, header, good)
-            total, dup, bad = total + s, dup + d, bad + nbad
-            print(f"  {fn}: {s} new, {d} already there, {nbad} bad")
+            s, d, _, b = store.store_rows(a.site, a.device, header, good)
+            total, dup, bad, early = total + s, dup + d, bad + nbad, early + b
+            print(f"  {fn}: {s} new, {d} already there, {nbad} bad" + (f", {b} before {start} (archived period)" if b else ""))
     store.event(a.site, a.device, "backfill", {"rows": total, "from": os.path.abspath(a.folder)})
-    print(f"backfill done: {total} new row(s), {dup} duplicate(s), {bad} bad row(s)")
+    print(f"backfill done: {total} new row(s), {dup} duplicate(s), {bad} bad row(s)"
+          + (f", {early} row(s) before {start} not stored (archived period, docs/ARCHIVE.md)" if early else ""))
     if total:
         print(f"older rows are not in the alarm log yet: run  manage.py alarms {a.site} --rebuild")
+
+
+# ---------------------------------------------------------------------- archive (docs/ARCHIVE.md)
+
+def service_answers():
+    """The ingest service, if it is running: 127.0.0.1 from the VPS or inside its container,
+    arkan-monitoring-ingest from a "docker compose run" container. None when nothing answers."""
+    port = int(os.environ.get("PORT", "8800"))
+    for host in ("127.0.0.1", "arkan-monitoring-ingest"):
+        try:
+            with socket.create_connection((host, port), timeout=2):
+                return f"{host}:{port}"
+        except OSError:
+            continue
+    return None
+
+
+def _ts_csv(line):
+    return line.split(",", 1)[0].strip()
+
+
+def _ts_live(line):
+    try:
+        return json.loads(line).get("recv")
+    except (ValueError, AttributeError):
+        return None
+
+
+def split_file(src, dst, cut, key, header, apply):
+    """Lines of src whose time (key(line), UTC) is before cut go to dst, the others stay in src; a header line
+    goes to both. A file with nothing to keep is moved whole. Returns (moved, kept); changes nothing unless apply."""
+    moved = kept = 0
+    with open(src, encoding="utf-8", newline="") as f:
+        if header:
+            f.readline()
+        for ln in f:
+            if ln.strip():
+                k = key(ln)
+                if k and k < cut:
+                    moved += 1
+                else:
+                    kept += 1
+    if not apply or not moved:
+        return moved, kept
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    if not kept:
+        os.replace(src, dst)
+        return moved, kept
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(src), prefix=".tmp-")
+    with open(src, encoding="utf-8", newline="") as f, open(dst, "x", encoding="utf-8", newline="") as old, \
+            os.fdopen(fd, "w", encoding="utf-8", newline="") as new:
+        if header:
+            head = f.readline()
+            old.write(head)
+            new.write(head)
+        for ln in f:
+            if not ln.strip():
+                continue
+            ln = ln if ln.endswith("\n") else ln + "\n"
+            k = key(ln)
+            (old if k and k < cut else new).write(ln)
+        for g in (old, new):
+            g.flush()
+            os.fsync(g.fileno())
+    os.chmod(tmp, 0o640)
+    os.chmod(dst, 0o640)
+    os.replace(tmp, src)
+    return moved, kept
+
+
+def remove_empty_dirs(top):
+    for dirpath, _, _ in sorted(os.walk(top), key=lambda x: -len(x[0])):
+        if dirpath != top and not os.listdir(dirpath):
+            os.rmdir(dirpath)
+
+
+def cmd_archive(store, a):
+    """Moves every record of a site before a local time (the test period) into a folder of its own."""
+    site = a.site
+    if not os.path.exists(os.path.join(store.site_dir(site), "site.json")):
+        die(f"no site {site}")
+    tz = site_offset(store, site)
+    local = None
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M"):
+        try:
+            local = datetime.strptime(a.before.strip(), fmt).replace(tzinfo=tz)
+            break
+        except ValueError:
+            continue
+    if local is None:
+        die(f'--before "{a.before}": expected "YYYY-MM-DD HH:MM", the site\'s local time')
+    cut_t = local.astimezone(timezone.utc)
+    if cut_t > datetime.now(timezone.utc):
+        die(f"{a.before} ({cut_t:%Y-%m-%dT%H:%M:%SZ}) is in the future: the records after it would be refused")
+    cut = cut_t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    cut_day = cut[:10]
+    name = f"{site}-before-{local:%Y-%m-%dT%H%M}"
+    arch = os.path.join(store.root, "archive", name)
+    if os.path.exists(arch):
+        die(f"{arch} exists already: this archive was made. Nothing was changed")
+    if a.apply:
+        running = service_answers()
+        if running:
+            die(f"the ingest service answers on {running}: stop it first (docker compose stop ingest), "
+                "then use docker compose run --rm ingest python tools/manage.py archive ... --apply")
+    dst = lambda p: os.path.join(arch, os.path.relpath(p, store.root))   # noqa: E731
+    sd = store.site_dir(site)
+    print(f"Archive of {site}: every record before {local:%Y-%m-%d %H:%M} {tz} = {cut}")
+    print(f"Into: {arch}")
+    if a.apply:
+        os.makedirs(arch)
+        for p in (store.devices_path(), os.path.join(sd, "site.json")):   # so the tools can read the archive
+            os.makedirs(os.path.dirname(dst(p)), exist_ok=True)
+            shutil.copy2(p, dst(p))
+
+    devices = set(store.site_devices(site))
+    devices |= {x for x in os.listdir(sd) if DEVICE_RE.match(x)
+                and (os.path.isdir(os.path.join(sd, x, "raw")) or os.path.isdir(os.path.join(sd, x, "live")))}
+    report = {"cut": cut, "local": f"{local:%Y-%m-%d %H:%M} {tz}", "devices": {}}
+    for dev in sorted(devices):
+        dd = store.device_dir(site, dev)
+        rec = {"files_moved": 0, "rows_moved": 0, "rows_kept_cut_day": 0, "first_day": None, "last_day": None,
+               "live_moved": 0}
+        for day, part, path in store.day_files(site, dev):
+            if day > cut_day:
+                continue
+            moved, kept = split_file(path, dst(path), cut, _ts_csv, True, a.apply)
+            if moved:
+                rec["rows_moved"] += moved
+                rec["first_day"] = rec["first_day"] or day
+                rec["last_day"] = day
+                rec["files_moved"] += 0 if kept else 1
+            if day == cut_day:
+                rec["rows_kept_cut_day"] += kept
+        live_dir = os.path.join(dd, "live")
+        if os.path.isdir(live_dir):
+            for fn in sorted(os.listdir(live_dir)):
+                if fn.endswith(".jsonl") and fn[:10] <= cut_day:
+                    path = os.path.join(live_dir, fn)
+                    rec["live_moved"] += split_file(path, dst(path), cut, _ts_live, False, a.apply)[0]
+        if a.apply:
+            remove_empty_dirs(os.path.join(dd, "raw"))
+            for fn in ("events.jsonl", "alarm-state.json"):   # copies: the events stay (firmware page)
+                if os.path.exists(os.path.join(dd, fn)):
+                    os.makedirs(os.path.dirname(dst(os.path.join(dd, fn))), exist_ok=True)
+                    shutil.copy2(os.path.join(dd, fn), dst(os.path.join(dd, fn)))
+        report["devices"][dev] = rec
+        days = f" ({rec['first_day']} to {rec['last_day']})" if rec["first_day"] else ""
+        print(f"  {dev} records: {rec['rows_moved']} row(s) moved{days}, {rec['files_moved']} day file(s) whole; "
+              f"{cut_day}: {rec['rows_kept_cut_day']} row(s) from {cut} kept")
+        print(f"  {dev} live snapshots (15 s): {rec['live_moved']} moved")
+
+    alarm_moved = alarm_kept = 0
+    ad = os.path.join(sd, "alarms")
+    if os.path.isdir(ad):
+        for fn in sorted(os.listdir(ad)):
+            if fn.endswith(".csv") and fn[:4] <= cut[:4]:
+                m, k = split_file(os.path.join(ad, fn), dst(os.path.join(ad, fn)), cut, _ts_csv, True, a.apply)
+                alarm_moved, alarm_kept = alarm_moved + m, alarm_kept + k
+    print(f"  alarm log: {alarm_moved} line(s) moved, {alarm_kept} kept, then rebuilt from the records kept")
+    moves = [p for p in (os.path.join(sd, "daily.csv"), os.path.join(store.root, "export", "oed", site))
+             if os.path.exists(p)]
+    for p in moves:
+        print(f"  {os.path.relpath(p, store.root)}: moved" + (", then rebuilt" if p.endswith("daily.csv") else ""))
+        if a.apply:
+            os.makedirs(os.path.dirname(dst(p)), exist_ok=True)
+            os.replace(p, dst(p))
+    print(f'  site.json: "records_from": "{cut}": older rows (a logger\'s backlog, an SD card backfill) are '
+          "not stored again")
+    print("  kept as they are: the logger events, settings and register table, the weather log, devices, firmware")
+    if not a.apply:
+        print("Nothing was changed. Stop the service (docker compose stop ingest), then run again with --apply.")
+        return
+
+    prof_path = os.path.join(sd, "site.json")
+    with open(prof_path, encoding="utf-8") as f:
+        prof = json.load(f)
+    prof["records_from"] = max(cut, str(prof.get("records_from") or ""))
+    atomic_write(prof_path, json.dumps(prof, indent=2) + "\n")
+
+    eng = AlarmEngine(store)
+    for dev in sorted(devices):
+        # Open offline or clock alarms (not replayed from the records) that began before the cut end here:
+        # their start line is in the archive. Those that began later stay open.
+        st = eng.load_state(site, dev)
+        alarms = {k: v for k, v in st.get("alarms", {}).items()
+                  if not (v.get("active") and str(v.get("since") or "") < cut)}
+        eng.save_state(site, dev, {"alarms": alarms})
+    lines = eng.rebuild(site, lambda dev: (row for _, row in read_rows(store, site, dev)))
+    print(f"alarm log rebuilt from the records kept: {len(lines)} line(s)")
+    if any(p.endswith("daily.csv") for p in moves):
+        cmd_daily(store, argparse.Namespace(site=site))
+    for dev, rec in report["devices"].items():
+        store.event(site, dev, "archive", {"before": cut, "rows": rec["rows_moved"], "to": "archive/" + name})
+    with open(os.path.join(arch, "README.txt"), "w", encoding="utf-8") as f:
+        f.write(f"Records of site {site} before {report['local']} ({cut}), moved here on {iso_now()}\n"
+                "by tools/manage.py archive (docs/ARCHIVE.md). Same layout as the data folder: read it with\n"
+                f"  python tools/manage.py --data /data/archive/{name} daily {site}   (or export-oed, list)\n"
+                f"The site keeps the records from {cut} on; its site.json has \"records_from\": \"{cut}\".\n\n"
+                + json.dumps(report, indent=2) + "\n")
+    print(f"Done. Archive: {arch}. Start the service again: docker compose start ingest")
 
 
 def cmd_publish_fw(store, a):
@@ -592,6 +804,9 @@ def main():
     p.add_argument("--all", action="store_true", help="every value, not only energy, temperature, humidity")
     p.add_argument("--out")
     p = sub.add_parser("backfill"); p.add_argument("site"); p.add_argument("device"); p.add_argument("folder")
+    p = sub.add_parser("archive"); p.add_argument("site")
+    p.add_argument("--before", required=True, help='site-local time, e.g. "2026-11-11 17:00": records before it move')
+    p.add_argument("--apply", action="store_true", help="make the changes (without it: only say what it would do)")
     p = sub.add_parser("publish-fw"); p.add_argument("file")
     p.add_argument("--version", help="optional: checked against the version written in the file")
     p.add_argument("--device")
@@ -618,7 +833,7 @@ def main():
         "init": cmd_init, "add-site": cmd_add_site, "add-device": cmd_add_device,
         "rotate-token": cmd_rotate_token, "disable-device": lambda s, x: cmd_enable(s, x, True),
         "enable-device": lambda s, x: cmd_enable(s, x, False), "list": cmd_list, "daily": cmd_daily,
-        "export-oed": cmd_export_oed, "backfill": cmd_backfill, "publish-fw": cmd_publish_fw,
+        "export-oed": cmd_export_oed, "backfill": cmd_backfill, "archive": cmd_archive, "publish-fw": cmd_publish_fw,
         "set-config": cmd_set_config, "show-config": cmd_show_config, "alarms": cmd_alarms,
         "set-registers": cmd_set_registers, "show-registers": cmd_show_registers, "weather": cmd_weather,
     }[a.cmd](store, a)

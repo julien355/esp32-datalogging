@@ -44,6 +44,7 @@ sites/adab/weather/actual-2026.csv             actual weather, one row per WITA 
 sites/adab/weather/dayahead-2026.csv           tomorrow's forecast, saved every day at 18:00 WITA
 sites/adab/weather/forecast.json               the last forecast fetched (every hour)
 export/oed/adab/*.csv                          OED upload files (manage.py export-oed)
+archive/adab-before-2026-11-11T1700/           the test period, moved out of the site (manage.py archive, docs/ARCHIVE.md)
 ```
 Backups: `/srv/arkan-monitoring/backups/data-<date>.tar.gz`, nightly, 14 kept (`server/deploy/backup.sh`).
 
@@ -95,6 +96,8 @@ ts,EM01_v1,EM01_v1_min,EM01_v1_max,...,EM01_p,EM01_p_min,EM01_p_max,...,EM01_e,E
 ```json
 {"ok": true, "stored": 58, "duplicates": 2, "rejected_rows": 0, "last_ts": "2026-11-07T03:15:00Z"}
 ```
+Since `v0.8.1`, a site whose `site.json` has `"records_from"` (set by `manage.py archive`, [`ARCHIVE.md`](ARCHIVE.md)) does not store older rows: the answer is still `200`, and adds `"before_start": n`.
+
 **Change from PLAN.md §5.2, agreed 7 November 2026:** CSV lines instead of JSON records. The logger sends the bytes of its file as they are (less RAM, no conversion, identical files on both sides). The live snapshot stays JSON.
 
 ## 5. Ready for Open Energy Dashboard

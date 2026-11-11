@@ -24,6 +24,8 @@ Formats: [`DATA-FORMAT.md`](DATA-FORMAT.md) (records), [`LIVE.md`](LIVE.md) (liv
 [`alarms/README.md`](alarms/README.md) (alarms). Times: records and live in UTC (`ts`, `recv`); history, weather and the
 alarm log's `local_time` in hotel time (WITA, UTC+8).
 
+Not on the site: `archive/<site>-before-<local time>/`, a test period moved out with `manage.py archive` ([`ARCHIVE.md`](ARCHIVE.md)), in the same layout. The site's `site.json` then has `"records_from"` (UTC): the site has no record before it.
+
 Not in this folder: Open Energy Dashboard's own database (another container on the same VPS, filled from the
 records with `manage.py export-oed`), and the copy on each logger's SD card (the same record files, for recovery).
 

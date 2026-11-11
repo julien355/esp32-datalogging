@@ -98,6 +98,18 @@ class StoreTest(unittest.TestCase):
         with self.assertRaises(IngestError):
             self.s.ingest("adab", "LOG-0001", "ts,a b\n")
 
+    def test_rows_before_records_from_are_not_stored(self):
+        p = os.path.join(self.s.site_dir("adab"), "site.json")
+        os.makedirs(os.path.dirname(p))
+        with open(p, "w") as f:
+            json.dump({"code": "adab", "records_from": "2026-11-07T09:00:00Z"}, f)
+        r = self.s.ingest("adab", "LOG-0001", HEADER + "\n" + row("2026-11-07T08:59:00Z") + "\n"
+                          + row("2026-11-07T09:00:00Z") + "\n")
+        self.assertEqual((r["stored"], r["duplicates"], r["before_start"]), (1, 0, 1))
+        self.assertEqual(self.day_lines("2026-11-07")[1:], [row("2026-11-07T09:00:00Z")])
+        r = self.s.ingest("adab", "LOG-0001", HEADER + "\n" + row("2026-11-07T09:01:00Z") + "\n")
+        self.assertNotIn("before_start", r)   # the usual answer, as in the docs
+
     def test_boot_event(self):
         self.s.ingest("adab", "LOG-0001", HEADER + "\n" + row(ts(1), boot="sw:daily") + "\n")
         with open(os.path.join(self.s.device_dir("adab", "LOG-0001"), "events.jsonl")) as f:
@@ -843,6 +855,77 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(oed[1], "1000.00,2026-11-06 23:00:00,2026-11-06 23:01:00")
         self.assertEqual(oed[2], "1000.50,2026-11-06 23:01:00,2026-11-06 23:02:00")   # contiguous chain
         self.assertEqual(oed[31], "1015.50,2026-11-06 23:30:00,2026-11-06 23:32:00")  # minute 30 missing: no hole
+
+    def test_archive_test_period(self):
+        def read(*p):
+            with open(os.path.join(*p), encoding="utf-8") as f:
+                return f.read()
+
+        cut = datetime(2026, 11, 7, 9, 0, tzinfo=timezone.utc)   # 17:00 WITA: the test period ends
+        mk = lambda m: (cut + timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ")   # noqa: E731
+        low = HEADER.replace("EM01_v1,", "EM01_v1,EM01_v1_min,")
+        rowv = lambda m, v: f"{mk(m)},{v},{v - 1}" + row(mk(m))[len(mk(m)) + 6:]   # noqa: E731
+        rows = [rowv(m, 180 if -200 <= m < -180 or 30 <= m < 50 else 231) for m in range(-1500, 60)]
+        for i in range(0, len(rows), 60):
+            self.req("POST", "/api/v1/ingest", low + "\n" + "\n".join(rows[i:i + 60]) + "\n", token=self.token)
+        dd = os.path.join(self.data, "sites", "adab", "LOG-0001")
+        os.makedirs(os.path.join(dd, "live"), exist_ok=True)
+        with open(os.path.join(dd, "live", "2026-11-07.jsonl"), "w") as f:
+            f.write("".join(json.dumps({"recv": mk(m), "values": {}}) + "\n" for m in (-10, -5, 0, 5)))
+        state = json.loads(read(dd, "alarm-state.json"))
+        state["alarms"]["A01"] = {"active": True, "since": mk(-100)}   # offline during the test period
+        with open(os.path.join(dd, "alarm-state.json"), "w") as f:
+            json.dump(state, f)
+        self.manage("daily", "adab")
+        before = sorted(os.path.join(d, f) for d, _, fs in os.walk(self.data) for f in fs)
+        args = [sys.executable, MANAGE, "--data", self.data, "archive", "adab", "--before", "2026-11-07 17:00"]
+        env = dict(os.environ, PORT=str(self.port))
+        out = subprocess.run(args, capture_output=True, text=True, env=env, check=True).stdout
+        self.assertIn("= 2026-11-07T09:00:00Z", out)
+        self.assertIn("1500 row(s) moved (2026-11-06 to 2026-11-07), 1 day file(s) whole; 2026-11-07: 60 row(s)", out)
+        self.assertEqual(before, sorted(os.path.join(d, f) for d, _, fs in os.walk(self.data) for f in fs))
+        r = subprocess.run(args + ["--apply"], capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("stop it first", r.stderr)   # the service of this test answers on PORT
+        env["PORT"] = "1"
+        out = subprocess.run(args + ["--apply"], capture_output=True, text=True, env=env, check=True).stdout
+        self.assertIn("Done.", out)
+        arch = os.path.join(self.data, "archive", "adab-before-2026-11-07T1700")
+        a_dd = os.path.join(arch, "sites", "adab", "LOG-0001")
+        kept = read(dd, "raw", "2026", "11", "2026-11-07.csv").splitlines()
+        moved = read(a_dd, "raw", "2026", "11", "2026-11-07.csv").splitlines()
+        self.assertEqual((kept[0], moved[0]), (low, low))
+        self.assertEqual((kept[1][:20], kept[-1][:20], len(kept)), (mk(0), mk(59), 61))
+        self.assertEqual((moved[1][:20], moved[-1][:20]), ("2026-11-07T00:00:00Z", mk(-1)))
+        self.assertFalse(os.path.exists(os.path.join(dd, "raw", "2026", "11", "2026-11-06.csv")))
+        self.assertTrue(os.path.exists(os.path.join(a_dd, "raw", "2026", "11", "2026-11-06.csv")))
+        self.assertEqual([json.loads(x)["recv"] for x in read(dd, "live", "2026-11-07.jsonl").splitlines()],
+                         [mk(0), mk(5)])
+        self.assertEqual(len(read(a_dd, "live", "2026-11-07.jsonl").splitlines()), 2)
+        # the alarm log: only the undervoltage after the cut, rebuilt from the records kept
+        log = [ln.split(",") for ln in read(self.data, "sites", "adab", "alarms", "2026.csv").splitlines()[1:]]
+        self.assertTrue(log and all(x[0] >= mk(0) for x in log))
+        self.assertIn("A05", {x[3] for x in log})
+        old_log = read(arch, "sites", "adab", "alarms", "2026.csv").splitlines()[1:]
+        self.assertTrue(old_log and all(ln.split(",")[0] < mk(0) for ln in old_log))
+        self.assertNotIn("A01", json.loads(read(dd, "alarm-state.json"))["alarms"])   # its start line is archived
+        self.assertEqual([ln.split(",")[:3] for ln in read(self.data, "sites", "adab", "daily.csv").splitlines()[1:]],
+                         [["2026-11-07", "LOG-0001", "60"]])
+        self.assertEqual(json.loads(read(self.data, "sites", "adab", "site.json"))["records_from"], mk(0))
+        self.assertIn('"kind": "archive"', read(dd, "events.jsonl").splitlines()[-1])
+        self.assertIn("records from 2026-11-07T09:00:00Z", self.manage("list"))
+        # the archive is a data folder of its own: the tools read it with --data
+        out = subprocess.run([sys.executable, MANAGE, "--data", arch, "list"], check=True, capture_output=True,
+                             text=True).stdout
+        self.assertIn("LOG-0001: fw None, last record 2026-11-07T08:59:00Z", out)
+        # the logger resends a test row: 200, not stored; the API has nothing before the cut
+        code, body = self.req("POST", "/api/v1/ingest", low + "\n" + rows[0] + "\n", token=self.token)
+        self.assertEqual((code, json.loads(body)["stored"], json.loads(body)["before_start"]), (200, 0, 1))
+        self.assertEqual(self.req("GET", "/api/v1/records/adab?from=2026-11-06&to=2026-11-06")[0], 404)
+        # twice: refused, nothing changed
+        r = subprocess.run(args + ["--apply"], capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("exists already", r.stderr)
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ reading a FORT FCN300 (3E4Y or 3EH4Y, same registers) meter over Modbus RTU. Pil
 - **Power quality** pages on the site page: voltage per phase (mean, lowest and highest 15 s sample, one day minute by minute), dips and swells, unbalance, frequency, power factor and the kVArh PLN bills, against the limits of the alarm register: [`docs/LIVE.md`](docs/LIVE.md#option-a-in-detail) (Power quality pages)
 - **Weather** on the site page: today's forecast hour by hour, tomorrow's forecast, and a log of the actual weather against the forecast and the outdoor sensor (Open-Meteo, no key): [`docs/WEATHER.md`](docs/WEATHER.md)
 - **One server, one data folder:** where every piece of data is (live, records, alarms, weather) and how a second dashboard reads it at the same time: [`docs/DATA-ACCESS.md`](docs/DATA-ACCESS.md)
+- **Archiving a test period** (Adab: everything before 17:00 WITA on 11 November 2026 was bench data), with `manage.py archive` from VPS `v0.8.1`: [`docs/ARCHIVE.md`](docs/ARCHIVE.md)
 - Keeping RAM low on the VPS: [`docs/VPS-MEMORY.md`](docs/VPS-MEMORY.md)
 - Hardware photos and original sketch: [`docs/img/`](docs/img/)
 - **Logger firmware** (PlatformIO, ESP32-S3): [`firmware/`](firmware/). Functions and every setting: [`docs/FIRMWARE.md`](docs/FIRMWARE.md)

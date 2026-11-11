@@ -14,10 +14,13 @@
       sites/<site>/<device>/live.json, live/YYYY-MM-DD.jsonl   15 s live snapshots (server.Live, LIVE_KEEP_DAYS)
       sites/<site>/daily.csv               one row per local day (tools/manage.py daily)
       sites/<site>/weather/                forecast.json, actual-YYYY.csv, dayahead-YYYY.csv (app/weather.py)
+      archive/<site>-before-<local time>/  records moved out of the site (tools/manage.py archive, docs/ARCHIVE.md):
+                                           the same layout, so the tools read it with --data
 
 The day files have exactly the columns of the logger's SD card files, so an SD card copy can
 be merged in (tools/manage.py backfill). Rows are unique per timestamp: a row already stored
-is dropped, so the logger can resend safely.
+is dropped, so the logger can resend safely. Rows older than site.json "records_from" (set by
+manage.py archive) are not stored: an archived test period never comes back.
 """
 
 import hashlib
@@ -34,6 +37,7 @@ NAME_RE = re.compile(r"^[A-Za-z0-9_]{1,32}$")
 CODE_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")          # site code: adab
 DEVICE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")  # device code: LOG-0001
 TS_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):00Z$")
+START_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")   # site.json "records_from"
 FIELD_RE = re.compile(r"^[A-Za-z0-9_.:@+-]{0,32}$")   # "@": boot reason@firmware, e.g. sw:ota@0.3.0
 MAX_COLUMNS = 300
 FUTURE_SLACK_S = 600
@@ -213,8 +217,24 @@ class DataStore:
             good.append((fields[0], ",".join(fields)))
         return header, cols, good, bad
 
+    def records_from(self, site):
+        """site.json "records_from" (UTC, written by manage.py archive), or "" when the site has none
+        (or a site.json broken by hand: the upload goes on, as before the archive)."""
+        try:
+            v = str(self.site_profile(site).get("records_from") or "")
+        except (ValueError, OSError):
+            return ""
+        return v if START_RE.match(v) else ""
+
     def store_rows(self, site, device, header, rows):
-        """rows: [(ts, line)]. Appends new rows to the right day file. Returns (stored, dup, new lines)."""
+        """rows: [(ts, line)]. Appends new rows to the right day file.
+        Returns (stored, dup, new lines, before_start): rows older than the site's "records_from" are dropped
+        and counted in before_start (an archived test period, from a logger's backlog or an SD card copy)."""
+        start = self.records_from(site)
+        before_start = 0
+        if start:
+            kept = [(ts, line) for ts, line in rows if ts >= start]
+            before_start, rows = len(rows) - len(kept), kept
         new_lines = []
         by_day = {}
         for ts, line in rows:
@@ -275,13 +295,15 @@ class DataStore:
                                     abs(time.time() - datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(
                                         tzinfo=timezone.utc).timestamp()) < 86400:
                                 self.on_rollback(site, device)
-        return stored, dup, new_lines
+        return stored, dup, new_lines, before_start
 
     def ingest(self, site, device, text):
         header, cols, good, bad = self.parse_csv(text)
-        stored, dup, new_lines = self.store_rows(site, device, header, good)
+        stored, dup, new_lines, before = self.store_rows(site, device, header, good)
         last = max((ts for ts, _ in good), default=None)
         res = {"ok": True, "stored": stored, "duplicates": dup, "rejected_rows": bad, "last_ts": last}
+        if before:   # 200 all the same: the logger moves on, these rows belong to an archived period
+            res["before_start"] = before
         if self.alarms is not None:
             res["alarms"] = len(self.alarms.process(site, device, header, new_lines))
         return res
