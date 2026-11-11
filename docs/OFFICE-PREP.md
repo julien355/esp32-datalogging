@@ -20,6 +20,8 @@ Reference: functions and settings [`FIRMWARE.md`](FIRMWARE.md), data format [`DA
 | A WiFi network at the office (2.4 GHz) | The office test network; the hotel's network is set later |
 | The VPS ready (`VPS-SETUP.md` steps 1 to 7) and the device token | Or a laptop server for a first test (step 3.2) |
 
+> **Bench power: one supply at a time.** While the laptop is on the board's USB-C, nothing else powers the board: DC jack empty, nothing on the 5V pin, no 5 V adapter. A second supply pushes current backwards into the laptop's USB port and can destroy the laptop: **on 11 November 2026 a laptop stopped working after the board ran from a 9 V adapter on the DC jack with its USB-C on the laptop.** Laptop in: other supplies out first. Other supply in: laptop out first. [Tutorial 1, section 0.3 rule 4](tutorials/1-LOGGER-ON-SITE.md#03-safety-rules).
+
 ## 1. Build and flash
 
 ```bash

@@ -65,7 +65,7 @@
   <rect x="500" y="120" width="560" height="345" fill="#f7f7f7" stroke="#000" stroke-width="2"/>
   <text x="515" y="142" font-weight="bold">Bluino ESP32-S3 TMP/RH RS485 RTC AI board</text>
   <text x="515" y="166" font-size="12">Alternative input (to verify on the board): 5 V into a header "5V" pin, GND to "GND".</text>
-  <text x="515" y="182" font-size="12">Only one 5 V source at a time: never USB-C and the 5V pin from two different supplies.</text>
+  <text x="515" y="182" font-size="12" font-weight="bold">ONE SUPPLY AT A TIME: laptop on USB-C = DC jack and 5V pin empty.</text>
   <text x="515" y="198" font-size="12">Check with a multimeter: 5V pin 4.75 to 5.25 V, 3V3 pin 3.2 to 3.4 V.</text>
 
   <!-- DC jack -->

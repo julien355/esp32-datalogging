@@ -89,13 +89,17 @@ The **VPS operator** in this tutorial is the owner, or the person he names. "Ask
 
 ### 0.3 Safety rules
 
-The full rules are in [`../install/README.md` section 1.5](../install/README.md#15-safety-rules). Read them and sign them before Lab 1 / bench day. The five that matter most:
+The full rules are in [`../install/README.md` section 1.5](../install/README.md#15-safety-rules). Read them and sign them before Lab 1 / bench day. The six that matter most:
 
 1. **Only the licensed electrician works in the MDP**, with the panel isolated, locked and tagged out. It holds 400/230 V and high fault currents. You may read the meter's LCD through the closed door window, or when the electrician has opened the panel, standing back, hands off.
 2. **Never open the secondary circuit of a current transformer (CT).** If you see CT wires loose or disconnected, stop and call the electrician.
 3. **The board is not 5 V tolerant.** The ESP32-S3 pins take 3.3 V at most. Nothing above 3.3 V on any GPIO pin; pull-up resistors go to **3V3**, never to 5V.
-4. **Never put the 5 V adapter on the DC jack.** The DC jack (marked `7-15V`) feeds a regulator that needs 7 to 15 V. Power the board through **USB-C only**. Never use two power sources at once. See drawing (b): [`../install/schematics/b-power-wiring.svg`](../install/schematics/b-power-wiring.svg).
-5. **Power off before rewiring.** Unplug the USB-C cable before you change any wire on the board.
+4. **ONE POWER SOURCE AT A TIME. The laptop never goes on the board's USB-C while anything else powers the board.** "Anything else" means an adapter in the DC jack (of any voltage), a supply on the `5V` header pin, or the 5 V USB-C adapter. The board's USB-C port is wired to the board's 5 V line, and we found no protection against this on the board: treat it as unprotected. The other supply then pushes its 5 V (or more, if the board's regulator fails) **backwards into the laptop's USB port**, and that can destroy the laptop's motherboard. **This has already happened on the bench:** on 11 November 2026 the board was powered from a 9 V adapter on the DC jack while its USB-C cable went to a laptop, and the laptop stopped working.
+   - **Before you plug the laptop into the board:** unplug every other supply. DC jack empty, nothing on the `5V` pin, the 5 V adapter's cable out.
+   - **Before you plug another supply into the board:** unplug the laptop's cable from the board.
+   - The only exception is a **USB isolator** between the laptop and the board, and only with the supervisor. Nothing in this tutorial needs one.
+5. **Never put 5 V on the DC jack.** The DC jack (marked `7-15V`) feeds a regulator that needs 7 to 15 V. The board runs from **USB-C only** (the laptop or the 5 V adapter, rule 4); the DC jack stays empty. See drawing (b): [`../install/schematics/b-power-wiring.svg`](../install/schematics/b-power-wiring.svg).
+6. **Power off before rewiring.** Unplug the USB-C cable before you change any wire on the board.
 
 Also: ESD (touch a grounded point before handling the board, hold it by the edges); safety glasses and a cable detector before drilling; a step stool at most for the outdoor sensor. **Anyone can stop the work** if something looks unsafe.
 
@@ -121,8 +125,8 @@ Positions below are for the top photo above, with the USB-C connector on the lef
 
 | Part | Where on the board (top photo) | What it is for | Status |
 |---|---|---|---|
-| **USB-C** connector | Left edge, middle | **The only power input you use** (5 V), and the programming and console port | Whether it goes to the ESP32-S3's native USB or through a USB-to-serial chip: **to verify** (A4 tells you how to find out) |
-| **DC jack**, marked `7-15V` | Left edge, lower corner | Input for 7 to 15 V | **Never used.** Never 5 V here |
+| **USB-C** connector | Left edge, middle | **The only power input you use** (5 V): the laptop **or** the 5 V adapter, never both (0.3 rule 4). Also the programming and console port | Whether it goes to the ESP32-S3's native USB or through a USB-to-serial chip: **to verify** (A4 tells you how to find out). No protection against back-feed into the laptop found: **treat it as unprotected** |
+| **DC jack**, marked `7-15V` | Left edge, lower corner | Input for 7 to 15 V | **Never used.** Never 5 V here. **Never anything here while a laptop is on USB-C**: it can destroy the laptop (0.3 rule 4) |
 | **BOOT** button | Top left corner (silkscreen `BOOT`) | Held 3 s while the logger runs: opens the **setup portal**. Held while you press RESET: puts the chip in **download mode** for flashing | GPIO 0 (`pin_btn` = 0) |
 | **RESET** button | Under BOOT (silkscreen `RESET`; OFFICE-PREP calls it RST) | Restarts the board | |
 | **CR1220 coin cell** holder | Top, middle left | Keeps the **real-time clock** running when the power is off | Cell + side up |
@@ -265,7 +269,7 @@ You need three programs: **Git** (downloads the code), **VS Code** (the editor) 
    ```
    Expected: `PlatformIO Core, version 6.x...`.
    If not ("pio is not recognized"): that is normal in a plain terminal. Use the **PlatformIO terminal** for every `pio` command in this tutorial: how to open it and how to recognise it is in [A4.2](#a42-open-the-platformio-terminal).
-5. **Check the USB connection of the board.** Plug the board into the laptop with the USB-C data cable. Open **Device Manager** (right-click the Start button > Device Manager), look under **Ports (COM & LPT)**.
+5. **Check the USB connection of the board.** **First check that nothing else powers the board:** DC jack empty, nothing on the `5V` pin, no adapter cable (0.3 rule 4: an adapter and the laptop together can destroy the laptop). Then plug the board into the laptop with the USB-C data cable. Open **Device Manager** (right-click the Start button > Device Manager), look under **Ports (COM & LPT)**.
    Expected: a new COM port appears when you plug the board, for example "USB Serial Device (COM5)". Note the COM number.
    If not: try another cable (charge-only cables have no data wires). If the port appears with a yellow warning sign, or its name mentions CH340 or CP210x without a working driver, install the driver of that chip from its maker. If still nothing: hold **BOOT**, press and release **RESET**, release **BOOT** (download mode, see A4) and look again.
 
@@ -724,7 +728,7 @@ From [`../OFFICE-PREP.md` section 4](../OFFICE-PREP.md#4-before-leaving-for-the-
 
 Detailed lab sheets: [`../install/README.md`](../install/README.md) Lab 5 (survey), Lab 6 (installation) and Lab 7 (commissioning). Record everything in those sheets; they become the as-built record (B13).
 
-**Important on site: the board has one USB-C port.** It is powered either by the 5 V adapter **or** by your laptop, never both. To use the serial console you unplug the adapter's cable from the board and plug in your laptop's cable (the laptop then powers the board). Each swap is a short power cut: the data shows a gap, `boot=poweron` and an **A02 Power interruption** event in the alarm log. That is expected during the install. Many checks can be done **without the laptop**, from a phone, through the setup portal's status box (B8).
+**Important on site: the board has one USB-C port.** It is powered either by the 5 V adapter **or** by your laptop, **never both**: both at once can destroy the laptop (0.3 rule 4). To use the serial console you **first unplug** the adapter's cable from the board, **then** plug in your laptop's cable (the laptop then powers the board). Going back, the laptop's cable comes out first, then the adapter's goes in. Each swap is a short power cut: the data shows a gap, `boot=poweron` and an **A02 Power interruption** event in the alarm log. That is expected during the install. Many checks can be done **without the laptop**, from a phone, through the setup portal's status box (B8).
 
 ### B1 Arrival and site survey
 
@@ -737,7 +741,7 @@ If the survey was already done on an earlier visit, re-check steps 3, 4 and 6 on
    If not: no RS485 terminals = no data. Stop and tell the supervisor and the owner. A different model = the proposed register table may not fit: you will check it in B10. Also photograph **each of the three CT labels** (they should say 250/5, plus the class): Q30.
 4. **Choose the box position** (drawing (e)): beside the panel, 30 cm or more from the steel, box centre about 1.5 m high, reachable without a ladder, not in a walkway, not under a pipe or vent.
 5. **WiFi signal check at that position.** RSSI (received signal strength) is in dBm: -50 is strong, **-70 is the minimum we accept**, -80 is unreliable. Every 3 dB less is half the power.
-   - **With the logger** (recommended): power the board from the laptop (USB-C), open the monitor, hold the board at the box position, antenna up, and type:
+   - **With the logger** (recommended): power the board from the laptop (USB-C, nothing else connected to the board), open the monitor, hold the board at the box position, antenna up, and type:
      ```
      wifi
      ```
@@ -811,13 +815,13 @@ All with the board **unpowered**. Write the results in the Lab 6 record sheet.
 | 3 | Shield bonded at the logger end only | Shield to G at the box; cut back and taped at the meter | Ask the electrician |
 | 4 | DATA to 3V3 on TS1 | 4.47 to 4.94 kohm | Wrong or missing resistor |
 | 5 | No short between the `TH2` cores | Open circuit between each pair | Re-check the cable |
-| 6 | Power path | Only the adapter's USB-C cable; DC jack empty | Fix before power |
+| 6 | Power path | One supply only: the laptop's cable for B7 step 1, the adapter's from B7 step 5; **never both**; DC jack empty | Fix before power |
 | 7 | microSD card in its slot; `120` jumper ON | Yes | |
 | 8 | Panel closed by the electrician; nobody near live parts | Yes | Wait |
 
 ### B7 First power-up and the meter settings
 
-1. **Power with the laptop first** (so you can watch and use the console): plug your laptop's USB-C cable into the board, open the monitor (`pio device monitor`), type `status`.
+1. **Power with the laptop first** (so you can watch and use the console): check that the adapter's cable is **not** in the board and the DC jack is empty (0.3 rule 4), then plug your laptop's USB-C cable into the board, open the monitor (`pio device monitor`), type `status`.
    Expected: `SD: ok`, `Time:` a real UTC time (from the RTC), `TH1=..C/..%`, `TH2=..C/..%`, `Portal: closed` (if a WiFi is already set).
    If `TH2=fault`: power off, check the TS1 wiring and the colours. With power on, measure DATA to GND on TS1: **3.2 to 3.4 V** expected. **If you see 5 V on DATA, unplug at once.**
 2. **Check the Modbus settings** of the logger against what you read on the meter (B4 step 4). The logger's settings: `meters` (meter name and address, default `EM01:1`), `mb_baud` (default `9600`), `mb_format` (default `8N1`; also `8E1`, `8O1`, `8N2`). If the meter differs, for example address 3 at 19200 baud, even parity:
@@ -841,7 +845,7 @@ All with the board **unpowered**. Write the results in the Lab 6 record sheet.
    - try function code 4: `mb 1 4 0 64`.
    The guide says the meter's own Modbus address and baud code are in registers 0x0034 and 0x0035 (**to verify**). Once the meter answers, `mb 1 3 52 2` shows them (read only).
 4. **Check the logger's own reading:** wait 30 s, then `status`. Expected: the `Last sample` line starts with `EM01_v1=... EM01_v2=...` and does not say `EM01: no answer`; with firmware 0.5.0 the line `Meter EM01 (id 1): answering since ..., n/n requests answered` too, and the site page shows `Meter EM01 · Modbus connected` in green at the top of the open alarms.
-5. **Switch to the adapter:** unplug the laptop's cable, plug the adapter's USB-C cable into the board (the electrician plugs the adapter into the socket, or you follow the procedure agreed with him).
+5. **Switch to the adapter:** unplug the laptop's cable **first**, then plug the adapter's USB-C cable into the board (the electrician plugs the adapter into the socket, or you follow the procedure agreed with him).
    Expected: the board powers up (power LED). From now on, the console needs the laptop again (and a power swap); use the portal for checks where you can.
 
 ### B8 Putting the logger on the hotel WiFi (setup portal)
@@ -1093,7 +1097,7 @@ The full steps, by cable and over the air, the same for every release: [`../HOW-
 
 ### C6 Troubleshooting
 
-The console commands need the laptop on USB (a power swap). Many checks are also possible in the portal's status box. The alarm ids are those of [`../alarms/alarms.csv`](../alarms/alarms.csv).
+The console commands need the laptop on USB (a power swap: the adapter's cable out first, then the laptop's in; never both, 0.3 rule 4). Many checks are also possible in the portal's status box. The alarm ids are those of [`../alarms/alarms.csv`](../alarms/alarms.csv).
 
 | Symptom | Diagnose (console) | Alarm that shows it | What to do |
 |---|---|---|---|
@@ -1109,6 +1113,7 @@ The console commands need the laptop on USB (a power swap). Many checks are also
 | **Values 10x, 1000x or 1/20 wrong** | `mb 1 3 0 64` compared with the LCD; `regs` | Maybe **A31** Energy counter not moving, **A30** Negative power | Register table or `ct_mult`: see B10 step 3. Tell the supervisor |
 | **Portal does not appear** | `status`: `Portal: ...` | (none) | Hold BOOT 3 to 4 s while the logger runs; console `portal` also opens it. A setup password under 8 characters is replaced by `arkan-setup` |
 | **Logger dead after pressing a button** | No text, no WiFi | **A01** after 15 min | BOOT held during a reset = download mode. Unplug and replug the power |
+| **Laptop shuts down, its USB port stops working, or a hot or burning smell, with the board plugged in** | None: do not try the console | (none) | **Unplug the board's cable and every supply at once.** Check 0.3 rule 4 (was another supply on the board?). Do not plug the board into any computer again until the supervisor has powered it **alone** from its supply and measured the `5V` pin to `GND`: 4.75 to 5.25 V expected. Above that, the board's regulator is faulty: replace the board. Report it to the supervisor |
 
 More symptoms (wiring, Modbus details, sensors): [`../install/README.md` section 12](../install/README.md#12-troubleshooting).
 
