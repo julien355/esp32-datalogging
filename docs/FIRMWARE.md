@@ -1,6 +1,6 @@
 # Logger firmware: functions and settings
 
-Firmware **0.5.1** (CSV schema 3; 0.4.0 added the remote register table (2.9.2) and the OTA build marker (2.8); 0.4.1 fixes the watchdog restart on empty server replies, see [`UPDATING.md`](UPDATING.md) section 5, and moves the AM2301 default to GPIO 1; 0.5.0 sends the Modbus link of each meter (2.7); 0.5.1 treats `wifi_ssid` and `wifi_ssid2` as two networks of equal rank and joins the one in range (2.4), see [`UPDATING.md`](UPDATING.md) section W), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
+Firmware **0.5.2** (CSV schema 3; 0.4.0 added the remote register table (2.9.2) and the OTA build marker (2.8); 0.4.1 fixes the watchdog restart on empty server replies, see [`UPDATING.md`](UPDATING.md) section 5, and moves the AM2301 default to GPIO 1; 0.5.0 sends the Modbus link of each meter (2.7); 0.5.1 treats `wifi_ssid` and `wifi_ssid2` as two networks of equal rank and joins the one in range (2.4), see [`UPDATING.md`](UPDATING.md) section W; 0.5.2 also joins networks with the older WPA security, such as the Adab hotel's, and says why a connection fails (2.4), see [`UPDATING.md`](UPDATING.md) section H), folder [`firmware/`](../firmware/). PlatformIO, Arduino framework, ESP32-S3.
 Status: **written, compiled by CI, not yet run on the board.** The pin map and the meter register map are still **to verify** (Lab 1 and Lab 3 of the install manual).
 
 How to build, flash, configure and test it: [`OFFICE-PREP.md`](OFFICE-PREP.md). The file format: [`DATA-FORMAT.md`](DATA-FORMAT.md).
@@ -53,6 +53,7 @@ One CSV file per UTC day, same columns as the server's files. **The day files ar
 |---|---|
 | WiFi drops | Records go on to the SD card. Reconnects with back-off: 10, 20, 40, 80, 160 s, then every 5 min |
 | Two networks (two sites) | `wifi_ssid` and `wifi_ssid2` are of equal rank: the logger is moved between two sites, each with its own network. Each reconnection round first **scans** (about 2 s) and tries only the network(s) in range, `wifi_ssid` first if both are; if the scan sees neither (hidden network, missed beacon, setup portal open), it tries both. **Once connected it stays on that network** and looks for nothing else; only when the link drops does the next round scan again. With only `wifi_ssid` set, it is tried every round, seen or not: one network works as before. `status` (`WiFi: down for n s, in range at the last scan: ...`) and the event log (`WiFi: connection failed (attempt n, status s, in range: ...)`) say what the last scan saw: the configured network(s) in range by name, `none of the configured networks (n other networks seen)`, `not scanned (setup portal open)` or `scan failed`. Since 0.5.1 |
+| Network security | Accepted: WPA2, WPA3, WPA/WPA2 and WPA2/WPA3 mixed, and **since 0.5.2 WPA** (older routers: the Adab hotel's network is `WPA-Personal`). Refused: WEP (broken) and WPA2-Enterprise (a user name as well as a password). A network with no password needs `wifi_pass` empty. Before 0.5.2 a WPA network was listed by the scan and still refused as not found (`status 1`). The data is protected by verified TLS whatever the WiFi security |
 | Offline 30 min | Restarts the WiFi driver (fixes most stuck radios), then every 30 min |
 | Offline `offline_rbt_h` hours (6) | Full reboot. Harmless: the data is on the SD card |
 | Link back | Uploads at once, then **catch-up**: up to 20 batches of 60 records back to back per minute (1,200 records a minute, so a 3-day outage is cleared in about 4 minutes) |
@@ -61,6 +62,19 @@ One CSV file per UTC day, same columns as the server's files. **The day files ar
 | Token refused (401/403) | Logged; retries every 10 min. Data stays on the card |
 | Live snapshot fails | Dropped (the next one comes 15 s later); after 3 failures live pauses 2 min so it does not hold up uploads |
 | Duplicates | The server drops rows it already has (same timestamp): resending is always safe |
+
+**Reading a failed connection** (since 0.5.2). The event log line is
+`WiFi: connection failed (attempt 1, status 1, reason 201 NO_AP_FOUND, in range: "Adab Sidemen" (WPA, -67 dBm)), next try in 10 s`.
+`in range` gives each configured network the scan saw, with its security and the signal of its strongest access point. `reason` is the WiFi driver's code for the refusal:
+
+| `reason` | Meaning | What to do |
+|---|---|---|
+| `201 NO_AP_FOUND` while `in range` names the network | The network is there but its security is refused | Look at the security in `in range` or `wifi`: WEP or Enterprise cannot be used; `open` needs `wifi_pass` empty |
+| `201 NO_AP_FOUND`, network not in range | Not seen: wrong name, 5 GHz only, hidden, too far | Check the name (capitals and spaces count) and the signal with `wifi` |
+| `15 4WAY_HANDSHAKE_TIMEOUT`, `204 HANDSHAKE_TIMEOUT`, `202 AUTH_FAIL`, `2 AUTH_EXPIRE` | The password is refused (more rarely: a very weak signal) | Type the password again: `set wifi_pass <password>`, `reboot` |
+| `joined but got no IP address` | The password is accepted but the network gives no address (DHCP) | The hotel must allow the logger, often by its MAC address: `status`, line `WiFi MAC` (since 0.5.2) |
+| `203 ASSOC_FAIL`, `17 ASSOC_TOOMANY` and other codes | The access point refuses the logger (full, MAC filter, band steering) | Ask the hotel; try again later |
+| `200 BEACON_TIMEOUT` | The signal was lost | Signal below -70 dBm: move the box or the antenna |
 
 ### 2.5 Auto restart and self-protection
 | Guard | Trigger | Action |
@@ -113,7 +127,7 @@ With `ota_on=1` (default), every `ota_check_h` hours the logger asks `GET /api/v
 - `rcfg_on=0` also turns this off. Firmware before 0.4.0 does not ask for the table (the page says "Firmware too old").
 
 ### 2.10 Serial console (USB, 115200 baud)
-`help`, `status`, `show`, `set <key> <value>`, `unset <key>`, `reboot`, `factory`, `portal`, `time`, `time set 2026-11-07T03:15:00`, `i2c`, `wifi`, `mb [slave] [fc] [start] [count]`, `regs`, `header`, `ls [dir]`, `cat <file>`, `tail <file> [n]`, `upload`, `resend <YYYY-MM-DD>`, `ota`, `config`.
+Since 0.5.2 `wifi` lists each access point with its channel, signal, security (`WPA2`, `WPA`, `open`, `WEP`...) and address (BSSID), and Backspace works (before, it was stored in the value: a password corrected with Backspace was wrong). `help`, `status`, `show`, `set <key> <value>`, `unset <key>`, `reboot`, `factory`, `portal`, `time`, `time set 2026-11-07T03:15:00`, `i2c`, `wifi`, `mb [slave] [fc] [start] [count]`, `regs`, `header`, `ls [dir]`, `cat <file>`, `tail <file> [n]`, `upload`, `resend <YYYY-MM-DD>`, `ota`, `config`.
 
 ### 2.11 Office preparation from the SD card
 A file `/config/settings.txt` with `key=value` lines is applied at boot, **then deleted from the card** (it holds the token and the WiFi password), then the logger restarts. `manage.py add-device ... --sd-settings settings.txt` writes one with the device code, token and server URL.
@@ -129,7 +143,7 @@ Stored in NVS (survive power cuts and reflashing; erased only by `factory`). Cha
 - setup portal: fields `wifi_ssid2` and `wifi_pass2` in the WiFi group, then "Save and restart";
 - SD card `/config/settings.txt`: lines `wifi_ssid2=<network name>` and `wifi_pass2=<password>`.
 
-The name must match exactly (capitals and spaces count), 2.4 GHz, WPA2, no login page, not hidden. After the reboot the event log shows `WiFi: networks "<first>" and "<second>": joins the one in range, stays on it until the link drops`. To test it on the bench: switch off (or move away from) the first network, reboot, and check `status` shows `WiFi: up, <second network>`. To remove it: `unset wifi_ssid2` and `unset wifi_pass2`.
+The name must match exactly (capitals and spaces count), 2.4 GHz, WPA, WPA2 or WPA3 with a password (WPA since 0.5.2), no login page, not hidden. After the reboot the event log shows `WiFi: networks "<first>" and "<second>": joins the one in range, stays on it until the link drops`. To test it on the bench: switch off (or move away from) the first network, reboot, and check `status` shows `WiFi: up, <second network>`. To remove it: `unset wifi_ssid2` and `unset wifi_pass2`.
 
 | Group | Key | Default | Meaning |
 |---|---|---|---|

@@ -29,7 +29,7 @@ static const char HELP[] =
     "  time                   show UTC time and RTC\n"
     "  time set <ISO UTC>     e.g. time set 2026-11-07T03:15:00 (UTC, not WITA)\n"
     "  i2c                    scan the I2C bus\n"
-    "  wifi                   scan WiFi networks (RSSI)\n"
+    "  wifi                   scan WiFi networks (channel, RSSI, security, access point)\n"
     "  mb [slave] [fc] [start] [count]  raw Modbus dump, e.g. mb 1 3 0 64\n"
     "  regs                   register table in use (copy to /config/registers.csv to edit)\n"
     "  header                 CSV columns\n"
@@ -189,8 +189,11 @@ static void exec(String cmd) {
   } else if (c == "i2c") cmdI2c();
   else if (c == "wifi") {
     int n = WiFi.scanNetworks();
+    if (n < 0) Serial.println("scan busy (the logger is searching for its network): type 'wifi' again");
+    if (n == 0) Serial.println("no network seen");
     for (int i = 0; i < n; i++)
-      Serial.printf("  %-32s ch %2d %4d dBm\n", WiFi.SSID(i).c_str(), WiFi.channel(i), WiFi.RSSI(i));
+      Serial.printf("  %-32s ch %2d %4d dBm  %-15s %s\n", WiFi.SSID(i).c_str(), WiFi.channel(i), WiFi.RSSI(i),
+                    net::authName(WiFi.encryptionType(i)), WiFi.BSSIDstr(i).c_str());
     WiFi.scanDelete();
   } else if (c == "mb") {
     // mb [slave] [fc] [start] [count]
@@ -229,6 +232,10 @@ void poll() {
   while (Serial.available()) {
     char ch = Serial.read();
     if (ch == '\r') continue;
+    if (ch == '\b' || ch == 0x7f) {   // Backspace (Windows sends 0x08, Linux and macOS 0x7f): drop the last character
+      if (line.length()) line.remove(line.length() - 1);
+      continue;
+    }
     if (ch == '\n') {
       Serial.printf("> %s\n", line.c_str());
       exec(line);

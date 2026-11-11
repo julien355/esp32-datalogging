@@ -12,7 +12,7 @@ RTC_NOINIT_ATTR char g_restartWhy[16];
 RTC_NOINIT_ATTR uint32_t g_restartMagic;
 
 void evlog(const char *fmt, ...) {
-  char msg[200];
+  char msg[256];
   va_list ap;
   va_start(ap, fmt);
   vsnprintf(msg, sizeof(msg), fmt, ap);

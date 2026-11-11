@@ -10,4 +10,5 @@ void otaCheckNow();         // console: check for a firmware update at once (als
                             // version that was rolled back before)
 void configCheckNow();      // console: check for remote settings at once
 String statusText();
+const char *authName(int mode);   // WiFi security of a scan result: "WPA2", "WPA", "open"...
 }  // namespace net

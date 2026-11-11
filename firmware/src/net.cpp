@@ -51,15 +51,50 @@ static void wdtDelay(uint32_t ms) {
 
 // ---------------------------------------------------------------- WiFi
 
+const char *authName(int mode) {
+  switch (mode) {
+    case WIFI_AUTH_OPEN: return "open";
+    case WIFI_AUTH_WEP: return "WEP";
+    case WIFI_AUTH_WPA_PSK: return "WPA";
+    case WIFI_AUTH_WPA2_PSK: return "WPA2";
+    case WIFI_AUTH_WPA_WPA2_PSK: return "WPA/WPA2";
+    case WIFI_AUTH_WPA2_ENTERPRISE: return "WPA2-Enterprise";
+    case WIFI_AUTH_WPA3_PSK: return "WPA3";
+    case WIFI_AUTH_WPA2_WPA3_PSK: return "WPA2/WPA3";
+    default: return "other";
+  }
+}
+
+// Why the last connection attempt ended: the WiFi driver's reason code (0 = no refusal seen).
+// 8 (ASSOC_LEAVE) is our own disconnect before each try, so it is not kept.
+static volatile uint8_t lastReason = 0;
+
+static void onDisconnected(arduino_event_id_t, arduino_event_info_t info) {
+  uint8_t r = info.wifi_sta_disconnected.reason;
+  if (r != WIFI_REASON_ASSOC_LEAVE) lastReason = r;
+}
+
+static String reasonText() {
+  uint8_t r = lastReason;
+  if (r) return String(r) + " " + WiFi.disconnectReasonName((wifi_err_reason_t)r);
+  return WiFi.status() == WL_IDLE_STATUS ? String("joined but got no IP address") : String("none");
+}
+
 static bool tryConnect(const String &ssid, const String &pass) {
   Serial.printf("WiFi: connecting to \"%s\"\n", ssid.c_str());
   WiFi.disconnect(false, false);
+  lastReason = 0;
   WiFi.begin(ssid.c_str(), pass.c_str());
   for (int i = 0; i < 80; i++) {   // 20 s
     if (WiFi.status() == WL_CONNECTED) return true;
     wdtDelay(250);
   }
   return false;
+}
+
+// Name, security and best signal of a configured network seen by the scan, e.g. "Hotel" (WPA, -67 dBm).
+static String seenText(const String &ssid, int auth, int rssi) {
+  return "\"" + ssid + "\" (" + authName(auth) + ", " + String(rssi) + " dBm)";
 }
 
 // The logger moves between sites: wifi_ssid and wifi_ssid2 are two networks of equal rank.
@@ -76,17 +111,27 @@ static bool connectAvailable(const String &s1, const String &s2) {
     // Active scan, 100 to 150 ms per channel: about 2 s. The WiFi library gives up after 10 s, well
     // within the 60 s task watchdog. Returns WIFI_SCAN_RUNNING while another scan (console "wifi") runs.
     int n = WiFi.scanNetworks(false, false, false, 150);
+    int rssi1 = -127, rssi2 = -127, auth1 = 0, auth2 = 0;   // strongest access point of each network
     for (int i = 0; i < n; i++) {
       String s = WiFi.SSID(i);
-      if (s1.length() && s == s1) seen1 = true;
-      if (s2.length() && s == s2) seen2 = true;
+      int r = WiFi.RSSI(i);
+      if (s1.length() && s == s1 && (!seen1 || r > rssi1)) {
+        seen1 = true;
+        rssi1 = r;
+        auth1 = WiFi.encryptionType(i);
+      }
+      if (s2.length() && s == s2 && (!seen2 || r > rssi2)) {
+        seen2 = true;
+        rssi2 = r;
+        auth2 = WiFi.encryptionType(i);
+      }
     }
     WiFi.scanDelete();
     wifiSeen = n == WIFI_SCAN_RUNNING ? String("not scanned (another scan running)")
                : n < 0                ? String("scan failed")
-               : seen1 && seen2       ? "\"" + s1 + "\" and \"" + s2 + "\""
-               : seen1                ? "\"" + s1 + "\""
-               : seen2                ? "\"" + s2 + "\""
+               : seen1 && seen2       ? seenText(s1, auth1, rssi1) + " and " + seenText(s2, auth2, rssi2)
+               : seen1                ? seenText(s1, auth1, rssi1)
+               : seen2                ? seenText(s2, auth2, rssi2)
                                       : String("none of the configured networks (") + n + " other networks seen)";
   }
   bool any = seen1 || seen2;
@@ -133,8 +178,8 @@ static void handleOffline() {
   if (st.portalOn) backoff = max<uint32_t>(backoff, 120);
   nextWifiAttempt = millis() + backoff * 1000;
   if (wifiAttempts == 1 || wifiAttempts % 10 == 0)
-    evlog("WiFi: connection failed (attempt %d, status %d, in range: %s), next try in %lu s", wifiAttempts,
-          WiFi.status(), wifiSeen.c_str(), (unsigned long)backoff);
+    evlog("WiFi: connection failed (attempt %d, status %d, reason %s, in range: %s), next try in %lu s",
+          wifiAttempts, WiFi.status(), reasonText().c_str(), wifiSeen.c_str(), (unsigned long)backoff);
 }
 
 // ---------------------------------------------------------------- HTTP
@@ -445,6 +490,12 @@ static void task(void *) {
   esp_task_wdt_add(nullptr);
   WiFi.persistent(false);   // credentials come from our settings, not the WiFi driver's flash
   WiFi.setAutoReconnect(false);
+  // The WiFi library refuses networks below WPA2 by default, and reports them as not found (status 1,
+  // reason 201) even though the scan lists them. Hotel routers still run WPA (the Adab hotel's network
+  // is "WPA-Personal"), so WPA is accepted too. WEP stays refused (broken). The data goes over verified
+  // TLS, so the WiFi layer is not what protects it.
+  WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);
+  WiFi.onEvent(onDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
   WiFi.mode(st.portalOn ? WIFI_AP_STA : WIFI_STA);
   WiFi.setHostname(devId.c_str());
   WiFi.setSleep(false);
@@ -520,6 +571,7 @@ String statusText() {
   s += st.wifiUp ? String("up, ") + WiFi.SSID() + " " + st.ip + " rssi " + String((int)st.rssi) + " dBm"
                  : String("down for ") + String(st.wifiDownSince ? (millis() - st.wifiDownSince) / 1000 : 0) +
                        " s, in range at the last scan: " + wifiSeen;
+  s += "\nWiFi MAC: " + WiFi.macAddress() + " (for a hotel that allows devices by address)";
   s += "\nServer: " + baseUrl + (token.length() ? "" : " (NO TOKEN)");
   s += "\nUploads: ok " + String((unsigned long)st.uploadsOk) + ", failed " + String((unsigned long)st.uploadsFail) +
        ", last ok " + (st.lastUploadOk ? isoTime(st.lastUploadOk) : String("never")) + ", last error " +

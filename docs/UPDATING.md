@@ -1,10 +1,41 @@
 # Updating the VPS and the loggers
 
-How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: firmware `0.5.1`** (section W, below, the loggers only): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0`** (section M, with firmware `0.5.0`, released as part of `0.5.1`): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
+How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: firmware `0.5.2`** (section H, below, the loggers only): the logger also joins networks with the older WPA security, such as the Adab hotel's `Adab Sidemen`, and the event log says why a connection fails. **Before it, firmware `0.5.1`** (section W): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0`** (section M, with firmware `0.5.0`, released as part of `0.5.1`): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
 **Status, 10 November 2026:** sections L and M are merged into the default branch (pull request #9, merge commit `bc2bb84`), and section W too (pull request #13, merge commit `a4b6812`). **The VPS runs `v0.8.0` since 10 November** (tags `v0.7.1` and `v0.8.0` pushed; the technician's login limited to Adab). **Still to do:** `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`) and goes straight to `0.5.1`, which contains 0.5.0, so `fw-v0.5.0` is never tagged. Steps 5 and 6 of [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md#7-general-update-to-do-now-in-order-10-november-2026) section 7. `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
+
+## H. Firmware 0.5.2: joins WPA networks (the Adab hotel), says why a connection fails
+
+**Found on site, 11 November 2026:** `LOG-0001` joins a phone hotspot but not the hotel network `Adab Sidemen`. Its event log: `WiFi: connection failed (attempt 1, status 1, in range: "Adab Sidemen")`: the scan sees the network, the connection reports it as not found. The laptop (`netsh wlan show networks mode=bssid`) shows why: `Authentication: WPA-Personal`, `Encryption: CCMP`. The WiFi library of the ESP32 refuses anything below WPA2 by default, and calls a refused network "not found".
+
+### H0. What is in it
+
+| Part | What changed | What it needs |
+|---|---|---|
+| Firmware **0.5.2** | Accepts **WPA** networks as well as WPA2 and WPA3. WEP (broken) and Enterprise networks stay refused. The data is protected by verified TLS whatever the WiFi security. [`FIRMWARE.md`](FIRMWARE.md#24-lost-connections) 2.4 | Flash by cable on site (H1): the logger cannot reach the VPS for an update over the air |
+| Event log and `status` | `WiFi: connection failed (attempt n, status s, reason <code> <name>, in range: "<network>" (<security>, <rssi> dBm)), next try in n s`. The `reason` table is in [`FIRMWARE.md`](FIRMWARE.md#24-lost-connections) 2.4. `status` adds the line `WiFi MAC: ...`, for a hotel that allows devices by address | Nothing |
+| Console | `wifi` lists each access point with channel, signal, security and BSSID, and says when a scan is busy. **Backspace works**: before, it was stored in the value, so a password corrected with Backspace was silently wrong | Nothing |
+| Settings, VPS, records | No new key, no VPS tag, `CSV_SCHEMA` stays 3 | Nothing |
+
+### H1. On site: flash by cable
+
+The laptop needs the ESP32 package once (10 to 20 minutes, internet needed): in the PlatformIO terminal, in the `firmware` folder, `pio pkg install -e logger`.
+
+1. **Get the code** of branch `ccr-6413cff1-cbsgtp`. With Git: `git fetch origin`, then `git checkout ccr-6413cff1-cbsgtp`. Without Git: download <https://github.com/julien355/esp32-datalogging/archive/refs/heads/ccr-6413cff1-cbsgtp.zip> (logged in to GitHub), unzip it to `C:\dev\`, and open the folder `esp32-datalogging-ccr-6413cff1-cbsgtp\firmware` in VS Code.
+2. **Check the version:** `Select-String '#define FW_VERSION' include\config.h` (in the `firmware` folder). **Expected:** `#define FW_VERSION "0.5.2"`.
+3. **Flash:** close the serial monitor, then `pio run -e logger -t upload` ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 3.3). **Expected:** `Hash of data verified.` and `[SUCCESS]`. The settings stay.
+4. **Watch:** `pio device monitor -f esp32_exception_decoder -f time -f log2file`, type `status`. **Expected** within a minute: `WiFi connected to "Adab Sidemen" ip=... rssi=... ch=...`, then `NTP sync`, and after two minutes `Uploads: ok n` and the backlog going down to 0.
+5. **If it still fails:** type `wifi` and copy the `Adab Sidemen` lines (security and signal), then copy the `WiFi: connection failed (... reason ...)` line and read it with the `reason` table in [`FIRMWARE.md`](FIRMWARE.md#24-lost-connections) 2.4.
+
+### H2. Afterwards, on GitHub
+
+1. Open a pull request from `ccr-6413cff1-cbsgtp`; merge it once CI is green and H1 has passed.
+2. Tag `fw-v0.5.2` on the merge commit and push the tag, as in W3. The release **Logger firmware 0.5.2** follows.
+3. `LOG-0001` already runs 0.5.2 from the cable: nothing to send. Any other logger: **Firmware update** on the site page, `logger-0.5.2.bin` ([`OTA.md`](OTA.md)).
+
+---
 
 ## W. Firmware 0.5.1: two WiFi networks of equal rank, joins the one in range
 
