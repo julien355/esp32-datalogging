@@ -1,0 +1,41 @@
+/* Meter readings entered by hand (PROPOSAL, docs/mockup/readings/): the entry form and the daily use pages */
+input[type="time"]{width:auto;min-width:0;padding:5px 8px;border-radius:var(--r-md);border:1px solid var(--control);background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;line-height:1.4}
+.mmwhen{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.mmwhen input{font-size:15px;padding:8px 10px}
+.mmgrid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@container app (min-width:900px){.mmgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mmcard{display:flex;flex-direction:column;gap:10px}
+.mmcard .card-head{margin-bottom:0}
+.mmcard .card-head h2{display:flex;gap:8px;align-items:center}
+.mmlast{font-size:13px;color:var(--muted)}
+.mmlast b{color:var(--ink);font-variant-numeric:tabular-nums}
+.mmin{display:flex;align-items:baseline;gap:10px}
+.mmin input{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.01em;max-width:300px;padding:8px 12px}
+.mmin .u{font-size:16px;font-weight:700;color:var(--muted)}
+.mmcheck{font-size:13.5px;line-height:1.45;min-height:1.45em}
+.mmcheck.good{color:var(--good-ink)}.mmcheck.warn{color:var(--warn-ink)}.mmcheck.crit{color:var(--crit-ink)}.mmcheck.muted{color:var(--muted)}
+.mmcheck .i{width:15px;height:15px;vertical-align:-3px;margin-right:4px}
+.mmcard.crit .mmin input{border-color:var(--crit);box-shadow:0 0 0 1px var(--crit)}
+.mmcard.warn .mmin input{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn)}
+.mmreset{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink-2)}
+.mmreset input{width:18px;height:18px;accent-color:var(--action)}
+.mmsave{position:sticky;bottom:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:flex-end;margin-top:16px;padding:12px 14px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-pop)}
+.mmsave .muted{margin-right:auto}
+.num{font-variant-numeric:tabular-nums}
+table.data td.num,table.data th.num{text-align:right;white-space:nowrap}
+table.data tr.mmnone td{color:var(--muted)}
+table.data tr.mmlight td.use{opacity:.75}
+.legend i.mmlight{background:var(--s1);opacity:.45;height:10px}
+.legend i.mmfull{background:var(--s1);height:10px}
+.legend i.mmref{height:0;border-top:2px dashed var(--s4);background:none;border-radius:0}
+.chart .mmmean{stroke:var(--s4);stroke-width:1.4;stroke-dasharray:6 4}
+.chart .mmno{fill:var(--muted);font-size:10px}
+.mmhow{white-space:nowrap}
+.mmrule{font-size:13px;color:var(--muted);margin-top:10px}
+.mmrule b{color:var(--ink-2)}
+.sheet .fgrid.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mmsheet-acts{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;margin-top:16px}
+.icon-btn.mmedit{width:34px;height:34px}
+.icon-btn.mmedit .i{width:17px;height:17px}
+@container app (max-width:699px){.mmsave{position:static;box-shadow:none}.mmsave .btn{width:100%}.kpi .big .mmlong{font-size:21px}}

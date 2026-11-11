@@ -1,5 +1,7 @@
 # Dashboard mockup
 
+> **Proposal of 11 November 2026, for review:** meter readings entered by hand (water, power meter 2) and their use per day: [`readings/`](readings/README.md).
+
 > **Since release v0.7.0 (10 November 2026)** the pages are in the Arkan design of the CMMS, with View as and Settings: [`arkan/`](arkan/README.md) holds the page as it is now, with saved answers. The screens below are the earlier design.
 
 How `arkan-monitoring.duckdns.org` should look for the Adab hotel, with **simulated data** (14 days).
