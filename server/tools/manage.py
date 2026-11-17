@@ -32,10 +32,20 @@ Commands:
   weather <site> [--lat L --lon L] [--dayahead-hour 18] [--model M] [--off] [--no-fetch]
                                         weather forecast and log of the site (Open-Meteo, no key, app/weather.py):
                                         set or change the place, fetch once now, show today, tomorrow and the log
+  manual-meter <site> [<id> --name N --kind water|power|gas|other --unit m3 --decimals 3 --due-h 26 --long TEXT
+                      --where TEXT --compare EM01 | <id> --remove]
+                                        meters read by hand (site.json manual_meters, app/manual.py): without an id,
+                                        list them with their last reading; with an id, add or change one, or remove it
+                                        (its readings file is kept). Their pages: Meter readings on the site page
+  import-readings <site> <meter> <file.csv | -> [--user NAME] [--dry-run]
+                                        past readings from a CSV (date,time,value[,note], hotel time, a header line
+                                        allowed), e.g. the paper round sheet: every line is checked first, nothing
+                                        is written if one is refused
 """
 
 import argparse
 import csv
+import io
 import json
 import os
 import re
@@ -48,6 +58,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import registers  # noqa: E402
 from alarms import AlarmEngine  # noqa: E402
 from firmware import Firmware, FirmwareError, check_image  # noqa: E402
+import manual  # noqa: E402
 from weather import Weather  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, atomic_write, iso_now, token_hash  # noqa: E402
 
@@ -567,6 +578,125 @@ def cmd_weather(store, a):
           f"with a day-ahead forecast. Files: {wx.dir(a.site)}")
 
 
+UNITS = {"m3": "m³", "kwh": "kWh", "l": "L", "mwh": "MWh"}
+
+
+def cmd_manual_meter(store, a):
+    p = os.path.join(store.site_dir(a.site), "site.json")
+    if not os.path.exists(p):
+        die(f"no site {a.site}")
+    prof = store.site_profile(a.site)
+    if not a.id:
+        ms = manual.meters(prof)
+        if not ms:
+            print(f"no meter read by hand on {a.site}: add one with manual-meter {a.site} water --name Water --kind water --unit m3")
+        now = datetime.now(timezone.utc)
+        for m in ms:
+            rs = manual.readings(store, a.site, m["id"])
+            off = manual.history._offset(store, a.site)
+            last = (f"last reading {manual.fv(rs[-1]['value'], m['decimals'])} {m['unit']} at {manual.loc(rs[-1]['t'], off)} "
+                    f"by {rs[-1]['user']}" + (" (due)" if (now - rs[-1]["t"]).total_seconds() > m["due_h"] * 3600 else "")
+                    if rs else "no reading yet")
+            print(f"{m['id']:<10} {m['name']} ({m['kind']}, {m['unit']}, {m['decimals']} decimals, due after {m['due_h']:g} h): "
+                  f"{len(rs)} reading(s), {last}. File: {manual.path(store, a.site, m['id'])}")
+        return
+    if not manual.ID_RE.match(a.id) or a.id in manual.RESERVED:
+        die(f"meter id: lower case letters, digits and '-', starting with a letter, not one of the page names "
+            f"({', '.join(sorted(manual.RESERVED))}); e.g. water, pm2")
+    lst = [dict(m) for m in (prof.get("manual_meters") or []) if isinstance(m, dict)]
+    cur = next((m for m in lst if m.get("id") == a.id), None)
+    if a.remove:
+        if not cur:
+            die(f"no meter {a.id} on {a.site}")
+        prof["manual_meters"] = [m for m in lst if m.get("id") != a.id]
+        atomic_write(p, json.dumps(prof, indent=2, ensure_ascii=False) + "\n")
+        print(f"meter {a.id} removed from site.json; its readings stay in {manual.path(store, a.site, a.id)}")
+        return
+    new = cur is None
+    m = cur or {"id": a.id}
+    if a.kind:
+        if a.kind not in manual.KINDS:
+            die(f"--kind: one of {', '.join(manual.KINDS)}")
+        m["kind"] = a.kind
+    m.setdefault("kind", "water" if a.id.startswith("water") else "other")
+    for k in ("name", "long", "where", "compare"):
+        v = getattr(a, k)
+        if v is not None:
+            if v:
+                m[k] = v
+            else:
+                m.pop(k, None)
+    if a.unit:
+        m["unit"] = UNITS.get(a.unit.lower(), a.unit)
+    if a.decimals is not None:
+        if not 0 <= a.decimals <= 4:
+            die("--decimals 0..4: the decimals the meter shows (3 for a water meter in m³ with litres)")
+        m["decimals"] = a.decimals
+    if a.due_h is not None:
+        if a.due_h <= 0:
+            die("--due-h: hours after the last reading before it shows as due, e.g. 26")
+        m["due_h"] = a.due_h
+    m.setdefault("name", a.id.capitalize())
+    m.setdefault("unit", "m³" if m["kind"] == "water" else "kWh")
+    m.setdefault("decimals", 3 if m["kind"] == "water" else 1)
+    m.setdefault("due_h", 26)
+    if new:
+        lst.append(m)
+    prof["manual_meters"] = lst
+    atomic_write(p, json.dumps(prof, indent=2, ensure_ascii=False) + "\n")
+    print(f"site.json: meter {'added' if new else 'changed'}: {json.dumps(m, ensure_ascii=False)}")
+    print(f"page: /live/{a.site}/#{a.id} (menu Meter readings), readings entered at /live/{a.site}/#readings")
+
+
+def cmd_import_readings(store, a):
+    prof = store.site_profile(a.site)
+    m = manual.meter(prof, a.meter)
+    if not m:
+        die(f"no meter {a.meter} read by hand on {a.site} (manual-meter {a.site} to list them)")
+    off = manual.history._offset(store, a.site)
+    rows = []
+    if a.file == "-":                     # from stdin: docker compose exec -T ingest ... - < file.csv (the container is read only)
+        text = sys.stdin.buffer.read().decode("utf-8-sig")
+    else:
+        with open(a.file, encoding="utf-8-sig", newline="") as f:
+            text = f.read()
+    delim = ";" if text[:2048].count(";") > text[:2048].count(",") else ","
+    for n, r in enumerate(csv.reader(io.StringIO(text), delimiter=delim), 1):
+        if not r or not "".join(r).strip():
+            continue
+        if n == 1 and not re.match(r"^\s*\d{4}-\d{2}-\d{2}", r[0]):
+            continue                          # header line
+        if len(r) < 3:
+            die(f"line {n}: date,time,value[,note] expected, got {r}")
+        t = manual.local_to_utc(f"{r[0].strip()} {r[1].strip()[:5]}", off)
+        if t is None:
+            die(f"line {n}: date YYYY-MM-DD and time HH:MM (hotel time) expected, got {r[0]!r} {r[1]!r}")
+        rows.append((t, n, r[2].strip(), r[3].strip() if len(r) > 3 else ""))
+    rows.sort()
+    now = datetime.now(timezone.utc)
+    have = manual.readings(store, a.site, a.meter)
+    sim, errors = list(have), []
+    for t, n, v, note in rows:          # every line checked against the readings and the lines before it
+        c = manual.check(m, sorted(sim, key=lambda x: x["t"]), t, v, off, now)
+        if c.get("empty") or not c["ok"]:
+            errors.append(f"line {n} ({manual.loc(t, off)}, {v}): {'no figure' if c.get('empty') else c['text']}")
+            continue
+        sim.append({"id": f"line{n}", "t": t, "value": c["v"], "reset": False})
+    if errors:
+        print("\n".join(errors), file=sys.stderr)
+        die(f"{len(errors)} line(s) refused: nothing imported")
+    print(f"{len(rows)} reading(s) checked for {a.meter} on {a.site}"
+          + (f", from {manual.loc(rows[0][0], off)} to {manual.loc(rows[-1][0], off)}" if rows else ""))
+    if a.dry_run or not rows:
+        return
+    for t, n, v, note in rows:
+        code, res = manual.add(store, a.site, a.meter, {"time": manual.loc(t, off), "value": v, "note": note},
+                               a.user, now=now, source="import")
+        if code != 200:
+            die(f"line {n}: {res['error']} (the lines before it are imported)")
+    print(f"imported as {a.user}: {manual.path(store, a.site, a.meter)}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", default=os.environ.get("DATA_DIR", "/data"), help="data folder (default $DATA_DIR or /data)")
@@ -612,6 +742,16 @@ def main():
     p.add_argument("--model", help="Open-Meteo model, default best_match (e.g. ecmwf_ifs025, gfs_seamless)")
     p.add_argument("--off", action="store_true", help="stop fetching for this site (the logs are kept)")
     p.add_argument("--no-fetch", action="store_true")
+    p = sub.add_parser("manual-meter"); p.add_argument("site"); p.add_argument("id", nargs="?")
+    p.add_argument("--name", help="menu name, e.g. Water"); p.add_argument("--long", help="page title, e.g. 'Water, PDAM main meter'")
+    p.add_argument("--kind", help="water, power, gas or other"); p.add_argument("--unit", help="m3, kWh, ...")
+    p.add_argument("--decimals", type=int, help="decimals the meter shows (water in m³ with litres: 3)")
+    p.add_argument("--due-h", type=float, help="hours after the last reading before it shows as due (26)")
+    p.add_argument("--where", help="where the meter is, shown on the page"); p.add_argument("--compare", help="main meter to compare with, e.g. EM01")
+    p.add_argument("--remove", action="store_true")
+    p = sub.add_parser("import-readings"); p.add_argument("site"); p.add_argument("meter"); p.add_argument("file")
+    p.add_argument("--user", default="import", help="name kept with each reading (default import)")
+    p.add_argument("--dry-run", action="store_true", help="check the lines only")
     a = ap.parse_args()
     store = DataStore(a.data)
     {
@@ -621,6 +761,7 @@ def main():
         "export-oed": cmd_export_oed, "backfill": cmd_backfill, "publish-fw": cmd_publish_fw,
         "set-config": cmd_set_config, "show-config": cmd_show_config, "alarms": cmd_alarms,
         "set-registers": cmd_set_registers, "show-registers": cmd_show_registers, "weather": cmd_weather,
+        "manual-meter": cmd_manual_meter, "import-readings": cmd_import_readings,
     }[a.cmd](store, a)
 
 

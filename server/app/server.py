@@ -27,6 +27,12 @@ People endpoints (behind the Caddy web login, never published without it):
   GET  /api/v1/quality/<site>/day/<date>     the 1-minute voltage (mean, lowest, highest), frequency, power factor
   GET  /api/v1/weather/<site>                Open-Meteo forecast (fetched every hour): today and tomorrow per hour
   GET  /api/v1/weather/<site>/log?days=7     actual weather per hour with the day-ahead forecast (&format=csv)
+  GET  /api/v1/manual/<site>?days=14         meters read by hand (site.json manual_meters: water, power meter 2): their
+                                             readings, the use per hotel day and between readings, last reading, due
+  GET  /api/v1/manual/<site>/<meter>.csv?what=days|readings&from=&to=   the same as CSV
+  POST /api/v1/manual/<site>/<meter>         JSON {time (hotel time), value, note, reset, old}: a new reading, any login
+  POST /api/v1/manual/<site>/<meter>/<id>    JSON {time, value, note, reason} or {delete: true, reason}: its author or an
+                                             admin (ADMIN_USERS). Manual POSTs: JSON, X-Requested-With: arkan, same origin
   Every ?days=N above (the last N local days, today included) can be ?from=YYYY-MM-DD&to=YYYY-MM-DD instead:
   local dates, both included, at most 92 days.
   GET  /live/  /live/<site>/   site page: live now (refresh every 15 s) and the history graphs; /live/ lists every site
@@ -75,6 +81,7 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import history  # noqa: E402
+import manual  # noqa: E402
 import quality  # noqa: E402
 import registers  # noqa: E402
 import weather  # noqa: E402
@@ -82,7 +89,7 @@ from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, IngestError, atomic_write, iso_now  # noqa: E402
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
@@ -100,7 +107,7 @@ METERS_RE = re.compile(r"^[A-Za-z0-9]{1,7}:\d{1,3}(,[A-Za-z0-9]{1,7}:\d{1,3}){0,
 REGISTERS_ADMIN_RE = re.compile(r"^/api/v1/admin/(registers|meter-settings)/")
 # People paths of one site, or of one logger, for the logins limited to some sites (USER_SITES).
 SITE_PAGE_RE = re.compile(r"^/live(?:/([a-z0-9-]+))?/?$")
-SITE_API_RE = re.compile(r"^/api/v1/(?:live|versions|alarms|history|quality|weather|records)/([a-z0-9-]+)(?:/|$)")
+SITE_API_RE = re.compile(r"^/api/v1/(?:live|versions|alarms|history|quality|weather|records|manual)/([a-z0-9-]+)(?:/|$)")
 DEVICE_API_RE = re.compile(r"^/api/v1/admin/(?:registers|meter-settings|fw)/([A-Za-z0-9_-]+)(?:/|$)")
 
 
@@ -418,6 +425,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(413, {"ok": False, "error": "body too large"})
         if path.startswith("/api/v1/admin/"):
             return self.registers_post(path, body)
+        if path.startswith("/api/v1/manual/"):
+            return self.manual_post(path, body)
         who = self.device()
         if not who:
             return self.send_json(401, {"ok": False, "error": "unknown or missing device token"})
@@ -501,6 +510,9 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/v1/weather/([a-z0-9-]+)(/log)?$", path)
         if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
             return self.weather_view(m.group(1), bool(m.group(2)), parse_qs(u.query))
+        m = re.match(r"^/api/v1/manual/([a-z0-9-]+)(?:/([a-z0-9-]+)\.csv)?$", path)
+        if m and CODE_RE.match(m.group(1)) and m.group(1) in self.store.sites():
+            return self.manual_get(m.group(1), m.group(2), parse_qs(u.query))
         if path in ("/live", "/live/") or re.match(r"^/live/[a-z0-9-]+/?$", path):
             return self.page("live")
         if path.startswith("/live/_ui/") and path[10:] in UI_FILES:
@@ -682,7 +694,9 @@ class Handler(BaseHTTPRequestHandler):
         p = self.store.site_profile(site)
         keys = ("name", "timezone", "utc_offset_h", "labels", "live", "sensors", "contracted_kva", "contract_v_ln", "rated_a",
                 "nominal_v")
-        return {k: p.get(k) for k in keys if k in p}
+        out = {k: p.get(k) for k in keys if k in p}
+        out["manual_meters"] = manual.meters(p)   # meters read by hand: their pages in the menu (Meter readings)
+        return out
 
     @staticmethod
     def period(q, days):
@@ -752,6 +766,64 @@ class Handler(BaseHTTPRequestHandler):
                 c["err"] = str(e)
             c["at"] = time.time()
         return c["rel"], c["err"]
+
+    def manual_get(self, site, mid, q):
+        """GET /api/v1/manual/<site> (JSON) and /api/v1/manual/<site>/<meter>.csv (manual.py)."""
+        try:
+            days, start, end = self.period(q, 14)
+            v = manual.view(self.store, site, days, start, end, only=mid)
+        except ValueError:
+            return self.send_json(400, {"ok": False, "error": self.PERIOD_ERROR})
+        if not mid:
+            return self.send_json(200, v)
+        if not v["meters"]:
+            return self.send_json(404, {"ok": False, "error": "no such meter read by hand on this site"})
+        what = "days" if q.get("what", ["days"])[0] == "days" else "readings"
+        body = manual.csv_text(v, what).encode("utf-8")
+        name = f"{site}-{mid}-{what}-{v['from']}" + (f"-to-{v['to']}" if v["to"] != v["from"] else "") + ".csv"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="{name}"')
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        return self.wfile.write(body)
+
+    def manual_post(self, path, body):
+        """A reading typed on the page, or its correction or deletion (manual.py). Behind the Caddy login: the login
+        name is kept with every line. Same cross-site protection as the firmware and register pages."""
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype != "application/json":
+            return self.send_json(415, {"ok": False, "error": "JSON only"})
+        if self.headers.get("X-Requested-With") != "arkan":
+            return self.send_json(403, {"ok": False, "error": "missing X-Requested-With header"})
+        origin = self.headers.get("Origin")
+        if origin and urlparse(origin).netloc != self.headers.get("Host", ""):
+            return self.send_json(403, {"ok": False, "error": "cross-site request refused"})
+        m = re.match(r"^/api/v1/manual/([a-z0-9-]+)/([a-z0-9-]+)(?:/(r\d+))?$", path)
+        if not m or not CODE_RE.match(m.group(1)) or m.group(1) not in self.store.sites():
+            return self.send_json(404, {"ok": False, "error": "not found"})
+        site, mid, rid = m.groups()
+        if not self.may_see(site):
+            return self.refuse_site()
+        user = self.auth_user()
+        if not user:
+            return self.send_json(403, {"ok": False, "error": "no login name (X-Auth-User from the Caddy login)"})
+        try:
+            req = json.loads(body or b"{}")
+            if not isinstance(req, dict):
+                raise ValueError
+        except ValueError:
+            return self.send_json(400, {"ok": False, "error": "bad JSON"})
+        if rid:
+            code, res = manual.change(self.store, site, mid, rid, req, user, bool(self.admin_user()))
+        else:
+            code, res = manual.add(self.store, site, mid, req, user)
+        if code == 200:
+            r = res.get("reading") or {}
+            sys.stderr.write(f"{iso_now()} manual reading {site}/{mid} {rid or r.get('id', '')} "
+                             f"{'deleted' if req.get('delete') else 'corrected' if rid else 'added'} by {user}\n")
+        return self.send_json(code, res)
 
     def weather_view(self, site, log, q):
         if not log:
