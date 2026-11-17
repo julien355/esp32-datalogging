@@ -14,6 +14,7 @@
       sites/<site>/<device>/live.json, live/YYYY-MM-DD.jsonl   15 s live snapshots (server.Live, LIVE_KEEP_DAYS)
       sites/<site>/daily.csv               one row per local day (tools/manage.py daily)
       sites/<site>/weather/                forecast.json, actual-YYYY.csv, dayahead-YYYY.csv (app/weather.py)
+      sites/<site>/manual/<meter>.csv      meter readings typed on the site page, never rewritten (app/manual.py)
 
 The day files have exactly the columns of the logger's SD card files, so an SD card copy can
 be merged in (tools/manage.py backfill). Rows are unique per timestamp: a row already stored

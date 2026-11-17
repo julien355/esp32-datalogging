@@ -1,10 +1,13 @@
-# Meter readings entered by hand: water meter and power meter 2 (PROPOSAL, for review)
+# Meter readings entered by hand: water meter and power meter 2
 
-**Status: mockup for review and approval, 11 November 2026. Nothing is built.** `server/` and the logger are not changed:
-this folder holds the proposed pages, shown inside a copy of the site page with simulated readings.
+**Status, 17 November 2026: built in release `v0.9.0`** for the water meter (`server/app/manual.py`, the pages in
+`server/app/live.html`; install: [`UPDATING.md`](../../UPDATING.md) section R). Power meter 2 is one command once decision R2
+below is answered. Decisions taken for the build: R1, R4, R6 and R10 as proposed; R5, R7, R8, R9 not in this release.
 
-Open **[`index.html`](index.html)** in a browser (one file, no server, no network). It is the Adab site page of the Arkan
-mockup ([`../arkan/`](../arkan/README.md)) with a new menu group, **Meter readings**: **Enter readings**, **Water**, **Power meter 2**.
+This folder keeps the design review: the mockup, the rules and the decisions. Open **[`index.html`](index.html)** in a browser
+(one file, no server, no network). It is the site page as released (`server/app/live.html`) with the saved answers of the Arkan
+mockup ([`../arkan/`](../arkan/README.md)) and two meters with simulated readings: the menu group **Meter readings** has
+**Enter readings**, **Water**, **Power meter 2**.
 The page works: type a reading, save it, correct it, delete it, change the period. Everything stays in the browser page and is
 gone when it is closed. The page's clock is fixed at **Tue 10 Nov 2026 13:00** hotel time (the time of the Arkan mockup's data).
 
@@ -104,7 +107,7 @@ reading to the next, on the day of the later reading. It needs no calculation, b
 
 In the mockup, **View as: Viewer** hides the pencil on the readings of others.
 
-## How it would be built (after approval)
+## How it is built (release v0.9.0)
 
 No change to the logger, the firmware or OED. One release of the platform (`v0.9.0`):
 
@@ -112,11 +115,11 @@ No change to the logger, the firmware or OED. One release of the platform (`v0.9
 |---|---|
 | `site.json` | a list `manual_meters`, one line per meter: `{"id": "water", "name": "Water", "long": "Water, PDAM main meter", "kind": "water", "unit": "m³", "decimals": 3, "due_h": 26, "where": "..."}`; power meter 2 adds `"compare": "EM01"`. A third meter (gas, solar) needs no code. Set with `manage.py` |
 | Data file | `sites/<site>/manual/<meter>.csv`, **append only**: one line per entry, correction or deletion (`seq, at_utc, user, action, id, time_utc, value, note, reset, old, reason`); the current readings are the file read from the top. Times in UTC, as every other file. Kept in the nightly backup with the rest of the data folder; readable by a second dashboard by the rules of [`DATA-ACCESS.md`](../../DATA-ACCESS.md) (a CSV growing at the end) |
-| `server/app/manual.py` | reads the file, works out the days (the rules above) and the checks; the same rules as the mockup's `readings.js`, so the page, the CSV and a second dashboard give the same figures |
+| `server/app/manual.py` | reads the file, works out the days (the rules above) and the checks, so the page, the CSV and a second dashboard give the same figures. Tests: `server/tests/test_manual.py` |
 | API | `GET /api/v1/manual/<site>?days=N` (or `?from=&to=`): meters, readings, use per day and between readings, usual range, last reading, due. `POST /api/v1/manual/<site>/<meter>` `{time, value, note, reset, old}`. `POST /api/v1/manual/<site>/<meter>/<id>` `{time, value, note, reason}` or `{delete: true, reason}`. `GET /api/v1/manual/<site>/<meter>.csv?what=days\|readings&from=&to=`. JSON POSTs, same origin and `X-Requested-With`, as the register page |
-| Page | the code of [`readings.js`](readings.js) and [`readings.css`](readings.css) moved into `server/app/live.html` (less the mockup's server part) |
-| `manage.py` | `add-manual-meter`, and `import-readings` for the past readings of the paper sheet or an Excel file (CSV: date, time, figure, note) |
-| Tests and docs | unit tests of the day rules and the checks (spread, gaps, reset, corrections, time zone); `LIVE.md`, `DATA-ACCESS.md`, `DATA-FORMAT.md`, `UPDATING.md` |
+| Page | in `server/app/live.html` (section "meter readings entered by hand"); the menu group comes with the site profile's `manual_meters` |
+| `manage.py` | `manual-meter` (add, change, list, remove a meter), and `import-readings` for the past readings of the paper sheet or an Excel file (CSV: date, time, figure, note; from a file or stdin) |
+| Tests and docs | unit and HTTP tests of the day rules, the checks, corrections, rights and the import; `LIVE.md`, `DATA-ACCESS.md`, `UPDATING.md` section R |
 
 Size: a few hundred bytes a day for two meters. No extra RAM worth counting.
 
@@ -140,8 +143,8 @@ Size: a few hundred bytes a day for two meters. No extra RAM worth counting.
 | File | What |
 |---|---|
 | `index.html` | the mockup (built, one file) |
-| `readings.js`, `readings.css` | the proposed pages; the block `if (MOCK && FX.manual)` plays the server in the mockup |
-| `build.py` | makes the 45 days of simulated readings and builds `index.html` from `server/app/live.html`, the UI kit and `../arkan/fixtures.json` (each insertion point must be found once, or it stops) |
+| `mock-server.js` | answers the page's `/api/v1/manual/` requests inside the mockup, with the rules of `server/app/manual.py` |
+| `build.py` | makes the 45 days of simulated readings and builds `index.html` from `server/app/live.html`, `mock-server.js`, the UI kit and `../arkan/fixtures.json` (each insertion point must be found once, or it stops) |
 | `capture.js` | the screenshots in `img/` (Playwright); stops if the page writes an error |
 
 Rebuild after a change:

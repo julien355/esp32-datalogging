@@ -98,6 +98,16 @@ Default for Adab:
 
 **Weather pages of `/live/<site>/`** (side menu, group *Weather*, added 9 November 2026): **Today** (`#wtoday`, the forecast hour by hour with the outdoor sensor beside the past hours), **Tomorrow** (`#wtomorrow`, the next day forecast) and **Weather log** (`#wlog`, the actual weather of each hour against the forecast made the day before, with the day's kWh). Live now shows one weather line under the alarms. Open-Meteo, fetched every hour by the ingest service; logs in `sites/<site>/weather/`. Setup and file format: [`WEATHER.md`](WEATHER.md).
 
+**Meter readings pages of `/live/<site>/`** (side menu, group *Meter readings*, after History; since service 0.9.0): meters the logger does not read, such as the water meter, read on site and typed in. Shown only for a site with meters in `site.json` `manual_meters` (`manage.py manual-meter`, [`UPDATING.md`](UPDATING.md) section R).
+
+| Menu | Address | What it shows | Who |
+|---|---|---|---|
+| Enter readings | `#readings` | the time of the round (hotel time) and one field per meter, each figure checked as it is typed (lower than before, higher than a later reading, future time: refused; far above or below the usual use: asks to check); the meters due (no reading for `due_h`, 26 h); the latest entries | every login that sees the site |
+| one page per meter | `#<id>`, e.g. `#water` | use per hotel day over the period (as Energy per day: 7, 14, 31 days or two dates), or between readings; tiles (yesterday, mean of the full days, highest day or share of the main meter, last reading); day by day; the readings with who entered them; CSV of the days and of the readings; the pencil corrects or deletes a reading (with a reason) | correcting: the person who entered it, or `ADMIN_USERS` |
+
+- A day's use: the meter's total at each local midnight is taken on the straight line between the readings just before and after it; a day runs from midnight to midnight. **Measured** when the readings around it are at most 30 h apart, **spread** (lighter) when they are further apart, no figure past 7 days or after the last reading. The rules and the design (approved from the mockup): [`mockup/readings/`](mockup/readings/README.md). Code: `server/app/manual.py`.
+- Data: `GET /api/v1/manual/<site>?days=N` (or `?from=&to=`), `GET /api/v1/manual/<site>/<id>.csv?what=days|readings`; entries `POST /api/v1/manual/<site>/<id>` and corrections `POST /api/v1/manual/<site>/<id>/<reading>` (JSON, same origin, `X-Requested-With: arkan`; the login name is kept with every line). File: `sites/<site>/manual/<id>.csv`, never rewritten ([`DATA-ACCESS.md`](DATA-ACCESS.md)).
+
 **Logger pages of `/live/<site>/`** (side menu, group *Logger*):
 
 | Menu | Address | What it is | Who |

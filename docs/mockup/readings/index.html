@@ -806,7 +806,7 @@ input[type="date"]{width:auto;min-width:0;padding:5px 8px;border-radius:var(--r-
 .alist .ai.neutral{background:var(--surface-2);color:var(--muted)}
 .alist li.mblink small{overflow-wrap:anywhere}
 .mocknote{background:var(--warn-bg);color:var(--warn-ink);font-size:12.5px;font-weight:600;text-align:center;padding:4px 12px}
-/* Meter readings entered by hand (PROPOSAL, docs/mockup/readings/): the entry form and the daily use pages */
+/* Meter readings entered by hand (server/app/manual.py): the entry form and the daily use pages */
 input[type="time"]{width:auto;min-width:0;padding:5px 8px;border-radius:var(--r-md);border:1px solid var(--control);background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;line-height:1.4}
 .mmwhen{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
 .mmwhen input{font-size:15px;padding:8px 10px}
@@ -1070,7 +1070,7 @@ table.data tr.mmlight td.use{opacity:.75}
 </head>
 <body>
 <a class="skip" href="#main">Skip to the page</a>
-<div class="mocknote" id="mocknote" hidden>Design mockup · <b>Meter readings</b> pages proposed for review · simulated data · nothing is saved</div>
+<div class="mocknote" id="mocknote" hidden>Design mockup · <b>Meter readings</b> pages · simulated data · nothing is saved</div>
 <div class="shell" id="shell">
   <div class="app" id="app">
     <aside class="side" aria-label="Main navigation">
@@ -1467,6 +1467,7 @@ async function loadSite() {
   for (const k in SPARKS) delete SPARKS[k];
   const j = await getJ(`/api/v1/live/${site}`);
   const prof = j.profile || {}; PROF = prof;
+  mmSetup(prof.manual_meters);
   const labels = prof.labels || {}, off = prof.utc_offset_h ?? 8, sensors = prof.sensors || {};
   const wanted = (prof.live && prof.live.values) || null;
   document.title = `Live: ${prof.name || site}`;
@@ -2668,27 +2669,42 @@ async function fwInit() {
   setInterval(() => devs.forEach(dev => fwRefresh(dev, off)), 30000);
 }
 
-// ------------------------------------------------------------------ meter readings entered by hand (PROPOSAL, docs/mockup/readings/README.md)
+// ------------------------------------------------------------------ meter readings entered by hand (server/app/manual.py)
 // Meters the logger does not read (the water meter, power meter 2): someone reads the meter's total on site and types it in with the time.
 // The server keeps every reading and works out the use of each hotel day (00:00 to 24:00) from them, so this page, the CSV and a second
 // dashboard all get the same figures:
 //   GET  /api/v1/manual/<site>?days=N (or ?from=&to=)   the meters, their readings, the use per day and between readings
 //   POST /api/v1/manual/<site>/<meter>                  {time, value, note, reset, old}: a new reading (every login of the site)
 //   POST /api/v1/manual/<site>/<meter>/<id>             {time, value, note, reason} or {delete: true, reason}: its author or an admin
-// The meters are a list in site.json ("manual_meters"): a third one (gas, a solar meter) needs no code.
-// In this mockup the block "if (MOCK && FX.manual)" plays the server, with the same rules.
+// The meters are a list in site.json ("manual_meters", manage.py manual-meter): a third one (gas, a solar meter) needs no code.
+// The rules (checks, use per day) are those of server/app/manual.py; the design was approved from docs/mockup/readings/.
 const MM_SPREAD_H = 30, MM_GAP_D = 7;   // readings more than 30 h apart: their use is spread evenly over the days between them;
                                         // more than 7 days apart: no figure per day (the readings table still has the total)
-const MM0 = (MOCK && FX.live.profile.manual_meters) || [];   // on the server: the site profile's "manual_meters"
 Object.assign(IC, {
   pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
   water: '<path d="M12 3s4.5 5 4.5 8.5a4.5 4.5 0 0 1-9 0C7.5 8 12 3 12 3z"/><path d="M3 20.5c1.5 0 1.5-1 3-1s1.5 1 3 1 1.5-1 3-1 1.5 1 3 1 1.5-1 3-1 1.5 1 3 1"/>',
   meter: '<rect x="4" y="3" width="16" height="18" rx="2"/><rect x="7" y="6" width="10" height="4" rx="1"/><path d="M12.5 12.5 10.5 16h3l-2 3.5"/>',
 });
 const mmIcon = m => m.kind === 'water' ? 'water' : 'meter';
-VIEWS.splice(VIEWS.findIndex(v => v.id === 'quality'), 0,
-  {id: 'readings', name: 'Enter readings', short: 'Readings', ic: 'pen', grp: 'Meter readings', note: 'by hand: ' + MM0.map(m => m.name.toLowerCase()).join(', ')},
-  ...MM0.map(m => ({id: m.id, name: m.name, short: m.short || m.name, ic: mmIcon(m), note: `${m.unit} per day, from the readings`})));
+// The menu group "Meter readings" (after History) comes with the site profile (manage.py manual-meter): Enter readings, then one
+// page per meter at #<id>. Nothing is shown for a site without meters read by hand.
+let MMS = [];
+const MVIEWS = {};
+function mmSetup(list) {
+  list = Array.isArray(list) ? list : [];
+  if (JSON.stringify(list) === JSON.stringify(MMS)) return;
+  MMS = list;
+  for (let i = VIEWS.length - 1; i >= 0; i--) if (VIEWS[i].mm) VIEWS.splice(i, 1);
+  for (const k in MVIEWS) delete MVIEWS[k];
+  if (MMS.length) {
+    VIEWS.splice(VIEWS.findIndex(v => v.id === 'quality'), 0,
+      {id: 'readings', mm: true, name: 'Enter readings', short: 'Readings', ic: 'pen', grp: 'Meter readings', note: 'by hand: ' + MMS.map(m => m.name.toLowerCase()).join(', ')},
+      ...MMS.map(m => ({id: m.id, mm: true, name: m.name, short: m.short || m.name, ic: mmIcon(m), note: `${m.unit} per day, from the readings`})));
+    MVIEWS.readings = mmEnterView;
+    for (const m of MMS) MVIEWS[m.id] = box => mmMeterView(box, m.id);
+  }
+  renderChrome();
+}
 
 // Figures: a narrow space between thousands (never a comma or a point, so 18 921.334 cannot be misread), a point before the decimals
 const fv = (v, d = 0) => { if (v === null || v === undefined || !isFinite(v)) return '–';
@@ -2700,14 +2716,21 @@ function mmNum(s) {
   if (typeof s === 'number') return {v: s, dec: (String(s).split('.')[1] || '').length, s: String(s)};
   s = String(s).trim().replace(/[\s  ']/g, '');
   if (!s) return null;
-  const c = s.lastIndexOf(','), d = s.lastIndexOf('.');
-  if (c >= 0 && d >= 0) s = c > d ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
-  else if (c >= 0) s = s.split(',').length > 2 ? s.replace(/,/g, '') : s.replace(',', '.');
-  else if (s.split('.').length > 2) s = s.replace(/\./g, '');
-  if (!/^\d+(\.\d+)?$/.test(s)) return {v: NaN, dec: 0, s};
+  const c = s.lastIndexOf(','), d = s.lastIndexOf('.'), bad = {v: NaN, dec: 0, s};   // the same rules as manual.parse_value
+  const grouped = (x, th) => new RegExp(`^\\d{1,3}(\\${th}\\d{3})+$`).test(x);        // thousands: groups of 3 digits
+  if (c >= 0 && d >= 0) {   // both: the last one is the decimals, the other the thousands
+    const ds = c > d ? ',' : '.', th = ds === ',' ? '.' : ',', i = s.lastIndexOf(ds), ip = s.slice(0, i);
+    if (!grouped(ip, th)) return bad;
+    s = ip.split(th).join('') + '.' + s.slice(i + 1);
+  } else if (s.split(',').length > 2 || s.split('.').length > 2) {   // one kind, several times: thousands only
+    const th = s.split(',').length > 2 ? ',' : '.';
+    if (!grouped(s, th)) return bad;
+    s = s.split(th).join('');
+  } else if (c >= 0) s = s.replace(',', '.');
+  if (!/^\d{1,12}(\.\d{1,6})?$/.test(s)) return bad;
   return {v: +s, dec: (s.split('.')[1] || '').length, s};
 }
-const mmOff = () => PROF.utc_offset_h ?? (MOCK ? FX.live.profile.utc_offset_h : 8) ?? 8;
+const mmOff = () => PROF.utc_offset_h ?? 8;
 const mmLoc = ms => new Date(ms + mmOff() * 36e5).toISOString().slice(0, 16).replace('T', ' ');   // UTC ms -> "YYYY-MM-DD HH:MM" hotel time
 const mmMs = local => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(local) ? tp(local) - mmOff() * 36e5 : NaN;
 const fwhen = local => `${fdate(tp(local))} ${local.slice(11, 16)}`;                           // "Tue 10 Nov 08:05"
@@ -2742,98 +2765,6 @@ function mmCheck(m, rs, tMs, raw, {skip = null, reset = false, old = null, usual
   if (pd > usual.hi * 1.5) return R('warn', `${t}: ${(pd / usual.median).toFixed(1)} × the usual (${range}). Check the figure; if it is right, say why in the note.`, x);
   if (pd < usual.lo * 0.5) return R('warn', `${t}: much less than usual (${range}). Check the figure: meter stuck, or supply cut?`, x);
   return R(more ? 'warn' : 'good', `${t}, ${range}.${more}`, x);
-}
-
-// ------------------------------------------------------------------ mockup: the server's side, with the server's rules
-if (MOCK && FX.manual) {
-  const MS = FX.manual, f0 = window.fetch;
-  const J = (body, status = 200) => Promise.resolve({ok: status < 400, status, json: async () => JSON.parse(JSON.stringify(body))});
-  const isoZ = ms => new Date(ms).toISOString().slice(0, 19) + 'Z';
-  const sorted = id => (MS.readings[id] || []).filter(r => !r.deleted).map(r => ({...r, ms: Date.parse(r.t), local: mmLoc(Date.parse(r.t))}))
-    .sort((a, b) => a.ms - b.ms);
-  // From one reading to the next: the use, and whether it is spread (over 30 h) or not counted per day (over 7 days, or a reset without the old figure)
-  const intervals = rs => rs.slice(1).map((b, i) => { const a = rs[i], dt = b.ms - a.ms;
-    let use = b.reset ? (b.old === undefined || b.old === null ? null : b.old - a.value) : b.value - a.value;
-    if (use !== null && use < 0) use = null;
-    return {from: a.local, to: b.local, t0: a.ms, t1: b.ms, a: a.id, b: b.id, use, h: dt / 36e5, per_day: use === null ? null : use / dt * 864e5,
-      spread: dt > MM_SPREAD_H * 36e5, gap: use === null || dt > MM_GAP_D * 864e5}; });
-  // One hotel day: the counter at both midnights on the straight line between the readings around them
-  function dayUse(segs, d, today) {
-    const d0 = tp(d + ' 00:00') - mmOff() * 36e5, d1 = d0 + 864e5;
-    let use = 0, cov = 0, spread = false, s0 = null, s1 = null, span = 0;
-    const via = [];
-    for (const s of segs) {
-      if (s.gap) continue;
-      const o0 = Math.max(d0, s.t0), o1 = Math.min(d1, s.t1);
-      if (o1 <= o0) continue;
-      use += s.use * (o1 - o0) / (s.t1 - s.t0); cov += o1 - o0; spread = spread || s.spread; span = Math.max(span, s.h);
-      if (!via.length) via.push(s.from);
-      via.push(s.to);
-      s0 = s0 === null ? o0 : Math.min(s0, o0); s1 = Math.max(s1 ?? o1, o1);
-    }
-    const how = cov >= 864e5 - 6e4 ? (spread ? 'spread' : 'measured')
-      : d === today && cov > 0 && s0 <= d0 + 6e4 && Math.abs(s1 - s0 - cov) < 6e4 ? 'so_far' : 'none';
-    return {date: d, use: how === 'none' ? null : +use.toFixed(3), how, via: how === 'none' ? [] : via, span_h: +span.toFixed(2),
-      until: how === 'so_far' ? mmLoc(s1) : null};
-  }
-  function meter(m, from, to) {
-    const rs = sorted(m.id), segs = intervals(rs), today = todayH(), bySeg = new Map(segs.map(s => [s.b, s]));
-    const days = [];
-    for (let d = from; d <= to; d = addD(d, 1)) days.push(dayUse(segs, d, today));
-    const recent = [];   // "usual": the measured days of the last 28 days, 10th to 90th percentile
-    for (let d = addD(today, -28); d < today; d = addD(d, 1)) { const x = dayUse(segs, d, today); if (x.how === 'measured') recent.push(x.use); }
-    recent.sort((a, b) => a - b);
-    const q = p => recent[Math.min(recent.length - 1, Math.floor(p * recent.length))];
-    const usual = recent.length >= 5 ? {lo: q(0.1), hi: q(0.9), median: q(0.5), days: recent.length} : null;
-    const inP = r => r.local.slice(0, 10) >= from && r.local.slice(0, 10) <= to;
-    const pick = r => r && {id: r.id, t: r.t, local: r.local, value: r.value, user: r.user, reset: !!r.reset};
-    const readings = rs.filter(inP).map(r => { const s = bySeg.get(r.id);
-      return {...pick(r), entered: r.entered, entered_local: mmLoc(Date.parse(r.entered)), note: r.note || '', old: r.old ?? null, hist: r.hist || null,
-        use: s ? s.use : null, h: s ? s.h : null, per_day: s ? s.per_day : null,
-        high: !!(s && usual && s.h >= 12 && s.per_day > usual.hi * 1.5)}; }).reverse();
-    const last = rs[rs.length - 1] || null, ago = last ? (nowMs() - last.ms) / 36e5 : null;
-    return {...m, readings, before: pick([...rs].reverse().find(r => r.local.slice(0, 10) < from)) || null, last: pick(last),
-      due: ago !== null && ago > m.due_h, ago_h: ago, days, usual, first_day: rs.length ? rs[0].local.slice(0, 10) : null,
-      intervals: segs.filter(s => s.to.slice(0, 10) >= from && s.to.slice(0, 10) <= to).map(({t0, t1, ...s}) => s)};
-  }
-  function serve(u) {
-    const q = new URLSearchParams(u.split('?')[1] || ''), today = todayH();
-    let from = q.get('from'), to = q.get('to') || today;
-    if (!from) { to = today; from = addD(today, 1 - (+q.get('days') || 14)); }
-    return {site, now: mmLoc(nowMs()), from, to, meters: MS.meters.map(m => meter(m, from, to))};
-  }
-  function post(id, rid, b) {
-    const m = MS.meters.find(x => x.id === id), list = MS.readings[id], now = isoZ(nowMs());
-    if (!m) return {ok: false, error: 'No such meter'};
-    const ms = b.time ? mmMs(String(b.time).replace('T', ' ')) : NaN, usual = meter(m, todayH(), todayH()).usual;
-    if (rid) {   // a correction or a deletion: the reading's author or an admin, and a reason; the first figure stays in the history
-      const r = list.find(x => x.id === rid && !x.deleted);
-      if (!r) return {ok: false, error: 'No such reading'};
-      if (r.user !== ME.user && !ME.admin) return {ok: false, error: 'Only the person who entered it, or an admin, can change it'};
-      if (!String(b.reason || '').trim()) return {ok: false, error: 'Say why'};
-      r.hist = r.hist || [{at: r.entered, user: r.user, what: 'entered', value: r.value}];
-      if (b.delete) { r.deleted = true; r.hist.push({at: now, user: ME.user, what: 'deleted', reason: b.reason}); return {ok: true}; }
-      const c = mmCheck(m, sorted(id), ms, b.value, {skip: rid, reset: !!r.reset, usual});
-      if (!c.ok || c.empty) return {ok: false, error: c.text};
-      r.hist.push({at: now, user: ME.user, what: 'corrected', value: c.v, was: r.value, reason: b.reason, ...(ms !== Date.parse(r.t) ? {t: isoZ(ms), was_t: r.t} : {})});
-      Object.assign(r, {t: isoZ(ms), value: c.v, note: b.note ?? r.note});
-      return {ok: true, reading: r};
-    }
-    const c = mmCheck(m, sorted(id), ms, b.value, {reset: !!b.reset, old: b.old, usual});
-    if (!c.ok || c.empty) return {ok: false, error: c.text};
-    const r = {id: id[0] + String(list.length + 1).padStart(4, '0'), t: isoZ(ms), value: c.v, user: ME.user, entered: now, note: String(b.note || '')};
-    if (b.reset) { r.reset = true; if (c.old !== null) r.old = c.old; }
-    list.push(r);
-    return {ok: true, reading: r, warning: c.cls === 'warn' ? c.text : ''};
-  }
-  window.fetch = (url, opt = {}) => {
-    const u = String(url); let m;
-    if ((opt.method || 'GET') === 'GET' && /^\/api\/v1\/manual\/[a-z0-9-]+(\?|$)/.test(u)) return J(serve(u));
-    if (opt.method === 'POST' && (m = u.match(/^\/api\/v1\/manual\/[a-z0-9-]+\/([a-z0-9-]+)(?:\/([a-z0-9]+))?$/))) {
-      const r = post(m[1], m[2], JSON.parse(opt.body)); return J(r, r.ok ? 200 : 400);
-    }
-    return f0(url, opt);
-  };
 }
 
 // ------------------------------------------------------------------ the pages
@@ -3063,8 +2994,6 @@ async function mmsSend(del) {
   renderHistory().catch(() => {});
 }
 
-const MVIEWS = {readings: mmEnterView};
-for (const m of MM0) MVIEWS[m.id] = box => mmMeterView(box, m.id);
 for (const type of ['input', 'change']) document.addEventListener(type, ev => {
   const id = ev.target.id || '';
   if (/^mm[vnro]-|^mmDate$|^mmTime$/.test(id)) mmRecheck();
@@ -3079,6 +3008,100 @@ document.addEventListener('click', ev => {
   if (b.id === 'mmSave') return mmSaveAll();
   if (b.id === 'mmsSave' || b.id === 'mmsDel') return mmsSend(b.id === 'mmsDel');
 });
+
+// ------------------------------------------------------------------ mockup only: the server's side (server/app/manual.py), in the page
+// Put into the page by docs/mockup/readings/build.py, after the readings pages of live.html and before the page starts.
+if (MOCK && FX.manual) {
+  const MS = FX.manual, f0 = window.fetch;
+  const J = (body, status = 200) => Promise.resolve({ok: status < 400, status, json: async () => JSON.parse(JSON.stringify(body))});
+  const isoZ = ms => new Date(ms).toISOString().slice(0, 19) + 'Z';
+  const sorted = id => (MS.readings[id] || []).filter(r => !r.deleted).map(r => ({...r, ms: Date.parse(r.t), local: mmLoc(Date.parse(r.t))}))
+    .sort((a, b) => a.ms - b.ms);
+  // From one reading to the next: the use, and whether it is spread (over 30 h) or not counted per day (over 7 days, or a reset without the old figure)
+  const intervals = rs => rs.slice(1).map((b, i) => { const a = rs[i], dt = b.ms - a.ms;
+    let use = b.reset ? (b.old === undefined || b.old === null ? null : b.old - a.value) : b.value - a.value;
+    if (use !== null && use < 0) use = null;
+    return {from: a.local, to: b.local, t0: a.ms, t1: b.ms, a: a.id, b: b.id, use, h: dt / 36e5, per_day: use === null ? null : use / dt * 864e5,
+      spread: dt > MM_SPREAD_H * 36e5, gap: use === null || dt > MM_GAP_D * 864e5}; });
+  // One hotel day: the counter at both midnights on the straight line between the readings around them
+  function dayUse(segs, d, today) {
+    const d0 = tp(d + ' 00:00') - mmOff() * 36e5, d1 = d0 + 864e5;
+    let use = 0, cov = 0, spread = false, s0 = null, s1 = null, span = 0;
+    const via = [];
+    for (const s of segs) {
+      if (s.gap) continue;
+      const o0 = Math.max(d0, s.t0), o1 = Math.min(d1, s.t1);
+      if (o1 <= o0) continue;
+      use += s.use * (o1 - o0) / (s.t1 - s.t0); cov += o1 - o0; spread = spread || s.spread; span = Math.max(span, s.h);
+      if (!via.length) via.push(s.from);
+      via.push(s.to);
+      s0 = s0 === null ? o0 : Math.min(s0, o0); s1 = Math.max(s1 ?? o1, o1);
+    }
+    const how = cov >= 864e5 - 6e4 ? (spread ? 'spread' : 'measured')
+      : d === today && cov > 0 && s0 <= d0 + 6e4 && Math.abs(s1 - s0 - cov) < 6e4 ? 'so_far' : 'none';
+    return {date: d, use: how === 'none' ? null : +use.toFixed(3), how, via: how === 'none' ? [] : via, span_h: +span.toFixed(2),
+      until: how === 'so_far' ? mmLoc(s1) : null};
+  }
+  function meter(m, from, to) {
+    const rs = sorted(m.id), segs = intervals(rs), today = todayH(), bySeg = new Map(segs.map(s => [s.b, s]));
+    const days = [];
+    for (let d = from; d <= to; d = addD(d, 1)) days.push(dayUse(segs, d, today));
+    const recent = [];   // "usual": the measured days of the last 28 days, 10th to 90th percentile
+    for (let d = addD(today, -28); d < today; d = addD(d, 1)) { const x = dayUse(segs, d, today); if (x.how === 'measured') recent.push(x.use); }
+    recent.sort((a, b) => a - b);
+    const q = p => recent[Math.min(recent.length - 1, Math.floor(p * recent.length))];
+    const usual = recent.length >= 5 ? {lo: q(0.1), hi: q(0.9), median: q(0.5), days: recent.length} : null;
+    const inP = r => r.local.slice(0, 10) >= from && r.local.slice(0, 10) <= to;
+    const pick = r => r && {id: r.id, t: r.t, local: r.local, value: r.value, user: r.user, reset: !!r.reset};
+    const readings = rs.filter(inP).map(r => { const s = bySeg.get(r.id);
+      return {...pick(r), entered: r.entered, entered_local: mmLoc(Date.parse(r.entered)), note: r.note || '', old: r.old ?? null, hist: r.hist || null,
+        use: s ? s.use : null, h: s ? s.h : null, per_day: s ? s.per_day : null,
+        high: !!(s && usual && s.h >= 12 && s.per_day > usual.hi * 1.5)}; }).reverse();
+    const last = rs[rs.length - 1] || null, ago = last ? (nowMs() - last.ms) / 36e5 : null;
+    return {...m, readings, before: pick([...rs].reverse().find(r => r.local.slice(0, 10) < from)) || null, last: pick(last),
+      due: ago !== null && ago > m.due_h, ago_h: ago, days, usual, first_day: rs.length ? rs[0].local.slice(0, 10) : null,
+      intervals: segs.filter(s => s.to.slice(0, 10) >= from && s.to.slice(0, 10) <= to).map(({t0, t1, ...s}) => s)};
+  }
+  function serve(u) {
+    const q = new URLSearchParams(u.split('?')[1] || ''), today = todayH();
+    let from = q.get('from'), to = q.get('to') || today;
+    if (!from) { to = today; from = addD(today, 1 - (+q.get('days') || 14)); }
+    return {site, now: mmLoc(nowMs()), from, to, meters: MS.meters.map(m => meter(m, from, to))};
+  }
+  function post(id, rid, b) {
+    const m = MS.meters.find(x => x.id === id), list = MS.readings[id], now = isoZ(nowMs());
+    if (!m) return {ok: false, error: 'No such meter'};
+    const ms = b.time ? mmMs(String(b.time).replace('T', ' ')) : NaN, usual = meter(m, todayH(), todayH()).usual;
+    if (rid) {   // a correction or a deletion: the reading's author or an admin, and a reason; the first figure stays in the history
+      const r = list.find(x => x.id === rid && !x.deleted);
+      if (!r) return {ok: false, error: 'No such reading'};
+      if (r.user !== ME.user && !ME.admin) return {ok: false, error: 'Only the person who entered it, or an admin, can change it'};
+      if (!String(b.reason || '').trim()) return {ok: false, error: 'Say why'};
+      r.hist = r.hist || [{at: r.entered, user: r.user, what: 'entered', value: r.value}];
+      if (b.delete) { r.deleted = true; r.hist.push({at: now, user: ME.user, what: 'deleted', reason: b.reason}); return {ok: true}; }
+      const c = mmCheck(m, sorted(id), ms, b.value, {skip: rid, reset: !!r.reset, usual});
+      if (!c.ok || c.empty) return {ok: false, error: c.text};
+      r.hist.push({at: now, user: ME.user, what: 'corrected', value: c.v, was: r.value, reason: b.reason, ...(ms !== Date.parse(r.t) ? {t: isoZ(ms), was_t: r.t} : {})});
+      Object.assign(r, {t: isoZ(ms), value: c.v, note: b.note ?? r.note});
+      return {ok: true, reading: r};
+    }
+    const c = mmCheck(m, sorted(id), ms, b.value, {reset: !!b.reset, old: b.old, usual});
+    if (!c.ok || c.empty) return {ok: false, error: c.text};
+    const r = {id: id[0] + String(list.length + 1).padStart(4, '0'), t: isoZ(ms), value: c.v, user: ME.user, entered: now, note: String(b.note || '')};
+    if (b.reset) { r.reset = true; if (c.old !== null) r.old = c.old; }
+    list.push(r);
+    return {ok: true, reading: r, warning: c.cls === 'warn' ? c.text : ''};
+  }
+  window.fetch = (url, opt = {}) => {
+    const u = String(url); let m;
+    if ((opt.method || 'GET') === 'GET' && /^\/api\/v1\/manual\/[a-z0-9-]+(\?|$)/.test(u)) return J(serve(u));
+    if (opt.method === 'POST' && (m = u.match(/^\/api\/v1\/manual\/[a-z0-9-]+\/([a-z0-9-]+)(?:\/([a-z0-9]+))?$/))) {
+      const r = post(m[1], m[2], JSON.parse(opt.body)); return J(r, r.ok ? 200 : 400);
+    }
+    return f0(url, opt);
+  };
+}
+
 
 // ------------------------------------------------------------------ page
 let shown = 0;   // the latest show(): an older one still loading never writes its error over it
@@ -3100,7 +3123,7 @@ async function show(id) {
   el('content').innerHTML = '<section class="card"><div class="empty">Loading…</div></section>';
   const n = ++shown;
   try { await renderHistory(); }
-  catch (e) { console.error(e); if (n === shown) el('content').innerHTML = `<section class="card"><div class="empty">Could not read the ${WXVIEWS[view] ? 'weather' : LABEL[view] || 'history'} from the server.</div></section>`; }
+  catch (e) { console.error(e); if (n === shown) el('content').innerHTML = `<section class="card"><div class="empty">Could not read the ${WXVIEWS[view] ? 'weather' : LABEL[view] || (MVIEWS[view] ? 'meter readings' : 'history')} from the server.</div></section>`; }
 }
 document.addEventListener('click', ev => {
   const r = ev.target.closest('button[data-role]');
@@ -3139,7 +3162,7 @@ for (const type of ['input', 'change']) document.addEventListener(type, ev => {
   }, 600);
 });
 addEventListener('hashchange', () => show(location.hash.slice(1)));
-const STATIC = ['now', 'firmware', 'prefs', 'register', 'readings'];   // not redrawn by a resize or the 5-minute refresh
+const STATIC = ['now', 'firmware', 'prefs', 'register', 'readings'];   // readings: the entry form keeps what is typed   // not redrawn by a resize or the 5-minute refresh
 let resizeT; addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!STATIC.includes(view)) renderHistory().catch(() => {}); }, 300); });
 
 async function tick() {
@@ -3153,7 +3176,8 @@ renderChrome();
 const redraw = () => renderHistory().catch(() => {});   // in place: no "Loading" and no jump to the top
 if (!site) { show(view); setInterval(() => { if (view === 'sites' && !document.hidden) redraw(); }, 15000); }
 else {   // the live call also brings the site profile (names, sensors, contract) the other pages use
-  if (view === 'now') tick(); else tick().finally(() => fwReady).finally(() => show(view));
+  const h0 = location.hash.slice(1);   // a meter's page (#water) is in the menu once the profile came with the first call
+  if (view === 'now' && (!h0 || h0 === 'now')) tick(); else tick().finally(() => fwReady).finally(() => show(h0 || view));
   setInterval(tick, 15000);
   setInterval(() => {   // a period that ended before today does not change: not read again
     if (STATIC.includes(view) || document.hidden || (range && range.to < todayH())) return;

@@ -806,6 +806,47 @@ input[type="date"]{width:auto;min-width:0;padding:5px 8px;border-radius:var(--r-
 .alist .ai.neutral{background:var(--surface-2);color:var(--muted)}
 .alist li.mblink small{overflow-wrap:anywhere}
 .mocknote{background:var(--warn-bg);color:var(--warn-ink);font-size:12.5px;font-weight:600;text-align:center;padding:4px 12px}
+/* Meter readings entered by hand (server/app/manual.py): the entry form and the daily use pages */
+input[type="time"]{width:auto;min-width:0;padding:5px 8px;border-radius:var(--r-md);border:1px solid var(--control);background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;line-height:1.4}
+.mmwhen{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.mmwhen input{font-size:15px;padding:8px 10px}
+.mmgrid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@container app (min-width:900px){.mmgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mmcard{display:flex;flex-direction:column;gap:10px}
+.mmcard .card-head{margin-bottom:0}
+.mmcard .card-head h2{display:flex;gap:8px;align-items:center}
+.mmlast{font-size:13px;color:var(--muted)}
+.mmlast b{color:var(--ink);font-variant-numeric:tabular-nums}
+.mmin{display:flex;align-items:baseline;gap:10px}
+.mmin input{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.01em;max-width:300px;padding:8px 12px}
+.mmin .u{font-size:16px;font-weight:700;color:var(--muted)}
+.mmcheck{font-size:13.5px;line-height:1.45;min-height:1.45em}
+.mmcheck.good{color:var(--good-ink)}.mmcheck.warn{color:var(--warn-ink)}.mmcheck.crit{color:var(--crit-ink)}.mmcheck.muted{color:var(--muted)}
+.mmcheck .i{width:15px;height:15px;vertical-align:-3px;margin-right:4px}
+.mmcard.crit .mmin input{border-color:var(--crit);box-shadow:0 0 0 1px var(--crit)}
+.mmcard.warn .mmin input{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn)}
+.mmreset{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink-2)}
+.mmreset input{width:18px;height:18px;accent-color:var(--action)}
+.mmsave{position:sticky;bottom:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:flex-end;margin-top:16px;padding:12px 14px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-pop)}
+.mmsave .muted{margin-right:auto}
+.num{font-variant-numeric:tabular-nums}
+table.data td.num,table.data th.num{text-align:right;white-space:nowrap}
+table.data tr.mmnone td{color:var(--muted)}
+table.data tr.mmlight td.use{opacity:.75}
+.legend i.mmlight{background:var(--s1);opacity:.45;height:10px}
+.legend i.mmfull{background:var(--s1);height:10px}
+.legend i.mmref{height:0;border-top:2px dashed var(--s4);background:none;border-radius:0}
+.chart .mmmean{stroke:var(--s4);stroke-width:1.4;stroke-dasharray:6 4}
+.chart .mmno{fill:var(--muted);font-size:10px}
+.mmhow{white-space:nowrap}
+.mmrule{font-size:13px;color:var(--muted);margin-top:10px}
+.mmrule b{color:var(--ink-2)}
+.sheet .fgrid.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mmsheet-acts{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;margin-top:16px}
+.icon-btn.mmedit{width:34px;height:34px}
+.icon-btn.mmedit .i{width:17px;height:17px}
+@container app (max-width:699px){.mmsave{position:static;box-shadow:none}.mmsave .btn{width:100%}.kpi .big .mmlong{font-size:21px}}
 </style>
 <script>/* Arkan UI kit, R0: display settings, sheets, list detail, filters, toasts. No dependencies, no network.
    Load in <head> so the saved display settings apply before the page paints.
@@ -1426,6 +1467,7 @@ async function loadSite() {
   for (const k in SPARKS) delete SPARKS[k];
   const j = await getJ(`/api/v1/live/${site}`);
   const prof = j.profile || {}; PROF = prof;
+  mmSetup(prof.manual_meters);
   const labels = prof.labels || {}, off = prof.utc_offset_h ?? 8, sensors = prof.sensors || {};
   const wanted = (prof.live && prof.live.values) || null;
   document.title = `Live: ${prof.name || site}`;
@@ -1699,6 +1741,7 @@ async function renderHistory() {
   hideTip();
   if (WXVIEWS[view]) return WXVIEWS[view](box);
   if (QVIEWS[view]) return QVIEWS[view](box);
+  if (MVIEWS[view]) return MVIEWS[view](box);
   if (view === 'versions') return versionsView(box);
   if (view === 'sites') return sitesView(box);
   if (view === 'prefs') return settingsView(box);
@@ -2626,6 +2669,346 @@ async function fwInit() {
   setInterval(() => devs.forEach(dev => fwRefresh(dev, off)), 30000);
 }
 
+// ------------------------------------------------------------------ meter readings entered by hand (server/app/manual.py)
+// Meters the logger does not read (the water meter, power meter 2): someone reads the meter's total on site and types it in with the time.
+// The server keeps every reading and works out the use of each hotel day (00:00 to 24:00) from them, so this page, the CSV and a second
+// dashboard all get the same figures:
+//   GET  /api/v1/manual/<site>?days=N (or ?from=&to=)   the meters, their readings, the use per day and between readings
+//   POST /api/v1/manual/<site>/<meter>                  {time, value, note, reset, old}: a new reading (every login of the site)
+//   POST /api/v1/manual/<site>/<meter>/<id>             {time, value, note, reason} or {delete: true, reason}: its author or an admin
+// The meters are a list in site.json ("manual_meters", manage.py manual-meter): a third one (gas, a solar meter) needs no code.
+// The rules (checks, use per day) are those of server/app/manual.py; the design was approved from docs/mockup/readings/.
+const MM_SPREAD_H = 30, MM_GAP_D = 7;   // readings more than 30 h apart: their use is spread evenly over the days between them;
+                                        // more than 7 days apart: no figure per day (the readings table still has the total)
+Object.assign(IC, {
+  pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+  water: '<path d="M12 3s4.5 5 4.5 8.5a4.5 4.5 0 0 1-9 0C7.5 8 12 3 12 3z"/><path d="M3 20.5c1.5 0 1.5-1 3-1s1.5 1 3 1 1.5-1 3-1 1.5 1 3 1 1.5-1 3-1 1.5 1 3 1"/>',
+  meter: '<rect x="4" y="3" width="16" height="18" rx="2"/><rect x="7" y="6" width="10" height="4" rx="1"/><path d="M12.5 12.5 10.5 16h3l-2 3.5"/>',
+});
+const mmIcon = m => m.kind === 'water' ? 'water' : 'meter';
+// The menu group "Meter readings" (after History) comes with the site profile (manage.py manual-meter): Enter readings, then one
+// page per meter at #<id>. Nothing is shown for a site without meters read by hand.
+let MMS = [];
+const MVIEWS = {};
+function mmSetup(list) {
+  list = Array.isArray(list) ? list : [];
+  if (JSON.stringify(list) === JSON.stringify(MMS)) return;
+  MMS = list;
+  for (let i = VIEWS.length - 1; i >= 0; i--) if (VIEWS[i].mm) VIEWS.splice(i, 1);
+  for (const k in MVIEWS) delete MVIEWS[k];
+  if (MMS.length) {
+    VIEWS.splice(VIEWS.findIndex(v => v.id === 'quality'), 0,
+      {id: 'readings', mm: true, name: 'Enter readings', short: 'Readings', ic: 'pen', grp: 'Meter readings', note: 'by hand: ' + MMS.map(m => m.name.toLowerCase()).join(', ')},
+      ...MMS.map(m => ({id: m.id, mm: true, name: m.name, short: m.short || m.name, ic: mmIcon(m), note: `${m.unit} per day, from the readings`})));
+    MVIEWS.readings = mmEnterView;
+    for (const m of MMS) MVIEWS[m.id] = box => mmMeterView(box, m.id);
+  }
+  renderChrome();
+}
+
+// Figures: a narrow space between thousands (never a comma or a point, so 18 921.334 cannot be misread), a point before the decimals
+const fv = (v, d = 0) => { if (v === null || v === undefined || !isFinite(v)) return '–';
+  const [i, f] = Math.abs(v).toFixed(d).split('.'); return (v < 0 ? '−' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (f ? '.' + f : ''); };
+const mmDec = m => m.kind === 'water' ? 1 : 0;   // decimals of a day's use
+// What was typed: "18921.334", "18921,334", "18 921,334", "18.921,334" (Indonesian) all read 18921.334. One point or one comma = the decimals.
+function mmNum(s) {
+  if (s === null || s === undefined) return null;
+  if (typeof s === 'number') return {v: s, dec: (String(s).split('.')[1] || '').length, s: String(s)};
+  s = String(s).trim().replace(/[\s  ']/g, '');
+  if (!s) return null;
+  const c = s.lastIndexOf(','), d = s.lastIndexOf('.'), bad = {v: NaN, dec: 0, s};   // the same rules as manual.parse_value
+  const grouped = (x, th) => new RegExp(`^\\d{1,3}(\\${th}\\d{3})+$`).test(x);        // thousands: groups of 3 digits
+  if (c >= 0 && d >= 0) {   // both: the last one is the decimals, the other the thousands
+    const ds = c > d ? ',' : '.', th = ds === ',' ? '.' : ',', i = s.lastIndexOf(ds), ip = s.slice(0, i);
+    if (!grouped(ip, th)) return bad;
+    s = ip.split(th).join('') + '.' + s.slice(i + 1);
+  } else if (s.split(',').length > 2 || s.split('.').length > 2) {   // one kind, several times: thousands only
+    const th = s.split(',').length > 2 ? ',' : '.';
+    if (!grouped(s, th)) return bad;
+    s = s.split(th).join('');
+  } else if (c >= 0) s = s.replace(',', '.');
+  if (!/^\d{1,12}(\.\d{1,6})?$/.test(s)) return bad;
+  return {v: +s, dec: (s.split('.')[1] || '').length, s};
+}
+const mmOff = () => PROF.utc_offset_h ?? 8;
+const mmLoc = ms => new Date(ms + mmOff() * 36e5).toISOString().slice(0, 16).replace('T', ' ');   // UTC ms -> "YYYY-MM-DD HH:MM" hotel time
+const mmMs = local => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(local) ? tp(local) - mmOff() * 36e5 : NaN;
+const fwhen = local => `${fdate(tp(local))} ${local.slice(11, 16)}`;                           // "Tue 10 Nov 08:05"
+const fshort = local => `${DAYS[new Date(tp(local)).getUTCDay()]} ${local.slice(11, 16)}`;     // "Tue 08:05"
+const fdur = ms => { const m = Math.round(ms / 6e4), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), mi = m % 60;
+  return d ? `${d} day${d > 1 ? 's' : ''} ${h} h` : h ? `${h} h ${String(mi).padStart(2, '0')} min` : `${mi} min`; };
+
+// The checks of a reading, the same on the page (as it is typed) and on the server (before it is saved).
+// rs: the meter's readings, oldest first, as {id, ms, local, value, reset}. Red (crit) stops the save; amber (warn) asks to check.
+function mmCheck(m, rs, tMs, raw, {skip = null, reset = false, old = null, usual = null} = {}) {
+  const u = m.unit, n = mmNum(raw), R = (cls, text, x = {}) => ({cls, text, ok: cls !== 'crit', ...x});
+  if (n === null) return R('muted', 'Leave empty to skip this meter.', {empty: true});
+  if (Number.isNaN(n.v)) return R('crit', 'Not a number. Type the figures of the meter, with a point or a comma before the decimals.');
+  if (!isFinite(tMs)) return R('crit', 'Choose the date and the time of the reading.');
+  if (tMs > nowMs() + 5 * 6e4) return R('crit', 'The time is in the future.');
+  const v = n.v, o = mmNum(old), oldV = o && !Number.isNaN(o.v) ? o.v : null, x = {v, s: n.s, old: oldV};
+  const list = rs.filter(r => r.id !== skip), prev = [...list].reverse().find(r => r.ms < tMs), next = list.find(r => r.ms > tMs);
+  const same = list.find(r => Math.abs(r.ms - tMs) < 6e4), shown = r => `${fwhen(r.local)} (${fv(r.value, m.decimals)} ${u})`;
+  if (same) return R('crit', `There is already a reading at that time: ${shown(same)}.`);
+  if (reset && prev && oldV !== null && oldV < prev.value) return R('crit', `The old meter's last figure is lower than its reading of ${shown(prev)}.`);
+  if (!reset && prev && v < prev.value) return R('crit', `Lower than the reading of ${shown(prev)}. Check the figure, or tick “Meter replaced or reset”.`);
+  if (next && !next.reset && v > next.value) return R('crit', `Higher than the later reading of ${shown(next)}. Check the figure and the time.`);
+  const more = n.dec > m.decimals ? ` The meter shows ${m.decimals} decimal${m.decimals === 1 ? '' : 's'}: check the figure.` : '';
+  if (reset) return R('warn', `Starts a new count at ${fv(v, m.decimals)} ${u}. ${!prev ? '' : oldV !== null ? `The old meter's use since ${fwhen(prev.local)}: ${
+    fv(oldV - prev.value, m.decimals)} ${u}.` : `The use from ${fwhen(prev.local)} to the change is not known: those days get no figure.`}${more}`, x);
+  if (!prev) return R(more ? 'warn' : 'good', `First reading of this meter.${more}`, x);
+  const use = v - prev.value, dt = tMs - prev.ms, pd = use / dt * 864e5, dd = mmDec(m);
+  let t = `+${fv(use, m.decimals)} ${u} since ${fwhen(prev.local)} (${fdur(dt)})`;
+  if (dt < 12 * 36e5 || !usual) return R(more ? 'warn' : 'good', t + '.' + more, x);   // a few hours say little about a day
+  t += `, ${fv(pd, dd)} ${u} a day`;
+  const range = `usual ${fv(usual.lo, dd)}–${fv(usual.hi, dd)}`;
+  if (pd > usual.hi * 1.5) return R('warn', `${t}: ${(pd / usual.median).toFixed(1)} × the usual (${range}). Check the figure; if it is right, say why in the note.`, x);
+  if (pd < usual.lo * 0.5) return R('warn', `${t}: much less than usual (${range}). Check the figure: meter stuck, or supply cut?`, x);
+  return R(more ? 'warn' : 'good', `${t}, ${range}.${more}`, x);
+}
+
+// ------------------------------------------------------------------ the pages
+let MMJ = null, MMV = null, MME = null, mmMode = 'day';
+const mmEntered = [];   // readings saved from this browser: highlighted in the lists
+const mmGet = async p => { const j = await getJ(`/api/v1/manual/${site}?${pq(p)}`); if (!j.meters) throw new Error(j.error || 'no meters'); return j; };
+const mmPost = (url, body) => fetch(url, {method: 'POST', cache: 'no-store', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'arkan'},
+  body: JSON.stringify(body)}).then(r => r.json()).catch(() => ({ok: false, error: 'server not reachable'}));
+const mmRs = mt => [...(mt.before ? [mt.before] : []), ...[...mt.readings].reverse()].map(r => ({...r, ms: Date.parse(r.t)}));
+const mmCan = r => isAdmin() || r.user === ME.user;   // a correction: the reading's author, or an admin (the server checks it too)
+const mmCsv = (mt, what, d) => `<a class="btn small" href="/api/v1/manual/${esc(site)}/${esc(mt.id)}.csv?what=${what}&amp;from=${d.from}&amp;to=${d.to}" download${
+  MOCK ? ` data-ui-toast="On the real site this downloads the ${what === 'days' ? 'use per day' : 'readings'} as CSV"` : ''}>${icon('down', 'sm')}${what === 'days' ? 'CSV' : 'CSV of the readings'}</a>`;
+function mmHist(r, dec = 3) {
+  return (r.hist || []).map(h => `${h.what === 'entered' ? 'Entered' : h.what === 'deleted' ? 'Deleted' : 'Corrected'}${h.value !== undefined ? ' ' + fv(h.value, dec) : ''}` +
+    ` by ${h.user}, ${fwhen(mmLoc(Date.parse(h.at)))}${h.reason ? ': ' + h.reason : ''}`).join(' · ');
+}
+
+// Enter readings: one time for the round, one field per meter, checked as it is typed
+const mmCard = m => `<section class="card mmcard" data-mm="${esc(m.id)}">
+  <div class="card-head"><h2>${icon(mmIcon(m))}${esc(m.long || m.name)}</h2><a class="link small" href="#${esc(m.id)}">Use per day</a></div>
+  <div class="mmlast">${m.last ? `Last reading <b>${fv(m.last.value, m.decimals)} ${esc(m.unit)}</b> · ${fwhen(m.last.local)} · ${esc(m.last.user)}` : 'No reading yet'}${
+    m.due ? ' <span class="pill warn">due</span>' : ''}${m.where ? `<br>${esc(m.where)}` : ''}</div>
+  <div class="mmin"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" id="mmv-${esc(m.id)}" aria-label="${esc(m.name)}: reading in ${esc(m.unit)}"><span class="u">${esc(m.unit)}</span></div>
+  <div class="mmcheck muted" id="mmc-${esc(m.id)}" aria-live="polite"></div>
+  <input type="text" id="mmn-${esc(m.id)}" placeholder="Note (optional): pool topped up, meter glass dirty…" aria-label="${esc(m.name)}: note">
+  <label class="mmreset"><input type="checkbox" id="mmr-${esc(m.id)}">Meter replaced or reset: the count starts again</label>
+  <div class="field" id="mmow-${esc(m.id)}" hidden><label for="mmo-${esc(m.id)}">Last figure of the old meter, if known (${esc(m.unit)})</label><input type="text" inputmode="decimal" id="mmo-${esc(m.id)}"></div>
+</section>`;
+function mmLatest(j) {
+  const rows = j.meters.flatMap(m => m.readings.map(r => ({m, r}))).sort((a, b) => a.r.entered < b.r.entered ? 1 : -1).slice(0, 8);
+  return tableCard(`<tr><th>Meter</th><th>Read at</th><th class="num">Reading</th><th class="num">Since the previous</th><th>By</th><th>Entered</th></tr>` +
+    rows.map(({m, r}) => `<tr${mmEntered.includes(r.id) ? ' class="cur"' : ''}><td><a href="#${esc(m.id)}">${esc(m.name)}</a></td><td>${fwhen(r.local)}</td>
+      <td class="num">${fv(r.value, m.decimals)} ${esc(m.unit)}</td><td class="num">${r.use === null ? '–' : '+' + fv(r.use, m.decimals) + ' ' + esc(m.unit)}</td>
+      <td>${esc(r.user)}</td><td>${fwhen(r.entered_local)}</td></tr>`).join(''));
+}
+async function mmEnterView(box) {
+  const j = await mmGet({days: 31}), today = todayH(), nowL = mmLoc(nowMs()), due = j.meters.filter(m => m.due);
+  MMJ = j;
+  box.innerHTML = head('Enter meter readings', `Type the figures as each meter shows them. Every reading is saved with your login (<b>${esc(ME.user || '…')}</b>) and the time below.`) +
+    (due.length ? `<div class="banner warn">${icon('alert')}<div><b>Reading due.</b> ${due.map(m => `${esc(m.name)}: last read ${fwhen(m.last.local)}, ${fdur(m.ago_h * 36e5)} ago`).join(' · ')}</div></div>` : '') +
+    `<section class="card"><div class="card-head"><h2>Time of the reading</h2><span class="muted small">hotel time (${esc(PROF.timezone || 'UTC+8')})</span></div>
+      <div class="mmwhen"><input type="date" id="mmDate" value="${nowL.slice(0, 10)}" min="${addD(today, -30)}" max="${today}" aria-label="Date of the reading">
+      <input type="time" id="mmTime" value="${nowL.slice(11, 16)}" aria-label="Time of the reading"><button type="button" class="btn small" id="mmNow">Now</button>
+      <span class="muted small">Read at about the same time every day (08:00 suggested): the daily figures are then measured, not spread.</span></div></section>
+    <div class="mmgrid mt-16">${j.meters.map(mmCard).join('')}</div>
+    <div class="mmsave"><span class="muted small">Saved as <b>${esc(ME.user || '…')}</b>. A wrong figure can be corrected on the meter's page; every change is kept.</span>
+      <button type="button" class="btn primary" id="mmSave" disabled>Save</button></div>` +
+    sec('Latest entries', 'every meter, newest first') + mmLatest(j);
+  mmRecheck();
+}
+function mmRecheck() {
+  if (!MMJ || !el('mmSave')) return;
+  const tMs = el('mmDate').value && el('mmTime').value ? mmMs(`${el('mmDate').value} ${el('mmTime').value}`) : NaN;
+  let n = 0, bad = 0;
+  for (const m of MMJ.meters) {
+    const reset = el('mmr-' + m.id).checked;
+    el('mmow-' + m.id).hidden = !reset;
+    const c = mmCheck(m, mmRs(m), tMs, el('mmv-' + m.id).value, {reset, old: el('mmo-' + m.id).value, usual: m.usual}), box = el('mmc-' + m.id);
+    box.className = 'mmcheck ' + c.cls;
+    box.innerHTML = (c.cls === 'muted' ? '' : icon(c.cls === 'good' ? 'check' : 'alert')) + esc(c.text);
+    const card = box.closest('.mmcard');
+    card.classList.toggle('crit', c.cls === 'crit'); card.classList.toggle('warn', c.cls === 'warn');
+    if (!c.empty) { n++; if (!c.ok) bad++; }
+  }
+  const b = el('mmSave');
+  b.disabled = !n || bad > 0;
+  b.textContent = bad ? 'Check the figure in red' : n ? `Save ${n} reading${n > 1 ? 's' : ''}` : 'Save';
+}
+async function mmSaveAll() {
+  const time = `${el('mmDate').value}T${el('mmTime').value}`, done = [], fail = [];   // hotel time; the server knows the site's time zone
+  el('mmSave').disabled = true;
+  for (const m of MMJ.meters) {
+    const n = mmNum(el('mmv-' + m.id).value);
+    if (n === null) continue;
+    const reset = el('mmr-' + m.id).checked, o = mmNum(el('mmo-' + m.id).value);
+    const r = await mmPost(`/api/v1/manual/${site}/${m.id}`, {time, value: n.s, note: el('mmn-' + m.id).value.trim(), reset,
+      old: reset && o && !Number.isNaN(o.v) ? o.s : null});
+    if (r.ok) { done.push(`${m.name} ${fv(n.v, m.decimals)} ${m.unit}`); if (r.reading) mmEntered.push(r.reading.id); }
+    else fail.push(`${m.name}: ${r.error}`);
+  }
+  toast(fail.length ? 'Not saved: ' + fail.join(' · ') : `Saved: ${done.join(', ')}${MOCK ? ' (mockup: kept in this page only)' : ''}`);
+  if (fail.length) return mmRecheck();
+  show('readings');
+}
+
+// A meter's page: use per hotel day (or between readings), the day by day table and the readings
+const mmHowTip = d => d.how === 'measured' ? `Measured: readings ${d.via.map(fshort).join(' → ')}`
+  : d.how === 'spread' ? `Spread evenly: readings ${d.via.map(fwhen).join(' → ')}, ${fdur(d.span_h * 36e5)} apart`
+  : d.how === 'so_far' ? `So far: 00:00 to ${d.until.slice(11)} (the last reading)` : 'No reading covers this day';
+function mmHowCell(d, mt) {
+  if (d.how === 'measured') return `Measured <span class="dimtxt">${d.via.map(fshort).join(' → ')}</span>`;
+  if (d.how === 'spread') return `<span class="pill neutral">Spread</span> <span class="dimtxt">readings ${fdur(d.span_h * 36e5)} apart: ${d.via.map(fwhen).join(' → ')}</span>`;
+  if (d.how === 'so_far') return `So far <span class="dimtxt">00:00 to ${d.until.slice(11)}</span>`;
+  return mt.last && d.date >= mt.last.local.slice(0, 10) ? 'Waiting for the next reading' : 'Not covered by readings';
+}
+// Bars with gaps: one per day (or per reading), lighter for spread or "so far", the mean of the full days as a dashed line
+function mmBars(box, bars, unit, {xName = 'Day (hotel time)', mean = null, digits = 1} = {}) {
+  sizeTo(box);
+  const vals = bars.map(b => b.v).filter(v => v !== null);
+  if (!vals.length) { box.innerHTML = '<div class="empty">No readings for this period.</div>'; return; }
+  const yt = nice(0, Math.max(...vals, mean ?? 0) || 1), y1 = yt[yt.length - 1], bw = (CW - CM.l - CM.r) / bars.length;
+  const Y = v => CH - CM.b - v / y1 * (CH - CM.t - CM.b);
+  let g = '', b = '';
+  for (const v of yt) g += `<line class="grid" x1="${CM.l}" x2="${CW - CM.r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${CM.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+  bars.forEach((d, i) => {
+    const w = Math.max(2, Math.min(bw - 2, bw * 0.82)), x = CM.l + i * bw + (bw - w) / 2;
+    if (d.v === null) b += `<text class="mmno" x="${x + w / 2}" y="${CH - CM.b - 5}" text-anchor="middle">–</text>`;
+    else { const y = Y(d.v), r = Math.max(0, Math.min(4, w / 2, CH - CM.b - y));
+      b += `<path d="M${x},${CH - CM.b}V${y + r}q0,${-r} ${r},${-r}h${w - 2 * r}q${r},0 ${r},${r}V${CH - CM.b}Z" style="fill:var(--s1)${d.light ? ';opacity:.45' : ''}"/>`; }
+    if (i % Math.ceil(40 / bw) === 0) b += `<text class="ax" x="${x + w / 2}" y="${CH - CM.b + 14}" text-anchor="middle">${esc(d.l1)}</text><text class="ax" x="${x + w / 2}" y="${CH - CM.b + 27}" text-anchor="middle">${esc(d.l2)}</text>`;
+    b += `<rect data-i="${i}" x="${CM.l + i * bw}" y="${CM.t}" width="${bw}" height="${CH - CM.t - CM.b}" fill="transparent"/>`;
+  });
+  const ref = mean === null ? '' : `<line class="mmmean" x1="${CM.l}" x2="${CW - CM.r}" y1="${Y(mean).toFixed(1)}" y2="${Y(mean).toFixed(1)}"/>` +
+    `<text class="ax liml" x="${CW - CM.r - 4}" y="${(Y(mean) - 5).toFixed(1)}" text-anchor="end">mean ${fv(mean, digits)}</text>`;
+  box.innerHTML = `<div class="legend"><span><i class="mmfull"></i>${xName.startsWith('Day') ? 'Measured: readings about a day apart' : 'About a day since the reading before'}</span>
+    <span><i class="mmlight"></i>${xName.startsWith('Day') ? 'Spread: readings more than 30 h apart · today so far' : 'More than 30 h since the reading before'}</span>${mean === null ? '' : '<span><i class="mmref"></i>Mean of the full days</span>'}</div>
+    <svg viewBox="0 0 ${CW} ${CH}" role="img" aria-label="${esc(unit)} per bar">${g}
+    <text class="ax" x="12" y="${(CH - CM.b + CM.t) / 2}" transform="rotate(-90 12 ${(CH - CM.b + CM.t) / 2})" text-anchor="middle">${esc(unit)}</text>${axes(xName)}${b}${ref}</svg>`;
+  const svg = box.querySelector('svg');
+  svg.addEventListener('mousemove', ev => { const i = ev.target.dataset && ev.target.dataset.i; if (i === undefined) return hideTip(); showTip(ev, bars[i].tip); });
+  svg.addEventListener('mouseleave', hideTip);
+}
+function mmReadTable(mt, d) {
+  const u = esc(mt.unit), dd = mmDec(mt);
+  const rows = mt.readings.map(r => {
+    const late = Date.parse(r.entered) - Date.parse(r.t) > 2 * 36e5, corr = (r.hist || []).some(h => h.what === 'corrected');
+    const pills = [r.reset ? `<span class="pill neutral" title="${esc(r.old !== null ? 'Last figure of the old meter: ' + fv(r.old, mt.decimals) : 'Old meter\'s last figure not known')}">new count</span>` : '',
+      corr ? `<span class="pill info" title="${esc(mmHist(r, mt.decimals))}">corrected</span>` : '', r.high ? `<span class="pill warn" title="More than 1.5 × the usual use per day">high</span>` : ''].filter(Boolean).join(' ');
+    return `<tr${mmEntered.includes(r.id) ? ' class="cur"' : ''}><td>${fwhen(r.local)}</td><td class="num"><b>${fv(r.value, mt.decimals)}</b></td>
+      <td class="num">${r.use === null ? '–' : '+' + fv(r.use, mt.decimals)}${r.h === null ? '' : `<br><small class="muted">in ${fdur(r.h * 36e5)}</small>`}</td>
+      <td class="num">${r.per_day === null || r.h < 12 ? '–' : fv(r.per_day, dd)}</td>
+      <td>${esc(r.user)}${late ? `<br><small class="muted">entered ${fwhen(r.entered_local)}</small>` : ''}</td><td class="wrap">${pills}${pills && r.note ? ' ' : ''}${esc(r.note)}</td>
+      <td>${mmCan(r) ? `<button type="button" class="icon-btn mmedit" data-mmedit="${esc(r.id)}" aria-label="Correct the reading of ${fwhen(r.local)}" title="Correct this reading">${icon('pen')}</button>` : ''}</td></tr>`;
+  }).join('');
+  return `<section class="card"><div class="card-head"><h2>Readings</h2><div class="inline"><span class="muted small">${mt.readings.length} in the period, newest first</span>
+      <a class="btn small" href="#readings">${icon('pen', 'sm')}Enter a reading</a>${mmCsv(mt, 'readings', d)}</div></div>
+    <div class="tablewrap"><table class="data"><tr><th>Read at</th><th class="num">Reading (${u})</th><th class="num">Since the previous</th>
+      <th class="num">Per day</th><th>By</th><th>Note</th><th></th></tr>${rows || '<tr><td colspan="7" class="muted">No reading in this period.</td></tr>'}</table></div></section>`;
+}
+async function mmMeterView(box, id) {
+  const j = await mmGet(per()), mt = j.meters.find(m => m.id === id), d = pDates();
+  if (!mt) { box.innerHTML = head(id, '') + '<section class="card"><div class="empty">This meter is not in the site\'s manual_meters.</div></section>'; return; }
+  MMV = mt;
+  let main = null;   // the main meter of the logger, per hotel day, for a meter that names it ("compare")
+  if (mt.compare) try { main = byDay((await hourly()).hours); } catch (e) { main = null; }
+  const u = mt.unit, dd = mmDec(mt), today = todayH(), y = mt.days.find(x => x.date === addD(today, -1));
+  const full = mt.days.filter(x => x.how === 'measured' || x.how === 'spread'), nSpread = full.filter(x => x.how === 'spread').length;
+  const mean = full.length ? full.reduce((a, x) => a + x.use, 0) / full.length : null;
+  const top = full.reduce((a, x) => (!a || x.use > a.use ? x : a), null);
+  const both = main ? full.filter(x => main[x.date] && main[x.date].minutes >= 1430) : [];
+  const share = both.length ? both.reduce((a, x) => a + x.use, 0) / both.reduce((a, x) => a + main[x.date].kwh, 0) * 100 : null;
+  const yNote = !y ? '' : y.how === 'none' ? (mt.last && mt.last.local < today + ' 00:00' ? 'waiting for today\'s reading' : 'no reading') : y.how === 'spread' ? 'spread over readings ' + fdur(y.span_h * 36e5) + ' apart' : 'measured';
+  box.innerHTML = head(mt.long || mt.name, `Read by hand${mt.where ? ', ' + esc(mt.where) : ''}. Use per hotel day (00:00 to 24:00), worked out from the readings. ${cap(pText())}.`,
+      periodPicker(mmCsv(mt, 'days', d))) +
+    tiles([range ? statTile('Total of the period', fv(full.reduce((a, x) => a + x.use, 0), dd), u, `${full.length} full day${full.length === 1 ? '' : 's'}`)
+        : statTile('Yesterday', y && y.use !== null ? fv(y.use, dd) : '–', u, yNote),
+      statTile('Mean per day', mean === null ? '–' : fv(mean, dd), u, `${full.length} full day${full.length === 1 ? '' : 's'}${nSpread ? `, ${nSpread} spread` : ''}`),
+      share !== null ? statTile(`Share of the main meter ${mt.compare}`, share.toFixed(0), '%', `${both.length} day${both.length === 1 ? '' : 's'} with both meters`)
+        : statTile('Highest day', top ? fv(top.use, dd) : '–', u, top ? fday(top.date) + (top.how === 'spread' ? ', spread' : '') : ''),
+      statTile('Last reading', mt.last ? `<span class="mmlong">${fv(mt.last.value, mt.decimals)}</span>` : '–', u, mt.last ? `${fwhen(mt.last.local)} · ${esc(mt.last.user)}${
+        mt.due ? ` · <span class="warnc">due, ${fdur(mt.ago_h * 36e5)} ago</span>` : ''}` : 'no reading yet')]) +
+    `<section class="card mt-16"><div class="card-head"><h2>${mmMode === 'day' ? 'Use per hotel day' : 'Use between readings'}</h2>
+      <div class="seg" role="group" aria-label="How the use is shown">${segBtn('data-mmmode="day"', mmMode === 'day', 'Per hotel day')}${segBtn('data-mmmode="read"', mmMode === 'read', 'Between readings')}</div></div>
+      <div class="chart" id="ch"></div>
+      <p class="mmrule">${mmMode === 'day' ? `<b>How a day's use is worked out.</b> A reading gives the meter's total at the time it was read. The total at midnight is taken on the
+        straight line between the readings just before and after it, and a day's use runs from midnight to midnight, as on Energy per day. Readings about a day apart
+        give a measured day. Lighter bars: readings more than ${MM_SPREAD_H} h apart (a Sunday or a holiday without a round), their use is spread evenly over the
+        days between them; and today so far. No bar: no reading after that day yet, or more than ${MM_GAP_D} days between two readings.`
+        : `<b>Between readings.</b> Each bar is the use from one reading to the next, on the day and time of the later reading: the way a paper round sheet counts it.
+        Lighter: more than ${MM_SPREAD_H} h since the reading before, so the bar holds more than a day.`}</p></section>` +
+    (mmMode === 'day' ? sec('Day by day', 'newest first') + tableCard(`<tr><th>Day</th><th class="num">Use</th><th>From the readings</th>${main ? `<th class="num">Main meter ${esc(mt.compare)}</th><th class="num">Share</th>` : ''}</tr>` +
+      [...mt.days].reverse().map(x => { const mm = main && main[x.date], mok = mm && mm.minutes >= 1430;
+        return `<tr class="${x.how === 'none' ? 'mmnone' : x.how !== 'measured' ? 'mmlight' : ''}"><td>${fday(x.date)}</td><td class="num use">${x.use === null ? '–' : fv(x.use, dd) + ' ' + esc(u)}</td><td>${mmHowCell(x, mt)}</td>${
+          main ? `<td class="num">${mm ? fv(mm.kwh, 0) + ' kWh' + (mok ? '' : ' <span class="dimtxt">part</span>') : '–'}</td><td class="num">${mok && x.use !== null && x.how !== 'so_far' ? (x.use / mm.kwh * 100).toFixed(0) + ' %' : ''}</td>` : ''}</tr>`; }).join('')) : '') +
+    sec('Readings') + mmReadTable(mt, d);
+  if (mmMode === 'day') mmBars(el('ch'), mt.days.map(x => { const ms = tp(x.date + ' 00:00'), dt = new Date(ms);
+    return {v: x.use, light: x.how !== 'measured', l1: DAYS[dt.getUTCDay()], l2: `${dt.getUTCDate()} ${MONS[dt.getUTCMonth()]}`,
+      tip: `<b>${fdate(ms)}</b>${x.use === null ? 'no figure' : fv(x.use, dd) + ' ' + esc(u) + (x.how === 'so_far' ? ' so far' : '')}` +
+        `${main && main[x.date] && x.use !== null ? `<div class="dim">main meter ${esc(mt.compare)}: ${fv(main[x.date].kwh, 0)} kWh</div>` : ''}<div class="dim">${esc(mmHowTip(x))}</div>`}; }),
+    u, {mean, digits: dd});
+  else mmBars(el('ch'), mt.intervals.map(s => ({v: s.use, light: s.spread, l1: `${DAYS[new Date(tp(s.to)).getUTCDay()]} ${+s.to.slice(8, 10)}`, l2: s.to.slice(11, 16),
+    tip: `<b>${fwhen(s.from)} → ${fwhen(s.to)}</b>${s.use === null ? 'not counted (meter replaced or reset)' : `+${fv(s.use, mt.decimals)} ${esc(u)} in ${fdur(s.h * 36e5)}`}` +
+      (s.h >= 12 && s.per_day !== null ? `<div class="dim">${fv(s.per_day, dd)} ${esc(u)} a day</div>` : '')})), u, {xName: 'Reading (hotel time)', digits: dd});
+}
+
+// Correcting a reading: a sheet with the figure, the time, the note and why; or deleting it. The first figure stays in the history.
+function mmOpenEdit(rid) {
+  const mt = MMV, r = mt && mt.readings.find(x => x.id === rid);
+  if (!r) return;
+  if (!el('mmSheet')) document.body.insertAdjacentHTML('beforeend', `<div class="sheet-wrap" id="mmSheet" hidden><div class="sheet small" tabindex="-1" role="dialog" aria-labelledby="mmsT">
+    <div class="sheet-top"><h2 id="mmsT"></h2><button class="icon-btn" data-ui-close aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div id="mmsBody"></div></div></div>`);
+  MME = {mt, r};
+  el('mmsT').textContent = `Correct a reading: ${mt.name}`;
+  el('mmsBody').innerHTML = `<dl class="dl" style="padding-top:0"><dt>Entered</dt><dd>${fv(r.value, mt.decimals)} ${esc(mt.unit)}, read ${fwhen(r.local)}, by ${esc(r.user)} on ${fwhen(r.entered_local)}</dd>
+      ${r.hist ? `<dt>Changes</dt><dd>${esc(mmHist(r, mt.decimals))}</dd>` : ''}</dl>
+    <div class="fgrid mt-16"><div class="field"><label for="mmsV">Reading (${esc(mt.unit)})</label><input type="text" inputmode="decimal" id="mmsV" value="${r.value.toFixed(mt.decimals)}"></div>
+      <div class="field"><label for="mmsD">Read at (hotel time)</label><div class="mmwhen"><input type="date" id="mmsD" value="${r.local.slice(0, 10)}" max="${todayH()}">
+        <input type="time" id="mmsH" value="${r.local.slice(11, 16)}" aria-label="Time"></div></div>
+      <div class="field"><label for="mmsN">Note</label><input type="text" id="mmsN" value="${esc(r.note)}"></div>
+      <div class="field"><label for="mmsW">Why (kept with the change)</label><input type="text" id="mmsW" placeholder="e.g. typing error, checked on the meter"></div></div>
+    <div class="mmcheck muted mt-8" id="mmsC"></div>
+    <div class="mmsheet-acts"><button type="button" class="btn danger" id="mmsDel">Delete this reading</button><button type="button" class="btn primary" id="mmsSave">Save the correction</button></div>
+    <p class="muted small mt-8">The reading as first entered and every change stay in the meter's file, with the login and the time.</p>`;
+  ArkanUI.openSheet('mmSheet');
+  mmsRecheck();
+}
+function mmsRecheck() {
+  if (!MME || !el('mmsC')) return;
+  const {mt, r} = MME, tMs = mmMs(`${el('mmsD').value} ${el('mmsH').value}`);
+  const c = mmCheck(mt, mmRs(mt), tMs, el('mmsV').value, {skip: r.id, reset: r.reset, usual: mt.usual}), why = el('mmsW').value.trim();
+  el('mmsC').className = 'mmcheck mt-8 ' + (c.empty ? 'crit' : c.cls);
+  el('mmsC').innerHTML = c.empty ? icon('alert') + 'Type the figure, or delete the reading.' : (c.cls === 'muted' ? '' : icon(c.cls === 'good' ? 'check' : 'alert')) + esc(c.text);
+  el('mmsSave').disabled = !c.ok || c.empty || !why;
+  el('mmsDel').disabled = !why;
+  el('mmsSave').title = el('mmsDel').title = why ? '' : 'Say why first';
+}
+async function mmsSend(del) {
+  const {mt, r} = MME, why = el('mmsW').value.trim();
+  if (del && !ask(`Delete the ${mt.name} reading of ${fwhen(r.local)} (${fv(r.value, mt.decimals)} ${mt.unit})? It stays in the history.`)) return;
+  const n = mmNum(el('mmsV').value);
+  const res = await mmPost(`/api/v1/manual/${site}/${mt.id}/${r.id}`, del ? {delete: true, reason: why}
+    : {time: `${el('mmsD').value}T${el('mmsH').value}`, value: n && n.s, note: el('mmsN').value.trim(), reason: why});
+  if (!res.ok) return toast('Not saved: ' + res.error);
+  ArkanUI.closeSheets();
+  toast(`${del ? 'Deleted' : 'Corrected'}${MOCK ? ' (mockup: in this page only)' : ''}`);
+  renderHistory().catch(() => {});
+}
+
+for (const type of ['input', 'change']) document.addEventListener(type, ev => {
+  const id = ev.target.id || '';
+  if (/^mm[vnro]-|^mmDate$|^mmTime$/.test(id)) mmRecheck();
+  if (/^mms[VDHNW]$/.test(id)) mmsRecheck();
+});
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('[data-mmmode],[data-mmedit],#mmNow,#mmSave,#mmsSave,#mmsDel');
+  if (!b || b.disabled) return;
+  if (b.dataset.mmmode) { mmMode = b.dataset.mmmode; return renderHistory().catch(() => {}); }
+  if (b.dataset.mmedit) return mmOpenEdit(b.dataset.mmedit);
+  if (b.id === 'mmNow') { const l = mmLoc(nowMs()); el('mmDate').value = l.slice(0, 10); el('mmTime').value = l.slice(11, 16); return mmRecheck(); }
+  if (b.id === 'mmSave') return mmSaveAll();
+  if (b.id === 'mmsSave' || b.id === 'mmsDel') return mmsSend(b.id === 'mmsDel');
+});
+
 // ------------------------------------------------------------------ page
 let shown = 0;   // the latest show(): an older one still loading never writes its error over it
 const LABEL = {quality: 'power quality', voltage: 'power quality', pf: 'power quality', versions: 'firmware versions', register: 'register table', sites: 'list of sites'};
@@ -2646,7 +3029,7 @@ async function show(id) {
   el('content').innerHTML = '<section class="card"><div class="empty">Loading…</div></section>';
   const n = ++shown;
   try { await renderHistory(); }
-  catch (e) { console.error(e); if (n === shown) el('content').innerHTML = `<section class="card"><div class="empty">Could not read the ${WXVIEWS[view] ? 'weather' : LABEL[view] || 'history'} from the server.</div></section>`; }
+  catch (e) { console.error(e); if (n === shown) el('content').innerHTML = `<section class="card"><div class="empty">Could not read the ${WXVIEWS[view] ? 'weather' : LABEL[view] || (MVIEWS[view] ? 'meter readings' : 'history')} from the server.</div></section>`; }
 }
 document.addEventListener('click', ev => {
   const r = ev.target.closest('button[data-role]');
@@ -2685,7 +3068,7 @@ for (const type of ['input', 'change']) document.addEventListener(type, ev => {
   }, 600);
 });
 addEventListener('hashchange', () => show(location.hash.slice(1)));
-const STATIC = ['now', 'firmware', 'prefs', 'register'];   // not redrawn by a resize or the 5-minute refresh
+const STATIC = ['now', 'firmware', 'prefs', 'register', 'readings'];   // readings: the entry form keeps what is typed   // not redrawn by a resize or the 5-minute refresh
 let resizeT; addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!STATIC.includes(view)) renderHistory().catch(() => {}); }, 300); });
 
 async function tick() {
@@ -2699,7 +3082,8 @@ renderChrome();
 const redraw = () => renderHistory().catch(() => {});   // in place: no "Loading" and no jump to the top
 if (!site) { show(view); setInterval(() => { if (view === 'sites' && !document.hidden) redraw(); }, 15000); }
 else {   // the live call also brings the site profile (names, sensors, contract) the other pages use
-  if (view === 'now') tick(); else tick().finally(() => fwReady).finally(() => show(view));
+  const h0 = location.hash.slice(1);   // a meter's page (#water) is in the menu once the profile came with the first call
+  if (view === 'now' && (!h0 || h0 === 'now')) tick(); else tick().finally(() => fwReady).finally(() => show(h0 || view));
   setInterval(tick, 15000);
   setInterval(() => {   // a period that ended before today does not change: not read again
     if (STATIC.includes(view) || document.hidden || (range && range.to < todayH())) return;

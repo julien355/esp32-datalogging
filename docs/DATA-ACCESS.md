@@ -15,7 +15,8 @@ only in the service's memory (since 0.5.0, the live snapshots are saved too).
 | **Alarms** | when they start and end | `alarms/YYYY.csv`, `<device>/alarm-state.json` | `GET /api/v1/alarms/<site>` |
 | **Weather** forecast | every hour | `weather/forecast.json` | `GET /api/v1/weather/<site>` |
 | **Weather log**: actual weather, day-ahead forecast | every hour, once a day | `weather/actual-YYYY.csv`, `weather/dayahead-YYYY.csv` | `GET /api/v1/weather/<site>/log?days=N` (`&format=csv`) |
-| Site profile: name, time zone, labels, contract, position | by hand | `site.json` | in `GET /api/v1/live/<site>` (`profile`) |
+| **Meter readings entered by hand** (water meter): every reading, correction and deletion, with the login (since 0.9.0) | when someone types one | `manual/<meter>.csv` (one line each, never rewritten: `seq,at,user,action,id,time,value,note,reset,old,reason`, UTC) | `GET /api/v1/manual/<site>?days=N` (readings, use per hotel day, between readings, last reading, due), `GET /api/v1/manual/<site>/<meter>.csv?what=days\|readings` |
+| Site profile: name, time zone, labels, contract, position, meters read by hand (`manual_meters`) | by hand | `site.json` | in `GET /api/v1/live/<site>` (`profile`) |
 | Loggers, firmware, last record | on each upload | `devices.json`, `<device>/events.jsonl`, `<device>/settings-reported.json` | `GET /api/v1/status` |
 
 Every `?days=N` (the last N hotel days, today included) also takes `?from=YYYY-MM-DD&to=YYYY-MM-DD` instead: hotel dates, both included, at most 92 days.

@@ -1,10 +1,115 @@
 # Updating the VPS and the loggers
 
-How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: firmware `0.5.1`** (section W, below, the loggers only): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0`** (section M, with firmware `0.5.0`, released as part of `0.5.1`): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
+How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: VPS `v0.9.0`** (section R, below, the VPS only): **meter readings entered by hand**, a water meter first: its total and the time it was read, typed on the site page, and the use of each hotel day worked out from the readings. **Before it, firmware `0.5.1`** (section W, below, the loggers only): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0`** (section M, with firmware `0.5.0`, released as part of `0.5.1`): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
 **Status, 10 November 2026:** sections L and M are merged into the default branch (pull request #9, merge commit `bc2bb84`), and section W too (pull request #13, merge commit `a4b6812`). **The VPS runs `v0.8.0` since 10 November** (tags `v0.7.1` and `v0.8.0` pushed; the technician's login limited to Adab). **Still to do:** `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`) and goes straight to `0.5.1`, which contains 0.5.0, so `fw-v0.5.0` is never tagged. Steps 5 and 6 of [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md#7-general-update-to-do-now-in-order-10-november-2026) section 7. `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
+
+## R. Release v0.9.0: meter readings entered by hand (the water meter)
+
+### R0. What is in it
+
+| Part | What changed | What it needs |
+|---|---|---|
+| Site page, new menu group **Meter readings** | **Enter readings** (`#readings`): the time of the round (hotel time, **Now** by default) and one field per meter. Each figure is checked as it is typed: lower than the reading before, higher than a later one, a time in the future or already taken are refused (red); more than 1.5 × the usual use of a day, or less than half, asks to check (amber); a banner says which meter is due (no reading for 26 h). **Meter replaced or reset** starts a new count. The figure may be typed `20096.870`, `20096,870` or `20.096,870` | Nothing: shown only for a site that has a meter read by hand (R3) |
+| Site page, one page per meter (`#water`) | Use per **hotel day** (00:00 to 24:00) over 7, 14, 31 days or two dates, worked out from the readings (the total at each midnight on the straight line between the readings around it): dark bar measured (readings at most 30 h apart), light bar spread (a Sunday without a round), no bar when there is no reading after the day yet or more than 7 days between two readings. Switch **Between readings** (the paper round sheet's way). Tiles, day by day table, every reading with who entered it, **CSV** of the days and of the readings. Design and rules: [`mockup/readings/`](mockup/readings/README.md) | Nothing |
+| Corrections | The pencil on a reading: a new figure or time, or a deletion, with a reason. **The person who entered it, or a login in `ADMIN_USERS`.** The first figure and every change stay in the meter's file | Nothing: `ADMIN_USERS` as today |
+| Who may enter | **Every login that sees the site** (`tech-adab` included). `USER_SITES` applies as for the other pages | Nothing |
+| Data | `sites/<site>/manual/<meter>.csv`, one line per entry, correction or deletion, never rewritten; the meters in `site.json`, `manual_meters`. In the nightly backup with the rest of the folder ([`DATA-ACCESS.md`](DATA-ACCESS.md)) | Nothing |
+| API | `GET /api/v1/manual/<site>?days=N` (or `?from=&to=`), `GET /api/v1/manual/<site>/<meter>.csv?what=days\|readings`, `POST /api/v1/manual/<site>/<meter>` and `.../<meter>/<id>` (JSON, from the page) | Nothing: behind the same login |
+| `manage.py` | `manual-meter <site> [<id> ...]`: add, change, list or remove a meter read by hand. `import-readings <site> <meter> <file.csv \| ->`: past readings (paper round sheet, Excel), every line checked first | R3, R5 |
+| Caddy, `.env`, Docker files, alarm register, loggers | No change | Nothing |
+
+Not in this release (decisions R5, R7 to R9 of the mockup): no alarm for an overdue reading or a leak, no line on Live now, Readings not in the phone's bottom tabs, no photo or cost. **Power meter 2** waits for its name and place (decision R2); it is one command when known (R3, last step).
+
+### R1. On GitHub: merge, then tag
+
+As M1: merge the pull request into the default branch once CI is green, then on the PC tag the **merge commit** and push the tag:
+
+```powershell
+git checkout ccr-a52c0421-oygp4n
+```
+
+```powershell
+git pull
+```
+
+```powershell
+git log -1 --oneline
+```
+
+**Expected:** the merge commit of the pull request. Then:
+
+```powershell
+git tag v0.9.0
+```
+
+```powershell
+git push origin v0.9.0
+```
+
+### R2. The VPS
+
+[`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 2, with `v0.8.0` as the version you start from and go back to, and `v0.9.0` as the new tag. In 2.5 the `git diff --stat` gives no output: nothing more than the code. After 2.6 (the owner approves the restart, about 30 s without live data):
+
+```bash
+curl -s http://127.0.0.1:8800/health
+```
+
+**Expected:** `{"ok": true, "version": "0.9.0", ...}`. The site page is unchanged until R3: no meter yet.
+
+### R3. Add the water meter (VPS, in `/opt/arkan-monitoring/server`)
+
+No restart: `site.json` is read at each request. Put where the meter is in `--where` (shown under the page title), or leave it out.
+
+```bash
+docker compose exec ingest python tools/manage.py manual-meter adab water --name Water --kind water --unit m3 --decimals 3 --long "Water meter" --due-h 26
+```
+
+**Expected:** `site.json: meter added: {"id": "water", ...}` and `page: /live/adab/#water`. `--decimals` is the number of decimals the meter shows (3 for a water meter in m³ with litres). Change any of it later with the same command and only the options to change; `manual-meter adab water --remove` takes it out of the menu (its readings are kept).
+
+```bash
+docker compose exec ingest python tools/manage.py manual-meter adab
+```
+
+**Expected:** `water      Water (water, m³, 3 decimals, due after 26 h): 0 reading(s), no reading yet. File: /data/sites/adab/manual/water.csv`
+
+**Power meter 2**, once its name and place are known (decision R2 of the mockup): the same command, for example `manual-meter adab pm2 --name "Power meter 2" --kind power --unit kWh --decimals 1 --compare EM01 --where "..."` (`--compare EM01` adds its share of the main meter; leave it out if it is not behind EM01).
+
+### R4. Checks
+
+In the browser, `https://arkan-monitoring.duckdns.org/live/adab/` (Ctrl+F5): the menu has **Meter readings** with **Enter readings** and **Water**, after History.
+
+1. **Enter readings**: type the meter's figure as it shows now, **Save 1 reading**. **Expected:** the check line says `First reading of this meter.`, then a toast `Saved: Water ... m³`, and the reading in **Latest entries** with your login.
+2. **Water**: the reading is in **Readings**. The use per day starts with the next reading (tomorrow morning): until then the tiles show `–`. Two readings about a day apart give the first measured day.
+3. From the VPS:
+
+```bash
+curl -s "http://127.0.0.1:8800/api/v1/manual/adab?days=7" | python3 -c "import json,sys; m=json.load(sys.stdin)['meters'][0]; print(m['id'], len(m['readings']), m['last'])"
+```
+
+**Expected:** `water 1 {'id': 'r1', ..., 'user': '<your login>', ...}`.
+
+4. With the technician's login (`tech-adab`): **Enter readings** works; the pencil shows only on its own readings.
+
+A test reading can be deleted: the pencil, a reason, **Delete this reading** (it stays in the file's history).
+
+### R5. Past readings (optional)
+
+If the readings were kept on paper or in Excel: a CSV `date,time,value,note` in hotel time (a header line is fine, `;` works too), one line per reading, for example `2026-11-02,07:42,19770.740,`. On the VPS, with the file in the home folder:
+
+```bash
+docker compose exec -T ingest python tools/manage.py import-readings adab water - --user wayan --dry-run < ~/water.csv
+```
+
+**Expected:** `n reading(s) checked for water on adab, from ... to ...`. A refused line is named with its reason (lower than the line before, a bad date) and nothing is written: fix the file and run again. Then the same command without `--dry-run`. `--user` is the name kept with those readings. Older than 31 days is fine here (the page takes 31 days back at most).
+
+### R6. Going back
+
+`git checkout v0.8.0`, then `docker compose up -d --build` ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 2.8). `v0.8.0` ignores `manual_meters` in `site.json` and the folder `sites/adab/manual/`: nothing to undo, and back on `v0.9.0` the readings are all there.
+
+---
 
 ## W. Firmware 0.5.1: two WiFi networks of equal rank, joins the one in range
 

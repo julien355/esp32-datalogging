@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Builds docs/mockup/readings/index.html: the site page of the Arkan mockup (server/app/live.html with
-docs/mockup/arkan/fixtures.json) plus the PROPOSED pages for meter readings entered by hand (water meter,
-power meter 2), with 45 days of simulated readings.
+"""Builds docs/mockup/readings/index.html: the site page (server/app/live.html, with its Meter readings pages since
+v0.9.0) with the saved answers of docs/mockup/arkan/fixtures.json, two meters read by hand (water, power meter 2) and
+45 days of simulated readings. mock-server.js answers the page's /api/v1/manual/ requests in the page, with the
+rules of server/app/manual.py.
 
     python3 docs/mockup/readings/build.py
 
-Nothing in server/ is changed: the new pages (readings.js, readings.css) are put into a copy of the page here,
-at fixed places of live.html. Every place must be found once, or the build stops. One file, no network.
+Every insertion point must be found once in live.html, or the build stops. One file, no network.
 """
 import json
 import math
@@ -151,18 +151,14 @@ def main():
     fx["manual"] = simulate(fx)
     fx["live"]["profile"]["manual_meters"] = METERS
     page = read(os.path.join(APP, "live.html"))
-    js, css = read(os.path.join(HERE, "readings.js")), read(os.path.join(HERE, "readings.css"))
+    mock = read(os.path.join(HERE, "mock-server.js"))
     fxs = json.dumps(fx, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
     page_marker = "// ------------------------------------------------------------------ page\n"
     parts = [
-        # the proposed pages, inside the page's own script, before the page starts
-        (page_marker, js + "\n" + page_marker),
-        ("  if (QVIEWS[view]) return QVIEWS[view](box);\n", "  if (QVIEWS[view]) return QVIEWS[view](box);\n  if (MVIEWS[view]) return MVIEWS[view](box);\n"),
-        # the entry form is not redrawn by a resize or the 5-minute refresh (it would empty the fields)
-        ("const STATIC = ['now', 'firmware', 'prefs', 'register'];", "const STATIC = ['now', 'firmware', 'prefs', 'register', 'readings'];"),
-        ("</style>\n<script src=\"/live/_ui/arkan-ui.js\"></script>", css + "</style>\n<script src=\"/live/_ui/arkan-ui.js\"></script>"),
+        # the server's side of the readings, inside the page's own script, after the readings pages, before the page starts
+        (page_marker, mock + "\n" + page_marker),
         ("Design mockup · simulated data, 14 days · nothing is sent to a logger",
-         "Design mockup · <b>Meter readings</b> pages proposed for review · simulated data · nothing is saved"),
+         "Design mockup · <b>Meter readings</b> pages · simulated data · nothing is saved"),
         # then the kit and the saved answers, as docs/mockup/arkan/build.py does
         ('<link rel="stylesheet" href="/live/_ui/arkan-ui.css">', "<style>" + read(os.path.join(APP, "arkan-ui", "arkan-ui.css")) + "</style>"),
         ('<script src="/live/_ui/arkan-ui.js"></script>', "<script>" + read(os.path.join(APP, "arkan-ui", "arkan-ui.js")) + "</script>"),
