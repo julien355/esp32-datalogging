@@ -38,6 +38,14 @@ Commands:
                                         list them with their last reading; with an id, add or change one, or remove it
                                         (its readings file is kept). Their pages: Meter readings on the site page
   import-readings <site> <meter> <file.csv | -> [--user NAME] [--dry-run]
+  site-set <site> key=value ...         change fields of site.json (no restart): meter_checked=2026-11-17 (date of the
+                                        on-site register check, shown on Current & balance), i_imbalance_loaded_a=25
+                                        (A41 counted from this mean current), contracted_kva, contract_v_ln, rated_a,
+                                        nominal_v, name. An empty value removes the field (back to its default)
+  alarm-register [--add]                lines of the default register (docs/alarms/alarms.csv, in the image) missing
+                                        from the register in use: the service uses them as they are (a new alarm of
+                                        a release needs nothing); --add copies them into the register in use, to edit
+                                        them in Excel (the lines already there, edited or not, are never changed)
                                         past readings from a CSV (date,time,value[,note], hotel time, a header line
                                         allowed), e.g. the paper round sheet: every line is checked first, nothing
                                         is written if one is refused
@@ -697,6 +705,65 @@ def cmd_import_readings(store, a):
     print(f"imported as {a.user}: {manual.path(store, a.site, a.meter)}")
 
 
+SITE_FIELDS = {"meter_checked": "date", "i_imbalance_loaded_a": float, "contracted_kva": float, "contract_v_ln": float,
+               "rated_a": float, "nominal_v": float, "name": str}
+
+
+def cmd_site_set(store, a):
+    p = os.path.join(store.site_dir(a.site), "site.json")
+    if not os.path.exists(p):
+        die(f"no site {a.site}")
+    prof = store.site_profile(a.site)
+    for pair in a.pairs:
+        k, eq, v = pair.partition("=")
+        if not eq or k not in SITE_FIELDS:
+            die(f"{pair}: key=value, key one of {', '.join(SITE_FIELDS)}")
+        kind = SITE_FIELDS[k]
+        if v == "":
+            prof.pop(k, None)
+            print(f"{k} removed")
+            continue
+        try:
+            if kind == "date":
+                datetime.strptime(v, "%Y-%m-%d")
+            elif kind is float:
+                v = float(v)
+                if v < 0:
+                    raise ValueError
+        except ValueError:
+            die(f"{k}: {'a date YYYY-MM-DD' if kind == 'date' else 'a number, 0 or more'}, not {v!r}")
+        prof[k] = v
+        print(f"{k} = {v}")
+    atomic_write(p, json.dumps(prof, indent=2, ensure_ascii=False) + "\n")
+    print(f"saved {p} (read at each request: no restart)")
+
+
+def cmd_alarm_register(store, a):
+    eng = AlarmEngine(store)
+    used = os.path.join(store.root, "alarm-register.csv")
+    if not os.path.exists(used):
+        die(f"no register in use at {used}: run init")
+    have = {r["id"] for r in eng._read_register(used)}
+    with open(eng.default_register, encoding="utf-8-sig", newline="") as f:
+        lines = f.read().splitlines()
+    new = [ln for ln in lines[1:] if ln.strip() and next(csv.reader([ln]))[0] not in have]
+    if not new:
+        print(f"{used}: every line of the default register is there")
+        return
+    for ln in new:
+        print(("added: " if a.add else "from the default register: ") + ln)
+    if not a.add:
+        print(f"{len(new)} line(s) not in {used}: the service uses them from the default register as they are. "
+              f"To change one in Excel, copy them into the file with --add")
+        return
+    shutil.copyfile(used, used + ".bak")
+    with open(used, encoding="utf-8-sig", newline="") as f:
+        cur = f.read()
+    with open(used, "a", encoding="utf-8", newline="") as f:
+        f.write(("" if cur.endswith("\n") else "\n") + "\n".join(new) + "\n")
+    print(f"{len(new)} line(s) appended to {used} (the previous file: alarm-register.csv.bak); they apply at the next record")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", default=os.environ.get("DATA_DIR", "/data"), help="data folder (default $DATA_DIR or /data)")
@@ -752,6 +819,8 @@ def main():
     p = sub.add_parser("import-readings"); p.add_argument("site"); p.add_argument("meter"); p.add_argument("file")
     p.add_argument("--user", default="import", help="name kept with each reading (default import)")
     p.add_argument("--dry-run", action="store_true", help="check the lines only")
+    p = sub.add_parser("site-set"); p.add_argument("site"); p.add_argument("pairs", nargs="+")
+    p = sub.add_parser("alarm-register"); p.add_argument("--add", action="store_true", help="append the missing lines")
     a = ap.parse_args()
     store = DataStore(a.data)
     {
@@ -762,6 +831,7 @@ def main():
         "set-config": cmd_set_config, "show-config": cmd_show_config, "alarms": cmd_alarms,
         "set-registers": cmd_set_registers, "show-registers": cmd_show_registers, "weather": cmd_weather,
         "manual-meter": cmd_manual_meter, "import-readings": cmd_import_readings,
+        "site-set": cmd_site_set, "alarm-register": cmd_alarm_register,
     }[a.cmd](store, a)
 
 

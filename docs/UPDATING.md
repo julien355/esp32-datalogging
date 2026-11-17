@@ -1,10 +1,102 @@
 # Updating the VPS and the loggers
 
-How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: VPS `v0.9.0`** (section R, below, the VPS only): **meter readings entered by hand**, a water meter first: its total and the time it was read, typed on the site page, and the use of each hotel day worked out from the readings. **Before it, firmware `0.5.1`** (section W, below, the loggers only): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0`** (section M, with firmware `0.5.0`, released as part of `0.5.1`): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
+How a new version of this repository reaches `hermes-vps` and the loggers. **Newest: VPS `v0.10.0`** (section C, below, the VPS only): **current per phase and balance**, a page of the Power quality group with each phase's current against the PLN phase limit, the imbalance, the share of each phase and checks that the CTs and scales are right; alarms **A40** (a phase without current) and **A41** (the current imbalance under load, from 25 A, counted apart from A10); new alarms of a release now work without touching the register in use. **Before it, VPS `v0.9.0`** (section R): **meter readings entered by hand**, a water meter first: its total and the time it was read, typed on the site page, and the use of each hotel day worked out from the readings. **Before it, firmware `0.5.1`** (section W, below, the loggers only): `wifi_ssid` and `wifi_ssid2` become two networks of equal rank, for a logger moved between two sites; it joins the one in range and stays on it until the link drops. **Next release: VPS `v0.8.0`** (section M, with firmware `0.5.0`, released as part of `0.5.1`): the Modbus link of each meter, connected or not, always shown at the top of the open alarms on the site page, and the history pages with two dates and a CSV of the original records. **Before it, VPS `v0.7.1`** (section L): logins for this platform only, and a login limited to one site, for a technician. It includes `v0.7.0` (section N): the site page in the Arkan design of the CMMS, with **View as** and **Settings**. The steps of the earlier releases follow, for reference: `v0.6.0` (section A, power quality pages; firmware `0.4.1`), `v0.5.0` (section B) and `v0.4.0`. **The steps, the same for every release** (the VPS from its terminal, the logger by cable from VS Code and PlatformIO, or over the air from a GitHub release): [`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md). This file only says what each release needs on top. More detail: [tutorial 2, C5](tutorials/2-VPS-SETUP.md#c5-updating-to-a-new-tag-and-going-back) (VPS) and [`OTA.md`](OTA.md) (loggers).
 
 **Status, 10 November 2026:** sections L and M are merged into the default branch (pull request #9, merge commit `bc2bb84`), and section W too (pull request #13, merge commit `a4b6812`). **The VPS runs `v0.8.0` since 10 November** (tags `v0.7.1` and `v0.8.0` pushed; the technician's login limited to Adab). **Still to do:** `LOG-0001` runs `0.4.1` (release `fw-v0.4.1`) and goes straight to `0.5.1`, which contains 0.5.0, so `fw-v0.5.0` is never tagged. Steps 5 and 6 of [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md#7-general-update-to-do-now-in-order-10-november-2026) section 7. `0.4.0` is marked withdrawn. Checks: [`CHECK-UP-TO-DATE.md`](CHECK-UP-TO-DATE.md).
 
 House rules: the VPS only runs **tags**; the owner approves every container restart and the Caddy reload; a backup comes first.
+
+## C. Release v0.10.0: current per phase and balance
+
+### C0. What is in it
+
+| Part | What changed | What it needs |
+|---|---|---|
+| Site page, **Power quality → Current & balance** (`#current`) | Each phase's highest 15 s current and highest 15-minute mean against the **PLN phase limit** (125 A at Adab), the minutes near it (A37's 90 %), the current imbalance over time (A10, and A41 under load), each phase's share of the energy, the table **Each phase** (mean, highest, kWh, kW, power factor, lowest power), charts hour by hour and **by hour of the day**, day by day, the current alarms, one day minute by minute, and six **measurement checks** (CT direction, each CT on its own phase, the phases add up to the total, the currents agree with the kVA, a current on every phase, checked on site), with a banner at the top when one fails. Design: [`mockup/current/`](mockup/current/README.md); page: [`LIVE.md`](LIVE.md#option-a-in-detail) | Nothing: from the columns the logger already writes |
+| Live now, Power quality | The current card has one more line: the imbalance now and the mean current, and a link to the page. The Power quality tile **Current imbalance** links there too | Nothing |
+| **Alarm A40, phase without current** (new) | A phase under 1 A while the two others carry 10 A or more, for 5 min: its CT shorted or disconnected (the kWh are then too low), or every load of that phase off. Warning, WhatsApp `yes` (sent once WhatsApp exists, S6) | Nothing (C3) |
+| **Alarm A41, current imbalance under load** (new) | Counted apart from A10: the same imbalance (above 20 % for 15 min), only while the mean current is **25 A or more**. At light load a few amperes make a large %; under load it heats the busiest phase. A10 is unchanged (from 5 A). `i_imbalance_loaded_a` in `site.json` changes the 25 A for one site. The page shows both counts | Nothing (C3) |
+| **Alarm register** | **A line of the default register (in the image) whose id is not in the register in use is now used as it is.** An alarm added by a release (A40, A41) works at once, without editing or overwriting `/srv/arkan-monitoring/data/alarm-register.csv`; a line of the register in use, edited or not, always wins. To turn an alarm off, set `enabled` to `no` in its line (deleting the line brings back the default one) | Nothing |
+| `site.json` | `meter_checked`: the date the meter's values were checked against real current, shown on the page | Set it (C4): the check is done |
+| `manage.py` | `site-set <site> key=value`: change `meter_checked`, `i_imbalance_loaded_a`, `contracted_kva`, `contract_v_ln`, `rated_a`, `nominal_v`, `name` (an empty value removes a key). `alarm-register`: lists the lines used from the default register; `--add` copies them into the register in use, only to edit one in Excel | C4 |
+| API | `GET /api/v1/quality/<site>/current?days=N` (or `?from=&to=`), `GET /api/v1/quality/<site>/current/day/<date>` | Nothing: behind the same login, `USER_SITES` applies |
+| Caddy, `.env`, Docker files, loggers | No change | Nothing |
+
+### C1. On GitHub: merge, then tag
+
+As R1, with `v0.10.0`: merge the pull request once CI is green, then on the PC tag the **merge commit** of the default branch and push the tag:
+
+```powershell
+git checkout ccr-a52c0421-oygp4n
+```
+
+```powershell
+git pull
+```
+
+```powershell
+git log -1 --oneline
+```
+
+**Expected:** the merge commit of the pull request. Then:
+
+```powershell
+git tag v0.10.0
+```
+
+```powershell
+git push origin v0.10.0
+```
+
+### C2. The VPS
+
+[`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 2, with `v0.9.0` as the version you start from and go back to, and `v0.10.0` as the new tag. In 2.5 the `git diff --stat` gives no output: nothing more than the code. After 2.6 (the owner approves the restart, about 30 s without live data):
+
+```bash
+curl -s http://127.0.0.1:8800/health
+```
+
+**Expected:** `{"ok": true, "version": "0.10.0", ...}`.
+
+### C3. The alarm register: nothing to do
+
+A40 and A41 come from the default register in the image, because the register in use has no line with their id. To see which lines come from there (VPS, in `/opt/arkan-monitoring/server`):
+
+```bash
+docker compose exec ingest python tools/manage.py alarm-register
+```
+
+**Expected:** `from the default register: A40,Phase without current,...` and `from the default register: A41,Current imbalance under load,...`. Only if you want to change one of them in Excel: `alarm-register --add` copies them into the register in use first (the previous file is kept as `alarm-register.csv.bak`), then edit as in [tutorial 2, C6](tutorials/2-VPS-SETUP.md#c6-editing-the-alarm-register-in-excel).
+
+### C4. The meter check, in the site profile
+
+The meter's values were checked against real current, and they match (owner, 17 November 2026). Write it in the site profile (no restart; put the date of the check if it was another day):
+
+```bash
+docker compose exec ingest python tools/manage.py site-set adab meter_checked=2026-11-17
+```
+
+**Expected:** `meter_checked = 2026-11-17` and `saved /data/sites/adab/site.json (read at each request: no restart)`.
+
+### C5. Checks
+
+In the browser, `https://arkan-monitoring.duckdns.org/live/adab/` (Ctrl+F5): the menu **Power quality** has **Current & balance** between Voltage and Power factor.
+
+1. **Current & balance**: the tiles, the table **Each phase** and the charts are filled for the period. **Measurement checks** at the bottom: **Checked against real current** is *fine* (C4). Any other check that is not *fine*: read its text (a CT backwards, crossed, a scale): it is the first thing to look at.
+2. **Live now**: under the current card, `Imbalance n % at m A mean · Current & balance`.
+3. From the VPS:
+
+```bash
+curl -s "http://127.0.0.1:8800/api/v1/quality/adab/current?days=1" | python3 -c "import json,sys; j=json.load(sys.stdin); print(j['pln_a'], j['i_floor_a'], j['i_imb_loaded_a'], len(j['hours']), j['limits']['izero']['enabled'], j['limits']['iul']['enabled'])"
+```
+
+**Expected:** `125.0 5.0 25.0 <hours today> True True`.
+
+### C6. Going back
+
+`git checkout v0.9.0`, then `docker compose up -d --build` ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) 2.8). `v0.9.0` reads only the register in use (A40 and A41 are not in it unless copied with `--add`; copied, they are skipped as unknown rules) and ignores `meter_checked` and `i_imbalance_loaded_a`: nothing to undo.
+
+---
 
 ## R. Release v0.9.0: meter readings entered by hand (the water meter)
 

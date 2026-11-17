@@ -156,7 +156,7 @@ def main():
     page_marker = "// ------------------------------------------------------------------ page\n"
     parts = [
         # the server's side of the readings, inside the page's own script, after the readings pages, before the page starts
-        (page_marker, mock + "\n" + page_marker),
+        (page_marker, mock + "\n" + read(os.path.join(HERE, "..", "current", "mock-server.js")) + "\n" + page_marker),
         ("Design mockup · simulated data, 14 days · nothing is sent to a logger",
          "Design mockup · <b>Meter readings</b> pages · simulated data · nothing is saved"),
         # then the kit and the saved answers, as docs/mockup/arkan/build.py does

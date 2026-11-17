@@ -1,5 +1,7 @@
 # Dashboard mockup
 
+> **Current per phase and balance**, built in release `v0.10.0`: the page `#current`, the review of what was missing to check the current and the balance, and the decisions, in [`current/`](current/README.md).
+
 > **Meter readings entered by hand** (water, power meter 2) and their use per day, built in release `v0.9.0`: the mockup and its decisions in [`readings/`](readings/README.md).
 
 > **Since release v0.7.0 (10 November 2026)** the pages are in the Arkan design of the CMMS, with View as and Settings: [`arkan/`](arkan/README.md) holds the page as it is now, with saved answers. The screens below are the earlier design.
