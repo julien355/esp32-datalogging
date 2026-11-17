@@ -2236,7 +2236,8 @@ async function qDaySection() {   // #voltage: one hotel day, minute by minute (r
 // ------------------------------------------------------------------ current per phase and balance (server/app/quality.py)
 // GET /api/v1/quality/<site>/current?days=N (or ?from=&to=): one row per hotel hour, from the same pass over the day files as the
 // power quality pages: each phase's current (mean, lowest and highest 15-second sample, highest 15-minute mean), its power, kWh and
-// power factor; the current imbalance (as A10: mean, highest minute, minutes counted, minutes above the limit); the minutes with a
+// power factor; the current imbalance (as A10: mean, highest minute, minutes counted, minutes above the limit; and the same minutes
+// with 25 A or more of mean current, as A41); the minutes with a
 // sample above A37's threshold (90 % of the PLN phase limit) and with a phase without current (as A40); the lowest power of each phase;
 // two sums that check the meter's registers. With the limits of the alarm register, the PLN phase limit and the current alarm lines.
 // GET /api/v1/quality/<site>/current/day/<date>: the currents, phase powers and imbalance of one hotel day, minute by minute.
@@ -2260,7 +2261,7 @@ const nf = v => v === null || v === undefined ? '–' : Math.round(v).toString()
 const heaviest = (ph, key) => [0, 1, 2].reduce((a, k) => (ph[k][key] ?? -1) > (ph[a][key] ?? -1) ? k : a, 0);
 
 function cSum(H) {   // totals of a list of hours
-  const o = {minutes: 0, n: 0, iuW: 0, iuN: 0, iuMax: null, iuHour: null, iuHourAt: null, iuHi: 0, iHi: 0, iHiAt: null,
+  const o = {minutes: 0, n: 0, iuW: 0, iuN: 0, iuMax: null, iuHour: null, iuHourAt: null, iuHi: 0, iuHiLd: 0, iHi: 0, iHiAt: null,
     zero: 0, zeroAt: null, zeroPh: '', psW: 0, ssW: 0, ldN: 0,
     ph: [0, 1, 2].map(() => ({w: 0, n: 0, hi: null, hiAt: null, d15: null, d15At: null, e: 0, pW: 0, pfW: 0, pfN: 0, pmin: null, hiN: 0}))};
   for (const r of H) {
@@ -2275,7 +2276,7 @@ function cSum(H) {   // totals of a list of hours
       if (r[`p${s}_min`] !== undefined && (P.pmin === null || r[`p${s}_min`] < P.pmin)) P.pmin = r[`p${s}_min`];
     });
     if (r.iu !== undefined) {
-      o.iuW += r.iu * r.iu_n; o.iuN += r.iu_n; o.iuHi += r.iu_hi || 0;
+      o.iuW += r.iu * r.iu_n; o.iuN += r.iu_n; o.iuHi += r.iu_hi || 0; o.iuHiLd += r.iu_hi_ld || 0;
       if (o.iuMax === null || r.iu_max > o.iuMax) o.iuMax = r.iu_max;
       if (o.iuHour === null || r.iu > o.iuHour) { o.iuHour = r.iu; o.iuHourAt = r.t; }
     }
@@ -2325,9 +2326,9 @@ function cChecks(t, j) {
     : `No minute with one phase under ${L.izero.v} A while the two others carried ${j.i_loaded_a} A or more (${limTag(L.izero)}).`,
     t.zero ? `${esc(t.zeroPh)} read under ${L.izero.v} A for ${t.zero} min while the others carried load (${fdate(tp(t.zeroAt))} ${esc(t.zeroAt.slice(11))})` : '']);
   const chk = PROF.meter_checked;
-  out.push([chk ? 'good' : 'warn', 'Checked against the meter and a clamp meter', chk
-    ? `Register table and CT ratio checked on site on ${esc(chk)}.`
-    : 'Not yet. The amperes and kW are not trusted until the register check on site: each value within 1 % of the meter\'s display, one phase cable with a clamp meter, the CT label read (docs/meter/README.md, section 4). Then <span class="mono">manage.py site-set &lt;site&gt; meter_checked=&lt;date&gt;</span>.', '']);
+  out.push([chk ? 'good' : 'warn', 'Checked against real current', chk
+    ? `The meter's values were checked against real current on ${esc(chk)}: they match. The checks above keep watching the CTs and the scales.`
+    : 'Not yet. The amperes and kW are not trusted until the meter\'s values are checked on site: each value within 1 % of the meter\'s display, one phase cable with a clamp meter (docs/meter/README.md, section 4). Then <span class="mono">manage.py site-set &lt;site&gt; meter_checked=&lt;date&gt;</span>.', '']);
   return out;
 }
 
@@ -2354,7 +2355,8 @@ QVIEWS.current = async function (box) {
     pln ? statTile('Near the PLN limit', flag(t.iHi > 0, t.iHi), 'minutes', `with a 15-second sample above ${L.pln.v} % of the limit (${fA(nearA, 1)} A) · ${limTag(L.pln)} starts after ${L.pln.delay ?? 5} minutes in a row` +
       (t.iHiAt ? ` · first ${hourOf(t.iHiAt)}` : '')) : '',
     statTile('Current imbalance', flag(t.iuHour > L.iu.v, fA(t.iu, 1)), '%', t.iuN ? `mean of the minutes with ${j.i_floor_a} A or more of mean current · highest hour ${fA(t.iuHour)} % (${hourOf(t.iuHourAt)}) · ` +
-      `${t.iuHi} min above ${L.iu.v} % (${limTag(L.iu)})` : `no minute with ${j.i_floor_a} A or more of mean current: not counted (as ${limTag(L.iu)})`),
+      `${flag(t.iuHi > 0, t.iuHi)} min above ${L.iu.v} % (${limTag(L.iu)}) · ${flag(t.iuHiLd > 0, t.iuHiLd)} min above ${L.iul.v} % with ${j.i_imb_loaded_a} A or more (${limTag(L.iul)})`
+      : `no minute with ${j.i_floor_a} A or more of mean current: not counted (as ${limTag(L.iu)})`),
     statTile('Share of the energy', t.ph.map(P => fA(P.share)).join(' · '), '%', `L1 · L2 · L3: ${t.ph.map(P => nf(P.e)).join(' · ')} kWh, from the power of each phase`),
   ].join('')}</div>`;
 
@@ -2381,7 +2383,8 @@ QVIEWS.current = async function (box) {
 
   const days = cByDay(H);
   h += sec('Day by day', 'click a day for its currents minute by minute') + tableCard(`<tr><th>Day</th><th class="hide-s">Recorded</th><th>Highest</th>
-      <th class="hide-s">Mean L1 · L2 · L3</th><th>Energy share</th><th>Imbalance</th><th class="hide-s">Above ${L.iu.v} %</th>${pln ? '<th class="hide-s">Near the limit</th>' : ''}</tr>` +
+      <th class="hide-s">Mean L1 · L2 · L3</th><th>Energy share</th><th>Imbalance</th><th class="hide-s">Above ${L.iu.v} % (${esc(L.iu.id)})</th>
+      <th class="hide-s">… with ${j.i_imb_loaded_a} A or more (${esc(L.iul.id)})</th>${pln ? '<th class="hide-s">Near the limit</th>' : ''}</tr>` +
     Object.keys(days).sort().reverse().map(k => {
       const x = days[k], hk = heaviest(x.ph, 'hi');
       return `<tr><td><a href="#current" data-cday="${k}">${fdate(tp(k + ' 00:00'))}</a>${x.zero ? ' <span class="pill warn">phase without current</span>' : ''}</td>
@@ -2389,10 +2392,10 @@ QVIEWS.current = async function (box) {
         <td>${flag(nearA && x.ph[hk].hi > nearA, `${fA(x.ph[hk].hi)} A`)} <span class="dimtxt">${PHN[hk]}</span></td>
         <td class="hide-s">${x.ph.map(P => fA(P.mean)).join(' · ')} A</td><td>${x.ph.map(P => fA(P.share)).join(' · ')} %</td>
         <td>${x.iu === null ? '–' : `${flag(x.iuHour > L.iu.v, `${fA(x.iu, 1)} %`)} <span class="dimtxt">hour ${fA(x.iuHour)} %</span>`}</td>
-        <td class="hide-s">${flag(x.iuHi > 0, `${x.iuHi} min`)}</td>${pln ? `<td class="hide-s">${flag(x.iHi > 0, `${x.iHi} min`)}</td>` : ''}</tr>`; }).join(''));
+        <td class="hide-s">${flag(x.iuHi > 0, `${x.iuHi} min`)}</td><td class="hide-s">${flag(x.iuHiLd > 0, `${x.iuHiLd} min`)}</td>${pln ? `<td class="hide-s">${flag(x.iHi > 0, `${x.iHi} min`)}</td>` : ''}</tr>`; }).join(''));
 
   const ev = j.events.slice().reverse();
-  h += sec('Current alarms', `${ev.length ? `${ev.length} line${ev.length === 1 ? '' : 's'}, ` : ''}${[L.iu, L.pln, L.rated, L.pneg, L.izero].map(limTag).join(', ')}; hotel time`);
+  h += sec('Current alarms', `${ev.length ? `${ev.length} line${ev.length === 1 ? '' : 's'}, ` : ''}${[L.iu, L.iul, L.pln, L.rated, L.pneg, L.izero].map(limTag).join(', ')}; hotel time`);
   h += ev.length ? tableCard(`<tr><th>Time</th><th>Alarm</th><th>State</th><th>Value</th><th class="hide-s">Message</th></tr>${ev.slice(0, 200).map(e =>
       `<tr><td>${esc(e.local_time)}</td><td><span class="mono">${esc(e.id)}</span> ${esc(e.name)} ${sevPill(e.severity)}</td>
         <td>${esc(e.state)}${e.duration_min ? ` <span class="dimtxt">${esc(e.duration_min)} min</span>` : ''}</td>
@@ -2405,7 +2408,7 @@ QVIEWS.current = async function (box) {
         s === 'good' ? '<span class="pill good">fine</span>' : s === 'neutral' ? '<span class="pill neutral">no data</span>' : s === 'crit' ? '<span class="pill crit">wrong</span>'
           : ti.startsWith('Checked') ? '<span class="pill warn">to do</span>' : '<span class="pill warn">look at it</span>'}</li>`).join('')}</ul></section>`;
   h += `<div class="foot"><span>Imbalance: the largest deviation of a phase from the mean of the three, in % of the mean, counted while the mean is ${j.i_floor_a} A or more
-    (as ${esc(L.iu.id)}; site.json i_imbalance_floor_a). 15-minute mean: the mean of 15 one-minute means in a row. Energy of a phase: its 1-minute power summed
+    (as ${esc(L.iu.id)}); ${esc(L.iul.id)} counts the same minutes apart, only with ${j.i_imb_loaded_a} A or more of mean current (site.json i_imbalance_loaded_a). 15-minute mean: the mean of 15 one-minute means in a row. Energy of a phase: its 1-minute power summed
     (the meter has no counter per phase). Power factor of a phase: P / (V × I) of the minutes with ${j.pf_load_kw} kW or more on it.${pln ? ` PLN phase limit: contracted kVA / 3 / ${esc(PROF.contract_v_ln || 220)} V.` : ''}</span></div>`;
   box.innerHTML = h;
 
@@ -2446,18 +2449,19 @@ async function cDaySection(j, t) {   // one hotel day, minute by minute (redrawn
       segBtn(`data-cday="${isoDay(ms + 864e5)}"`, false, fdate(ms + 864e5) + ' ▶', day >= today)}</div>${dateIn('data-pick="cday"', day, 'Day')}` +
     (hiDay && hiDay !== day ? `<button class="btn small" data-cday="${hiDay}">Highest of the period: ${fdate(tp(hiDay + ' 00:00'))}</button>` : '') +
     (zDay && zDay !== day ? `<button class="btn small" data-cday="${zDay}">Phase without current: ${fdate(tp(zDay + ' 00:00'))}</button>` : '') + '</div>';
-  let hi = null, iuS = 0, iuN = 0, near = 0, zero = 0;
+  let hi = null, iuS = 0, iuN = 0, iuHi = 0, iuLd = 0, near = 0, zero = 0;
   for (const r of R) {
     for (const k of [1, 2, 3]) { const v = r[ci[`i${k}_max`]] ?? r[ci[`i${k}`]]; if (v !== null && (!hi || v > hi.v)) hi = {v, t: r[0], k}; }
-    if (r[ci.iu] !== null) { iuS += r[ci.iu]; iuN++; }
+    const i = [1, 2, 3].map(k => r[ci[`i${k}`]]), iu = r[ci.iu];
+    if (iu !== null) { iuS += iu; iuN++; iuHi += iu > L.iu.v; iuLd += iu > L.iul.v && !i.includes(null) && (i[0] + i[1] + i[2]) / 3 >= j.i_imb_loaded_a; }
     near += nearA !== null && [1, 2, 3].some(k => r[ci[`i${k}_max`]] > nearA);
-    const i = [1, 2, 3].map(k => r[ci[`i${k}`]]);
     if (!i.includes(null)) { const k = i.indexOf(Math.min(...i)); zero += i[k] < L.izero.v && i.every((x, n) => n === k || x >= j.i_loaded_a); }
   }
   box.innerHTML = `<div class="page-head" style="margin-top:28px"><div><h2 style="font-size:19px;font-weight:800">One day, minute by minute: ${fdate(ms)}</h2>
       <div class="sub">Mean current of each phase per minute, and in grey the lowest to highest 15-second sample of the minute. Hover for each phase's range.</div></div>${tools}</div>` +
     tiles([statTile('Highest 15-second sample', hi ? flag(nearA && hi.v > nearA, fA(hi.v)) : '–', 'A', hi ? `L${hi.k} at ${hi.t}${pln ? ` · ${fA(hi.v / pln * 100)} % of the PLN limit` : ''}` : ''),
-      statTile('Imbalance, mean', iuN ? fA(iuS / iuN, 1) : '–', '%', iuN ? `${iuN} minutes with ${j.i_floor_a} A or more of mean current` : `no minute with ${j.i_floor_a} A or more`),
+      statTile('Imbalance, mean', iuN ? fA(iuS / iuN, 1) : '–', '%', iuN ? `${iuN} minutes with ${j.i_floor_a} A or more of mean current · ${iuHi} min above ${L.iu.v} % (${esc(L.iu.id)}) · ` +
+        `${iuLd} with ${j.i_imb_loaded_a} A or more (${esc(L.iul.id)})` : `no minute with ${j.i_floor_a} A or more`),
       pln ? statTile('Near the PLN limit', flag(near > 0, near), 'minutes', `a 15-second sample above ${fA(nearA, 1)} A`) : '',
       statTile(zero ? 'Phase without current' : 'Minutes recorded', zero ? flag(true, zero) : R.length, zero ? 'minutes' : day === today ? 'so far' : 'of 1440',
         zero ? `a phase under ${L.izero.v} A while the others carry ${j.i_loaded_a} A or more · ${limTag(L.izero)}` : '')]) +
@@ -2484,12 +2488,13 @@ document.addEventListener('change', ev => {   // the day's calendar: applied a m
   const v = ev.target.value;
   setTimeout(() => { if (view !== 'current' || !/^\d{4}-\d{2}-\d{2}$/.test(v) || v > todayH() || v < '2000-01-01') return; cDay = v; cDaySection().catch(cDayErr); }, 600);
 });
-// Live now: one line under the current card: the imbalance of the last snapshot (as A10), and the link to the page
+// Live now: one line under the current card: the imbalance of the last snapshot (as A10: not below 5 A of mean current) and the
+// mean current, and the link to the page
 function curLive(V, M) {
   const i = [1, 2, 3].map(k => V(`${M}_i${k}`));
   if (i.some(x => x === null)) return '';
-  const floor = PROF.i_imbalance_floor_a ?? 25, m = (i[0] + i[1] + i[2]) / 3, u = m >= floor ? Math.max(...i.map(x => Math.abs(x - m))) / m * 100 : null;
-  return `<div class="sub">Imbalance ${u === null ? `not counted below ${floor} A` : u.toFixed(0) + ' %'} · <a href="#current">Current &amp; balance</a></div>`;
+  const m = (i[0] + i[1] + i[2]) / 3, u = m >= 5 ? Math.max(...i.map(x => Math.abs(x - m))) / m * 100 : null;
+  return `<div class="sub">Imbalance ${u === null ? 'not counted below 5 A' : `${u.toFixed(0)} % at ${m.toFixed(0)} A mean`} · <a href="#current">Current &amp; balance</a></div>`;
 }
 
 // ------------------------------------------------------------------ firmware versions (everyone; sending firmware: #firmware, admins)
@@ -3382,18 +3387,18 @@ if (MOCK && FX.manual) {
 //   - the pool pump (starts at 08:00 and 16:30) and the lift on all three phases.
 // Two events: Sat 7 Nov 19:38 to 19:44 the kitchen's ovens and dishwasher together on L1 (two 15-second samples above 90 % of the PLN
 // phase limit); Thu 5 Nov 14:10 to 14:51 L3 reads under 1 A while L1 and L2 carry their load (its CT shorted during work in the panel).
-// The current imbalance of the power quality overview (A10, counted from 25 A of mean current since v0.10.0) is replaced by the one
-// of these minutes, so both pages agree.
+// The current imbalance of the power quality overview (A10) is replaced by the one of these minutes, so both pages agree.
 if (MOCK && FX.quality) (() => {
   const Q = FX.quality, prof = FX.live.profile;
+  prof.meter_checked ??= '2026-11-17';   // the meter's values checked against real current (manage.py site-set)
   const PLN = prof.contracted_kva * 1000 / 3 / (prof.contract_v_ln || 220);   // the PLN limiter of one phase: 125 A at Adab
-  Q.i_floor_a = 25;   // A10's floor since v0.10.0 (site.json i_imbalance_floor_a)
-  const LOADED = 10;  // A40: the two other phases carry this or more
+  const LOADED = 10, IMB_LD = 25;   // A40: the two other phases carry this or more; A41: imbalance counted from this mean current
   const LIM = {...Q.limits,
     pln: {id: 'A37', name: 'Phase current near the PLN limit', v: 90, enabled: true, delay: 5},
     rated: {id: 'A29', name: 'Phase current near the rating', v: 90, enabled: true, delay: 5},
     pneg: {id: 'A30', name: 'Negative power on a phase', v: -0.5, enabled: true, delay: 5},
-    izero: {id: 'A40', name: 'Phase without current', v: 1, enabled: true, delay: 5}};
+    izero: {id: 'A40', name: 'Phase without current', v: 1, enabled: true, delay: 5},
+    iul: {id: 'A41', name: 'Current imbalance under load', v: 20, enabled: true, delay: 15}};
   let seed = 20261117;   // the same simulated minutes at every opening
   const R = () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const U = (a, b) => a + (b - a) * R();
@@ -3446,13 +3451,14 @@ if (MOCK && FX.quality) (() => {
     prev = m.ms;
     m.pf = m.p.map((pk, k) => pk >= 0.3 && m.i[k] >= 1 ? pk * 1000 / (m.v[k] * m.i[k]) : null);
     m.iu = unb(m.i, Q.i_floor_a);
+    m.ld = (m.i[0] + m.i[1] + m.i[2]) / 3 >= IMB_LD;
     m.d15 = m.i.map((y, k) => { ring[k].push(y); if (ring[k].length > 15) ring[k].shift(); return ring[k].length === 15 ? ring[k].reduce((a, b) => a + b) / 15 : null; });
     const lowK = m.i.indexOf(Math.min(...m.i));
     m.zero = m.i[lowK] < LIM.izero.v && m.i.every((y, k) => k === lowK || y >= LOADED) ? lowK : undefined;
     const key = m.t.slice(0, 13) + ':00';
     let o = HRS.get(key);
     if (!o) HRS.set(key, o = {t: key, minutes: 0, n: 0, i: [0, 0, 0], lo: [null, null, null], hi: [null, null, null], d15: [null, null, null],
-      p: [0, 0, 0], pmin: [null, null, null], pfs: [0, 0, 0], pfn: [0, 0, 0], iu: 0, iun: 0, iumax: null, iuhi: 0,
+      p: [0, 0, 0], pmin: [null, null, null], pfs: [0, 0, 0], pfn: [0, 0, 0], iu: 0, iun: 0, iumax: null, iuhi: 0, iunld: 0, iuhild: 0,
       ihi: [0, 0, 0], izero: 0, izeroPh: '', izeroAt: '', ps: 0, ss: 0, ld: 0});
     o.minutes++; o.n++;
     for (let k = 0; k < 3; k++) {
@@ -3464,7 +3470,8 @@ if (MOCK && FX.quality) (() => {
       if (m.pf[k] !== null) { o.pfs[k] += m.pf[k]; o.pfn[k]++; }
       o.ihi[k] += m.hi[k] > near;
     }
-    if (m.iu !== null) { o.iu += m.iu; o.iun++; o.iumax = Math.max(o.iumax ?? 0, m.iu); o.iuhi += m.iu > LIM.iu.v; }
+    if (m.iu !== null) { o.iu += m.iu; o.iun++; o.iumax = Math.max(o.iumax ?? 0, m.iu); o.iuhi += m.iu > LIM.iu.v;
+      if (m.ld) { o.iunld++; o.iuhild += m.iu > LIM.iul.v; } }
     if (m.zero !== undefined) { o.izero++; o.izeroPh = 'L' + (m.zero + 1); o.izeroAt ||= m.t.slice(11); }
     if (m.pt >= 1) { o.ps += (m.p[0] + m.p[1] + m.p[2]) / m.pt; o.ss += (m.v[0] * m.i[0] + m.v[1] * m.i[1] + m.v[2] * m.i[2]) / 1000 / m.st; o.ld++; }
   }
@@ -3476,7 +3483,7 @@ if (MOCK && FX.quality) (() => {
         [`p${s}`]: r1(o.p[k] / o.n, 3), [`e${s}`]: r1(o.p[k] / 60, 3), [`p${s}_min`]: r1(o.pmin[k], 3),
         [`pf${s}`]: o.pfn[k] ? r1(o.pfs[k] / o.pfn[k], 3) : undefined, [`i${s}_hi`]: o.ihi[k]});
     }
-    Object.assign(r, {iu: o.iun ? r1(o.iu / o.iun) : undefined, iu_max: r1(o.iumax), iu_n: o.iun, iu_hi: o.iuhi,
+    Object.assign(r, {iu: o.iun ? r1(o.iu / o.iun) : undefined, iu_max: r1(o.iumax), iu_n: o.iun, iu_hi: o.iuhi, iu_n_ld: o.iunld, iu_hi_ld: o.iuhild,
       i_zero: o.izero, i_zero_ph: o.izeroPh || undefined, i_zero_at: o.izeroAt || undefined,
       psum: o.ld ? r1(o.ps / o.ld * 100, 1) : undefined, sratio: o.ld ? r1(o.ss / o.ld * 100, 1) : undefined});
     return r;
@@ -3484,7 +3491,7 @@ if (MOCK && FX.quality) (() => {
   // the overview's current imbalance (A10) from the same minutes
   for (const r of Q.hours) { const c = HRS.get(r.t); if (c && c.iun) { r.iu = r1(c.iu / c.iun); r.iu_max = r1(c.iumax); } }
 
-  // ---- 3. the alarm lines these minutes give (A10, A40), as server/app/alarms.py writes them
+  // ---- 3. the alarm lines these minutes give (A10, A41, A40), as server/app/alarms.py writes them
   const EVENTS = [];
   const off = (prof.utc_offset_h ?? 8) * 36e5, utc = t => new Date(tp(t) - off).toISOString().slice(0, 19) + 'Z';
   const line = (a, state, t, value, unit, dur, message) => EVENTS.push({ts_utc: utc(t), local_time: t, id: a.id, name: a.name,
@@ -3505,6 +3512,8 @@ if (MOCK && FX.quality) (() => {
     });
   }
   replay(LIM.iu, m => m.iu !== null && m.iu > LIM.iu.v, m => m.iu !== null && m.iu < 15, 15, '%', m => m.iu,
+    'largest phase current deviation from the mean above 20 % for 15 min');
+  replay(LIM.iul, m => m.iu !== null && m.ld && m.iu > LIM.iul.v, m => m.iu !== null && m.ld && m.iu < 15, 15, '%', m => m.ld ? m.iu : null,
     'largest phase current deviation from the mean above 20 % for 15 min while the mean current is 25 A or more');
   replay(LIM.izero, m => m.zero !== undefined, m => m.zero === undefined, 5, 'A', m => m.zero === undefined ? null : m.i[m.zero],
     'a phase current below 1 A while the two others carry 10 A or more for 5 min', true);
@@ -3526,7 +3535,7 @@ if (MOCK && FX.quality) (() => {
       const ok = t => t.slice(0, 10) >= from && t.slice(0, 10) <= to;
       return ANS({site: FX.site, device: 'LOG-0001', meter: 'EM01', utc_offset_h: prof.utc_offset_h ?? 8, from: from + ' 00:00', to,
         now: FX.history.now, first_day: HOURS[0].t.slice(0, 10), nominal_v: prof.nominal_v || 230, pln_a: +PLN.toFixed(1), rated_a: prof.rated_a,
-        i_floor_a: Q.i_floor_a, i_loaded_a: LOADED, pf_load_kw: 0.3, limits: LIM, hours: HOURS.filter(r => ok(r.t)), events: EVENTS.filter(e => ok(e.local_time))});
+        i_floor_a: Q.i_floor_a, i_imb_loaded_a: IMB_LD, i_loaded_a: LOADED, pf_load_kw: 0.3, limits: LIM, hours: HOURS.filter(r => ok(r.t)), events: EVENTS.filter(e => ok(e.local_time))});
     }
     return base(url, opt);
   };

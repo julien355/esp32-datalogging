@@ -247,19 +247,33 @@ class AlarmTest(unittest.TestCase):
         # starts at the first of the 5 minutes, clears when L3 is back; from minute 20 L1 carries 5 A: nothing can be told
         self.assertEqual(a40, [("start", self.t(2), "0.2"), ("clear", self.t(12), "0.2")])
 
-    def test_current_imbalance_counted_from_25_a(self):
-        """A10 counts only while the mean current is 25 A or more (site.json i_imbalance_floor_a changes it)."""
+    def test_current_imbalance_two_counts(self):
+        """A10 counts the imbalance from 5 A of mean current; A41, apart, the same only from 25 A (site.json
+        i_imbalance_loaded_a changes it)."""
         h = "ts,EM01_i1,EM01_i2,EM01_i3,EM01_n"
-        low = [f"{self.t(m)},14,8,8,4" for m in range(20)]           # 40 % off, but a mean of 10 A: not counted
-        high = [f"{self.t(m)},42,24,24,4" for m in range(20, 40)]    # 40 % off at a mean of 30 A
+        low = [f"{self.t(m)},14,8,8,4" for m in range(20)]           # 40 % off at a mean of 10 A: A10 only
+        high = [f"{self.t(m)},42,24,24,4" for m in range(20, 40)]    # 40 % off at a mean of 30 A: A10 and A41
         self.s.ingest("adab", "LOG-0001", h + "\n" + "\n".join(low + high) + "\n")
-        a10 = [(x[6], x[0]) for x in self.log() if x[3] == "A10"]
-        self.assertEqual(a10, [("start", self.t(20))])
+        starts = [(x[3], x[0]) for x in self.log() if x[3] in ("A10", "A41") and x[6] == "start"]
+        self.assertEqual(starts, [("A10", self.t(0)), ("A41", self.t(20))])
         with open(os.path.join(self.s.site_dir("adab"), "site.json"), "w") as f:
-            json.dump({"i_imbalance_floor_a": 5}, f)
+            json.dump({"i_imbalance_loaded_a": 5}, f)
         self.s.ingest("adab", "LOG-0001", h + "\n" + "\n".join(f"{self.t(m)},14,8,8,4" for m in range(40, 60)) + "\n")
-        self.assertEqual([x[6] for x in self.log() if x[3] == "A10"], ["start"])   # still open: 40 % at 10 A counts now
+        self.assertEqual([x[6] for x in self.log() if x[3] == "A41"], ["start"])   # still open: 10 A counts for it now
 
+    def test_register_in_use_gets_new_lines_from_the_default(self):
+        """A line of the default register missing from the register in use is used as it is; an edited line wins."""
+        with open(self.s.alarms.default_register, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+        with open(os.path.join(self.s.root, "alarm-register.csv"), "w", encoding="utf-8") as f:
+            f.write("\n".join(ln.replace(",20,15,%,", ",30,25,%,") if ln.startswith("A10,") else ln
+                              for ln in lines if not ln.startswith(("A40,", "A41,"))) + "\n")
+        reg = {a["id"]: a for a in self.s.alarms.register("adab")}
+        self.assertEqual(reg["A10"]["threshold"], "30")                 # the edited line of the register in use
+        self.assertEqual(reg["A40"]["rule"], "i_phase_zero")            # from the default register
+        self.assertEqual(reg["A41"]["rule"], "i_imbalance_loaded")
+        self.assertEqual(len(reg), len([a for a in self.s.alarms._read_register(self.s.alarms.default_register)
+                                        if a["enabled"] == "yes"]))
 
 class ToolsAndHttpTest(unittest.TestCase):
     def setUp(self):
@@ -523,8 +537,9 @@ class ToolsAndHttpTest(unittest.TestCase):
         code, body = self.req("GET", "/api/v1/quality/adab/current?days=3")
         self.assertEqual(code, 200, body)
         j = json.loads(body)
-        self.assertEqual((j["pln_a"], j["rated_a"], j["i_floor_a"], j["i_loaded_a"]), (125.0, 200.0, 25.0, 10.0))
-        self.assertEqual((j["limits"]["pln"]["id"], j["limits"]["izero"]["id"], j["limits"]["izero"]["v"]), ("A37", "A40", 1))
+        self.assertEqual((j["pln_a"], j["rated_a"], j["i_floor_a"], j["i_imb_loaded_a"], j["i_loaded_a"]), (125.0, 200.0, 5.0, 25.0, 10.0))
+        self.assertEqual((j["limits"]["pln"]["id"], j["limits"]["izero"]["id"], j["limits"]["izero"]["v"], j["limits"]["iul"]["id"]),
+                         ("A37", "A40", 1, "A41"))
         h = j["hours"]
         tot = lambda k: sum(r.get(k, 0) for r in h)
         self.assertEqual((tot("minutes"), tot("n")), (20, 20))
@@ -539,9 +554,10 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertAlmostEqual(min(r["pf1"] for r in h), sum(9000 / (230 * i) for i in range(50, 60)) / 10, places=3)
         self.assertTrue(all(abs(r["psum"] - 100) < 0.5 for r in h))
         self.assertTrue(all(abs(r["sratio"] - 100) < 0.5 for r in h))
-        # imbalance as A10: counted while the mean is 25 A or more (all minutes here, mean >= 27 A)
-        self.assertEqual(tot("iu_n"), 20)
+        # imbalance as A10 (counted from 5 A of mean current) and as A41 (from 25 A): every minute here (mean >= 27 A)
+        self.assertEqual((tot("iu_n"), tot("iu_n_ld")), (20, 20))
         self.assertGreater(tot("iu_hi"), 0)
+        self.assertEqual(tot("iu_hi_ld"), tot("iu_hi"))
         # minute by minute: the hotel day of the last minutes
         day = (mid + timedelta(minutes=9) + timedelta(hours=8)).strftime("%Y-%m-%d")
         code, body = self.req("GET", f"/api/v1/quality/adab/current/day/{day}")
@@ -553,7 +569,8 @@ class ToolsAndHttpTest(unittest.TestCase):
         self.assertEqual(self.req("GET", "/api/v1/quality/adab/current?days=x")[0], 400)
         self.assertEqual(self.req("GET", "/api/v1/quality/nosite/current")[0], 404)
         self.assertEqual(self.req("GET", "/api/v1/history/adab/current")[0], 404)
-        # the site profile gives the page meter_checked; alarm-register adds a missing line and keeps the others
+        # the site profile gives the page meter_checked; alarm-register lists the lines used from the default register
+        # and copies them into the register in use with --add, keeping the others
         self.manage("site-set", "adab", "meter_checked=2026-11-20")
         prof = json.loads(self.req("GET", "/api/v1/live/adab")[1])["profile"]
         self.assertEqual(prof["meter_checked"], "2026-11-20")
@@ -562,12 +579,17 @@ class ToolsAndHttpTest(unittest.TestCase):
             lines = f.read().splitlines()
         with open(reg, "w", encoding="utf-8") as f:
             f.write("\n".join(ln.replace(",20,15,%,", ",25,15,%,") if ln.startswith("A10,") else ln
-                              for ln in lines if not ln.startswith("A40,")) + "\n")
-        self.assertIn("missing: A40,", self.manage("alarm-register"))
+                              for ln in lines if not ln.startswith(("A40,", "A41,"))) + "\n")
+        out = self.manage("alarm-register")
+        self.assertIn("from the default register: A40,", out)
+        self.assertIn("from the default register: A41,", out)
+        j = json.loads(self.req("GET", "/api/v1/quality/adab/current?days=3")[1])
+        self.assertTrue(j["limits"]["izero"]["enabled"])      # used before it is copied: nothing to do on a release
         self.manage("alarm-register", "--add")
         with open(reg, encoding="utf-8") as f:
             text = f.read()
         self.assertIn("\nA40,Phase without current,", text)
+        self.assertIn("\nA41,Current imbalance under load,", text)
         self.assertIn("A10,Current imbalance,power quality,i_imbalance_pct,EM01,25,15,", text)   # an edited line stays
         self.assertIn("every line", self.manage("alarm-register"))
 

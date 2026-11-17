@@ -10,18 +10,18 @@
 //   - the pool pump (starts at 08:00 and 16:30) and the lift on all three phases.
 // Two events: Sat 7 Nov 19:38 to 19:44 the kitchen's ovens and dishwasher together on L1 (two 15-second samples above 90 % of the PLN
 // phase limit); Thu 5 Nov 14:10 to 14:51 L3 reads under 1 A while L1 and L2 carry their load (its CT shorted during work in the panel).
-// The current imbalance of the power quality overview (A10, counted from 25 A of mean current since v0.10.0) is replaced by the one
-// of these minutes, so both pages agree.
+// The current imbalance of the power quality overview (A10) is replaced by the one of these minutes, so both pages agree.
 if (MOCK && FX.quality) (() => {
   const Q = FX.quality, prof = FX.live.profile;
+  prof.meter_checked ??= '2026-11-17';   // the meter's values checked against real current (manage.py site-set)
   const PLN = prof.contracted_kva * 1000 / 3 / (prof.contract_v_ln || 220);   // the PLN limiter of one phase: 125 A at Adab
-  Q.i_floor_a = 25;   // A10's floor since v0.10.0 (site.json i_imbalance_floor_a)
-  const LOADED = 10;  // A40: the two other phases carry this or more
+  const LOADED = 10, IMB_LD = 25;   // A40: the two other phases carry this or more; A41: imbalance counted from this mean current
   const LIM = {...Q.limits,
     pln: {id: 'A37', name: 'Phase current near the PLN limit', v: 90, enabled: true, delay: 5},
     rated: {id: 'A29', name: 'Phase current near the rating', v: 90, enabled: true, delay: 5},
     pneg: {id: 'A30', name: 'Negative power on a phase', v: -0.5, enabled: true, delay: 5},
-    izero: {id: 'A40', name: 'Phase without current', v: 1, enabled: true, delay: 5}};
+    izero: {id: 'A40', name: 'Phase without current', v: 1, enabled: true, delay: 5},
+    iul: {id: 'A41', name: 'Current imbalance under load', v: 20, enabled: true, delay: 15}};
   let seed = 20261117;   // the same simulated minutes at every opening
   const R = () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const U = (a, b) => a + (b - a) * R();
@@ -74,13 +74,14 @@ if (MOCK && FX.quality) (() => {
     prev = m.ms;
     m.pf = m.p.map((pk, k) => pk >= 0.3 && m.i[k] >= 1 ? pk * 1000 / (m.v[k] * m.i[k]) : null);
     m.iu = unb(m.i, Q.i_floor_a);
+    m.ld = (m.i[0] + m.i[1] + m.i[2]) / 3 >= IMB_LD;
     m.d15 = m.i.map((y, k) => { ring[k].push(y); if (ring[k].length > 15) ring[k].shift(); return ring[k].length === 15 ? ring[k].reduce((a, b) => a + b) / 15 : null; });
     const lowK = m.i.indexOf(Math.min(...m.i));
     m.zero = m.i[lowK] < LIM.izero.v && m.i.every((y, k) => k === lowK || y >= LOADED) ? lowK : undefined;
     const key = m.t.slice(0, 13) + ':00';
     let o = HRS.get(key);
     if (!o) HRS.set(key, o = {t: key, minutes: 0, n: 0, i: [0, 0, 0], lo: [null, null, null], hi: [null, null, null], d15: [null, null, null],
-      p: [0, 0, 0], pmin: [null, null, null], pfs: [0, 0, 0], pfn: [0, 0, 0], iu: 0, iun: 0, iumax: null, iuhi: 0,
+      p: [0, 0, 0], pmin: [null, null, null], pfs: [0, 0, 0], pfn: [0, 0, 0], iu: 0, iun: 0, iumax: null, iuhi: 0, iunld: 0, iuhild: 0,
       ihi: [0, 0, 0], izero: 0, izeroPh: '', izeroAt: '', ps: 0, ss: 0, ld: 0});
     o.minutes++; o.n++;
     for (let k = 0; k < 3; k++) {
@@ -92,7 +93,8 @@ if (MOCK && FX.quality) (() => {
       if (m.pf[k] !== null) { o.pfs[k] += m.pf[k]; o.pfn[k]++; }
       o.ihi[k] += m.hi[k] > near;
     }
-    if (m.iu !== null) { o.iu += m.iu; o.iun++; o.iumax = Math.max(o.iumax ?? 0, m.iu); o.iuhi += m.iu > LIM.iu.v; }
+    if (m.iu !== null) { o.iu += m.iu; o.iun++; o.iumax = Math.max(o.iumax ?? 0, m.iu); o.iuhi += m.iu > LIM.iu.v;
+      if (m.ld) { o.iunld++; o.iuhild += m.iu > LIM.iul.v; } }
     if (m.zero !== undefined) { o.izero++; o.izeroPh = 'L' + (m.zero + 1); o.izeroAt ||= m.t.slice(11); }
     if (m.pt >= 1) { o.ps += (m.p[0] + m.p[1] + m.p[2]) / m.pt; o.ss += (m.v[0] * m.i[0] + m.v[1] * m.i[1] + m.v[2] * m.i[2]) / 1000 / m.st; o.ld++; }
   }
@@ -104,7 +106,7 @@ if (MOCK && FX.quality) (() => {
         [`p${s}`]: r1(o.p[k] / o.n, 3), [`e${s}`]: r1(o.p[k] / 60, 3), [`p${s}_min`]: r1(o.pmin[k], 3),
         [`pf${s}`]: o.pfn[k] ? r1(o.pfs[k] / o.pfn[k], 3) : undefined, [`i${s}_hi`]: o.ihi[k]});
     }
-    Object.assign(r, {iu: o.iun ? r1(o.iu / o.iun) : undefined, iu_max: r1(o.iumax), iu_n: o.iun, iu_hi: o.iuhi,
+    Object.assign(r, {iu: o.iun ? r1(o.iu / o.iun) : undefined, iu_max: r1(o.iumax), iu_n: o.iun, iu_hi: o.iuhi, iu_n_ld: o.iunld, iu_hi_ld: o.iuhild,
       i_zero: o.izero, i_zero_ph: o.izeroPh || undefined, i_zero_at: o.izeroAt || undefined,
       psum: o.ld ? r1(o.ps / o.ld * 100, 1) : undefined, sratio: o.ld ? r1(o.ss / o.ld * 100, 1) : undefined});
     return r;
@@ -112,7 +114,7 @@ if (MOCK && FX.quality) (() => {
   // the overview's current imbalance (A10) from the same minutes
   for (const r of Q.hours) { const c = HRS.get(r.t); if (c && c.iun) { r.iu = r1(c.iu / c.iun); r.iu_max = r1(c.iumax); } }
 
-  // ---- 3. the alarm lines these minutes give (A10, A40), as server/app/alarms.py writes them
+  // ---- 3. the alarm lines these minutes give (A10, A41, A40), as server/app/alarms.py writes them
   const EVENTS = [];
   const off = (prof.utc_offset_h ?? 8) * 36e5, utc = t => new Date(tp(t) - off).toISOString().slice(0, 19) + 'Z';
   const line = (a, state, t, value, unit, dur, message) => EVENTS.push({ts_utc: utc(t), local_time: t, id: a.id, name: a.name,
@@ -133,6 +135,8 @@ if (MOCK && FX.quality) (() => {
     });
   }
   replay(LIM.iu, m => m.iu !== null && m.iu > LIM.iu.v, m => m.iu !== null && m.iu < 15, 15, '%', m => m.iu,
+    'largest phase current deviation from the mean above 20 % for 15 min');
+  replay(LIM.iul, m => m.iu !== null && m.ld && m.iu > LIM.iul.v, m => m.iu !== null && m.ld && m.iu < 15, 15, '%', m => m.ld ? m.iu : null,
     'largest phase current deviation from the mean above 20 % for 15 min while the mean current is 25 A or more');
   replay(LIM.izero, m => m.zero !== undefined, m => m.zero === undefined, 5, 'A', m => m.zero === undefined ? null : m.i[m.zero],
     'a phase current below 1 A while the two others carry 10 A or more for 5 min', true);
@@ -154,7 +158,7 @@ if (MOCK && FX.quality) (() => {
       const ok = t => t.slice(0, 10) >= from && t.slice(0, 10) <= to;
       return ANS({site: FX.site, device: 'LOG-0001', meter: 'EM01', utc_offset_h: prof.utc_offset_h ?? 8, from: from + ' 00:00', to,
         now: FX.history.now, first_day: HOURS[0].t.slice(0, 10), nominal_v: prof.nominal_v || 230, pln_a: +PLN.toFixed(1), rated_a: prof.rated_a,
-        i_floor_a: Q.i_floor_a, i_loaded_a: LOADED, pf_load_kw: 0.3, limits: LIM, hours: HOURS.filter(r => ok(r.t)), events: EVENTS.filter(e => ok(e.local_time))});
+        i_floor_a: Q.i_floor_a, i_imb_loaded_a: IMB_LD, i_loaded_a: LOADED, pf_load_kw: 0.3, limits: LIM, hours: HOURS.filter(r => ok(r.t)), events: EVENTS.filter(e => ok(e.local_time))});
     }
     return base(url, opt);
   };

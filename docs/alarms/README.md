@@ -18,8 +18,8 @@ Status: **built and tested with the simulated logger** (7 November 2026). WhatsA
   - **A01 logger offline** is checked every minute on what the VPS **receives**;
   - **A18 clock** is checked on the live snapshots.
 - Nothing is lost by evaluating on the VPS: the logger keeps every record on its SD card, and **`manage.py alarms adab --rebuild` replays the whole history** (service stopped, see the VPS tutorial C6; A01 and A18, which do not come from the records, are kept as they were) against the current register (after an SD backfill, or to see what a new threshold would have given).
-- The **Power quality** pages of the site page (`/live/<site>/#quality`, `#voltage`, `#current`, `#pf`) count minutes outside the voltage limits, dips, swells, unbalance, current imbalance, phase currents near the PLN limit, a phase without current and low power factor with the thresholds of this register (A04 to A07, A09, A10, A26 to A30, A37, A40): a changed threshold changes those pages too ([`../LIVE.md`](../LIVE.md#option-a-in-detail)).
-- **A new line in a release** (A40 in `v0.10.0`) is in `docs/alarms/alarms.csv` and in the image, but not in the register in use on the VPS, which `init` never overwrites: `manage.py alarm-register` lists the lines of the default register missing from it, `manage.py alarm-register --add` appends them (the lines already there, edited or not, are never changed; the previous file is kept as `alarm-register.csv.bak`).
+- The **Power quality** pages of the site page (`/live/<site>/#quality`, `#voltage`, `#current`, `#pf`) count minutes outside the voltage limits, dips, swells, unbalance, current imbalance, phase currents near the PLN limit, a phase without current and low power factor with the thresholds of this register (A04 to A07, A09, A10, A26 to A30, A37, A40, A41): a changed threshold changes those pages too ([`../LIVE.md`](../LIVE.md#option-a-in-detail)).
+- **A new alarm in a release** (A40, A41 in `v0.10.0`) needs nothing on the VPS. Since `v0.10.0` the service reads the register in use, then takes from the default register (`docs/alarms/alarms.csv`, in the image) every line whose id is not in it: a new alarm works at once, and the register in use is never overwritten (`init` never did). A line of the register in use, edited or not, always wins. **To turn an alarm off, set `enabled` to `no`**: deleting its line brings back the default one. `manage.py alarm-register` lists the lines used from the default register; `--add` copies them into the register in use, only to change one in Excel (the previous file is kept as `alarm-register.csv.bak`).
 
 ## 2. Where the files are
 
@@ -69,7 +69,7 @@ Read the log:
 | `evaluated_on` | `1-min record`, `live snapshot` or `reception` |
 | `condition`, `note` | Plain text: what it means, what to check |
 
-## 5. The alarms and warnings recorded (38 lines, 35 enabled)
+## 5. The alarms and warnings recorded (39 lines, 36 enabled)
 
 **Power quality (from the 1-minute mean, min and max)**
 
@@ -83,7 +83,8 @@ Read the log:
 | A28 | **Voltage unbalance** (new) | > 2 % for 10 min (EN 50160 limit) | warning | no |
 | A07 | Frequency out of range | min or max more than 0.5 Hz from 50 Hz (genset) | warning | yes |
 | A09 | Low power factor | < 0.85 for 15 min, load above 1 kW | warning | no |
-| A10 | Current imbalance | > 20 % for 15 min, **while the mean current is 25 A or more** (since `v0.10.0`; was 5 A): at light load a few amperes make a large %. `i_imbalance_floor_a` in `site.json` changes the 25 A for a site | warning | no |
+| A10 | Current imbalance | > 20 % for 15 min, mean above 5 A | warning | no |
+| A41 | **Current imbalance under load** (`v0.10.0`) | counted apart from A10: > 20 % for 15 min **while the mean current is 25 A or more** (`i_imbalance_loaded_a` in `site.json` for another value). At light load a few amperes make a large %; under load it heats the busiest phase and the neutral | warning | no |
 | A32 | Mains lost, logger on UPS | **off until the UPS is installed** (needs a mains-sense signal) | critical | yes |
 
 **Load and meter**
@@ -130,12 +131,12 @@ Also kept in `events.jsonl` (not in the alarm log): settings sent and applied, l
 | Contracted power | **82.5 kVA** | A08 (74.25 kVA), A37 | `contracted_kva` 82.5 |
 | PLN limit per phase | 82.5 kVA / (3 x 220 V) = **125 A** (the limiter PLN fits for this contract) | A37 (112.5 A) | `contract_v_ln` 220 |
 | Main breaker | **200 A** | A29 (180 A) | `rated_a` 200 |
-| CT ratio | set in the meter, which already shows correct A and kW. **CTs 250/5 A, ratio 50 (owner, 8 November 2026), to be confirmed on their labels** | register scale (`ct_mult` stays 1 unless the site register check shows otherwise: `docs/meter/README.md`) | |
+| CT ratio | set in the meter, which already shows correct A and kW. **CTs 250/5 A, ratio 50 (owner, 8 November 2026). The meter's values were checked against real current and match (owner, 17 November 2026)** | register scale (`ct_mult` stays 1 unless the site register check shows otherwise: `docs/meter/README.md`) | |
 
 - **A37 before A29:** at 82.5 kVA the PLN limiter (3 x 125 A) trips long before the 200 A breaker is loaded, and it trips on **one** overloaded phase even when the total kVA is under the contract. A37 is the one that warns before a PLN trip; A29 stays as the breaker's own check.
 - **Voltage limits** (A05 207 V, A06 242 V, A26 207 V, A27 253 V): SNI tolerance +5 % / -10 % around 230 V. A supply that runs near 220 V is still inside them.
 - **A11, A12, A13** (electrical room), **A22 to A25** (outdoor): as proposed on 5 November.
-- **A04 to A10, A26 to A31, A37, A40** depend on the meter register check, done on site (`docs/meter/README.md` section 4). Until then their values and thresholds are not trusted: a scale error equal to the CT ratio (50 for a 250/5 CT) would fire or silence A29 and A37.
+- **A04 to A10, A26 to A31, A37, A40, A41** depend on the meter's values being right. **They were checked against real current and match (owner, 17 November 2026)**; `site.json` `meter_checked` records it, and the measurement checks of the page Current & balance keep watching the scales and the CTs (`docs/meter/README.md`).
 - Review the log after the first week and tune: a line that fires every day is noise; raise its threshold or delay, or set WhatsApp to `no`.
 
 ## 7. What the WhatsApp group will receive (S6)

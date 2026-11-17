@@ -701,7 +701,7 @@ class Handler(BaseHTTPRequestHandler):
     def public_profile(self, site):
         p = self.store.site_profile(site)
         keys = ("name", "timezone", "utc_offset_h", "labels", "live", "sensors", "contracted_kva", "contract_v_ln", "rated_a",
-                "nominal_v", "meter_checked", "i_imbalance_floor_a")
+                "nominal_v", "meter_checked")
         out = {k: p.get(k) for k in keys if k in p}
         out["manual_meters"] = manual.meters(p)   # meters read by hand: their pages in the menu (Meter readings)
         return out

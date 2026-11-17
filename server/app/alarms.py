@@ -23,8 +23,9 @@ import time
 from datetime import datetime, timedelta, timezone
 
 GAP_S = 300                       # a gap longer than this resets a pending (not yet confirmed) alarm
-I_IMBALANCE_FLOOR_A = 25.0        # A10: current imbalance counted only with this mean current or more (site.json
-                                  # i_imbalance_floor_a): at light load a few amperes make a large percentage
+I_IMBALANCE_FLOOR_A = 5.0         # A10: current imbalance not counted below this mean current
+I_IMBALANCE_LOADED_A = 25.0       # A41: the same imbalance, counted only with this mean current or more (site.json
+                                  # i_imbalance_loaded_a): at light load a few amperes make a large percentage
 I_LOADED_A = 10.0                 # A40: a phase is "without current" only while the two others carry this or more
 PLANNED_BOOTS = ("sw:daily", "sw:console", "sw:portal", "sw:remote_cfg", "sw:remote_regs", "sw:ota", "sw:import", "sw:ota_rollback")
 POWER_BOOTS = ("poweron", "brownout")
@@ -120,14 +121,19 @@ def r_v_unbalance_pct(row, a, ctx):
     return _unbalance(_phases(row, a, "v"), 100)
 
 
-def imbalance_floor(site):
-    """Mean current (A) below which the current imbalance is not counted: site.json i_imbalance_floor_a, else 25 A."""
-    v = num((site or {}).get("i_imbalance_floor_a"))
-    return I_IMBALANCE_FLOOR_A if v is None else v
+def imbalance_loaded(site):
+    """A41: the mean current (A) from which the imbalance under load is counted: site.json i_imbalance_loaded_a, else 25."""
+    v = num((site or {}).get("i_imbalance_loaded_a"))
+    return I_IMBALANCE_LOADED_A if v is None else v
 
 
 def r_i_imbalance_pct(row, a, ctx):
-    return _unbalance(_phases(row, a, "i"), imbalance_floor(ctx["site"]))
+    return _unbalance(_phases(row, a, "i"), I_IMBALANCE_FLOOR_A)
+
+
+def r_i_imbalance_loaded(row, a, ctx):
+    """A41: the imbalance of A10, only while the mean current is imbalance_loaded() or more."""
+    return _unbalance(_phases(row, a, "i"), imbalance_loaded(ctx["site"]))
 
 
 def r_i_phase_zero(row, a, ctx):
@@ -323,6 +329,7 @@ LEVEL = {
     "v_min_phase": ("below", r_v_min_phase), "v_max_phase": ("above", r_v_max_phase),
     "v_mean_low": ("below", r_v_mean_low), "v_mean_high": ("above", r_v_mean_high),
     "v_unbalance_pct": ("above", r_v_unbalance_pct), "i_imbalance_pct": ("above", r_i_imbalance_pct),
+    "i_imbalance_loaded": ("above", r_i_imbalance_loaded),
     "f_dev": ("above", r_f_dev), "s_pct_contract": ("above", r_s_pct_contract), "pf_low": ("below", r_pf_low),
     "i_max_pct_rated": ("above", r_i_max_pct_rated), "i_pct_contract": ("above", r_i_pct_contract), "p_phase_negative": ("below", r_p_phase_negative),
     "i_phase_zero": ("below", r_i_phase_zero),
@@ -372,8 +379,14 @@ class AlarmEngine:
         return rows
 
     def register(self, site, include_disabled=False):
+        """The register in use (DATA_DIR/alarm-register.csv), then the lines of the default register (in the image) whose
+        id is not in it: an alarm added by a release works without touching the register in use, and a line of the
+        register in use, edited or not, always wins. Then the site's own lines replace those with the same id."""
         base = os.path.join(self.store.root, "alarm-register.csv")
         rows = self._read_register(base if os.path.exists(base) else self.default_register)
+        if os.path.exists(base) and self.default_register and os.path.abspath(base) != self.default_register:
+            have = {r["id"] for r in rows}
+            rows = rows + [r for r in self._read_register(self.default_register) if r["id"] not in have]
         over = {r["id"]: r for r in self._read_register(os.path.join(self.store.site_dir(site), "alarm-register.csv"))}
         out = []
         for r in rows:

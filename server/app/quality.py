@@ -18,8 +18,8 @@ The limits are read from the alarm register (docs/alarms/alarms.csv, the copy in
 counts exactly what the alarms check:
     A05 undervoltage, A06 overvoltage   a phase's 1-minute mean below 207 V / above 242 V
     A26 dip, A27 swell, A04 phase lost  a 15 s sample below 207 V / above 253 V / below 100 V
-    A28 voltage unbalance (2 %), A10 current imbalance (20 %, not below 25 A of mean current: site.json
-    i_imbalance_floor_a), A07 frequency (50 +- 0.5 Hz), A09 power factor (0.85, only while the load is 1 kW or more;
+    A28 voltage unbalance (2 %), A10 current imbalance (20 %, not below 5 A of mean current), A41 the same counted
+    apart, only with 25 A or more of mean current (site.json i_imbalance_loaded_a), A07 frequency (50 +- 0.5 Hz), A09 power factor (0.85, only while the load is 1 kW or more;
     the sign of the power factor is not used), A37 a 15 s phase current above 90 % of the PLN phase limit
     (contracted_kva / 3 / contract_v_ln), A29 the same against rated_a, A30 a phase's power below -0.5 kW,
     A40 a phase below 1 A while the two others carry 10 A or more.
@@ -37,20 +37,21 @@ import os
 import threading
 from datetime import datetime, timedelta, timezone
 
-from alarms import I_LOADED_A, _unbalance, imbalance_floor
+from alarms import I_IMBALANCE_FLOOR_A, I_LOADED_A, _unbalance, imbalance_loaded
 from history import MAX_GAP_S, _files, _num, _offset, _parse_ts, _read, first_day, period
 
 PF_LOAD_KW = 1.0          # power factor ignored below this load (as A09)
+I_FLOOR_A = I_IMBALANCE_FLOOR_A   # current imbalance ignored below this mean current (as A10)
 PH_LOAD_KW = 0.3          # power factor of a phase ignored below this power on it
 V_FLOOR_V = 100.0         # voltage unbalance ignored below this mean voltage (as A28)
 MAX_EVENTS = 500
 # alarm id -> (limit name, default when the register has no such line)
 LIMITS = {"A05": ("low", 207.0), "A06": ("high", 242.0), "A26": ("dip", 207.0), "A27": ("swell", 253.0),
           "A04": ("lost", 100.0), "A28": ("vu", 2.0), "A10": ("iu", 20.0), "A07": ("f_dev", 0.5), "A09": ("pf", 0.85),
-          "A37": ("pln", 90.0), "A29": ("rated", 90.0), "A30": ("pneg", -0.5), "A40": ("izero", 1.0)}
+          "A37": ("pln", 90.0), "A29": ("rated", 90.0), "A30": ("pneg", -0.5), "A40": ("izero", 1.0), "A41": ("iul", 20.0)}
 COUNTS = ("vn", "vok", "vlow", "vhigh", "dips", "swells", "lost", "loaded", "pf_low")
-CCOUNTS = ("in3", "ihi1", "ihi2", "ihi3", "iu_n", "iu_hi", "izero")      # counts of the current page
-CURRENT_RULES = ("i_imbalance_pct", "i_pct_contract", "i_max_pct_rated", "p_phase_negative", "i_phase_zero")
+CCOUNTS = ("in3", "ihi1", "ihi2", "ihi3", "iu_n", "iu_hi", "iu_n_ld", "iu_hi_ld", "izero")   # counts of the current page
+CURRENT_RULES = ("i_imbalance_pct", "i_imbalance_loaded", "i_pct_contract", "i_max_pct_rated", "p_phase_negative", "i_phase_zero")
 CDAY_COLS = ("t", "i1", "i1_min", "i1_max", "i2", "i2_min", "i2_max", "i3", "i3_min", "i3_max", "p1", "p2", "p3", "iu")
 DAY_COLS = ("t", "v1", "v1_min", "v1_max", "v2", "v2_min", "v2_max", "v3", "v3_min", "v3_max",
             "f", "f_min", "f_max", "pf", "p")
@@ -85,7 +86,7 @@ def _lim(lim_full, prof):
     """The values the summaries count against (part of their cache key)."""
     lim = {k: v["v"] for k, v in lim_full.items()}
     pln = pln_a(prof)
-    lim.update(i_floor=imbalance_floor(prof), near_a=pln * lim["pln"] / 100 if pln else None, loaded=I_LOADED_A)
+    lim.update(i_floor=I_FLOOR_A, i_ld=imbalance_loaded(prof), near_a=pln * lim["pln"] / 100 if pln else None, loaded=I_LOADED_A)
     return lim
 
 
@@ -154,7 +155,7 @@ def _minute(row, m, lim, h, hhmm=""):
 
 
 def _current(row, m, lim, h, volts, hhmm):
-    """The current page's part of a 1-minute record: each phase's current and power, the imbalance (as A10),
+    """The current page's part of a 1-minute record: each phase's current and power, the imbalance (as A10 and A41),
     the minutes near the PLN limit (A37's threshold) and with a phase without current (as A40), the two sums."""
     ip = _phase(row, m, "i")
     cur = [v for v, _, _ in ip]
@@ -172,6 +173,9 @@ def _current(row, m, lim, h, volts, hhmm):
     if iu is not None:
         h["iu_n"] += 1
         h["iu_hi"] += iu > lim["iu"]
+        if sum(cur) / 3 >= lim["i_ld"]:   # A41: the same imbalance, under load
+            h["iu_n_ld"] += 1
+            h["iu_hi_ld"] += iu > lim["iul"]
     if None in cur:
         return
     h["in3"] += 1
@@ -316,7 +320,8 @@ def _crow(k, parts):
         r[f"i{k}_hi"] = tot(f"ihi{k}")
     if "iu" in cnt:
         r["iu"], r["iu_max"] = _r(mean("iu"), 2), _r(mx["iu"], 2)
-    r["iu_n"], r["iu_hi"], r["i_zero"] = tot("iu_n"), tot("iu_hi"), tot("izero")
+    r["iu_n"], r["iu_hi"], r["iu_n_ld"], r["iu_hi_ld"], r["i_zero"] = (tot("iu_n"), tot("iu_hi"), tot("iu_n_ld"), tot("iu_hi_ld"),
+                                                                      tot("izero"))
     if r["i_zero"]:
         first = next(p for p in parts if p.get("izero"))
         r["i_zero_ph"], r["i_zero_at"] = first["izero_ph"], first["izero_at"]
@@ -433,15 +438,16 @@ def current_hourly(store, engine, site, device, days=14, meter="EM01", start=Non
             "from": first_key, "to": (local_end - timedelta(days=1)).strftime("%Y-%m-%d"),
             "now": (now + off).strftime("%Y-%m-%d %H:%M"), "first_day": first_day(store, site, device, off),
             "nominal_v": _num(prof.get("nominal_v")) or 230.0, "pln_a": _r(pln, 1), "rated_a": _num(prof.get("rated_a")),
-            "i_floor_a": lim["i_floor"], "i_loaded_a": I_LOADED_A, "pf_load_kw": PH_LOAD_KW, "limits": lim_full, "hours": rows,
+            "i_floor_a": lim["i_floor"], "i_imb_loaded_a": lim["i_ld"], "i_loaded_a": I_LOADED_A, "pf_load_kw": PH_LOAD_KW,
+            "limits": lim_full, "hours": rows,
             "events": events(store, engine, site, device, utc_from, local_end - off, CURRENT_RULES)}
 
 
 def current_minutes(store, site, device, day, meter="EM01"):
     """{"cols": [...], "rows": [["HH:MM", i1, i1_min, i1_max, ..., p1, p2, p3, iu]]} for one local day; iu is
-    empty below the imbalance floor (as A10)."""
+    empty below 5 A of mean current (as A10)."""
     off = _offset(store, site)
-    floor = imbalance_floor(store.site_profile(site))
+    floor = I_FLOOR_A
     local0 = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     utc_from, utc_to = local0 - off, local0 - off + timedelta(days=1)
     rows = []

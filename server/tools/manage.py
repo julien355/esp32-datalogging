@@ -38,13 +38,14 @@ Commands:
                                         list them with their last reading; with an id, add or change one, or remove it
                                         (its readings file is kept). Their pages: Meter readings on the site page
   import-readings <site> <meter> <file.csv | -> [--user NAME] [--dry-run]
-  site-set <site> key=value ...         change fields of site.json (no restart): meter_checked=2026-11-20 (date of the
-                                        on-site register check, shown on Current & balance), i_imbalance_floor_a=25
-                                        (A10 counted from this mean current), contracted_kva, contract_v_ln, rated_a,
+  site-set <site> key=value ...         change fields of site.json (no restart): meter_checked=2026-11-17 (date of the
+                                        on-site register check, shown on Current & balance), i_imbalance_loaded_a=25
+                                        (A41 counted from this mean current), contracted_kva, contract_v_ln, rated_a,
                                         nominal_v, name. An empty value removes the field (back to its default)
   alarm-register [--add]                lines of the default register (docs/alarms/alarms.csv, in the image) missing
-                                        from the register in use: listed, or appended with --add (the lines already
-                                        there, edited or not, are never changed)
+                                        from the register in use: the service uses them as they are (a new alarm of
+                                        a release needs nothing); --add copies them into the register in use, to edit
+                                        them in Excel (the lines already there, edited or not, are never changed)
                                         past readings from a CSV (date,time,value[,note], hotel time, a header line
                                         allowed), e.g. the paper round sheet: every line is checked first, nothing
                                         is written if one is refused
@@ -704,7 +705,7 @@ def cmd_import_readings(store, a):
     print(f"imported as {a.user}: {manual.path(store, a.site, a.meter)}")
 
 
-SITE_FIELDS = {"meter_checked": "date", "i_imbalance_floor_a": float, "contracted_kva": float, "contract_v_ln": float,
+SITE_FIELDS = {"meter_checked": "date", "i_imbalance_loaded_a": float, "contracted_kva": float, "contract_v_ln": float,
                "rated_a": float, "nominal_v": float, "name": str}
 
 
@@ -750,9 +751,10 @@ def cmd_alarm_register(store, a):
         print(f"{used}: every line of the default register is there")
         return
     for ln in new:
-        print(("added: " if a.add else "missing: ") + ln)
+        print(("added: " if a.add else "from the default register: ") + ln)
     if not a.add:
-        print(f"{len(new)} line(s) missing from {used}: add them with --add")
+        print(f"{len(new)} line(s) not in {used}: the service uses them from the default register as they are. "
+              f"To change one in Excel, copy them into the file with --add")
         return
     shutil.copyfile(used, used + ".bak")
     with open(used, encoding="utf-8-sig", newline="") as f:

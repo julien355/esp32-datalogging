@@ -78,7 +78,7 @@ Plain text, UTF-8, comma separated, `\n` line ends, a header line, no quotes, `.
 | `sd` | | 1 = written to the SD card, 0 = the card was failing (row kept in RAM only) |
 | `boot` | | On the first record after a boot only: `reason@firmware`, for example `poweron@0.4.1` or `sw:ota@0.4.2` |
 
-A second meter adds the same block with `EM02_`. The meter columns and their scales come from the register table: **until the register check, the values and units of currents and powers are not trusted.**
+A second meter adds the same block with `EM02_`. The meter columns and their scales come from the register table. **The values of the Adab meter were checked against real current and match (owner, 17 November 2026)**; before that check, currents and powers were not trusted ([`meter/README.md`](meter/README.md)).
 
 Size: about 500 bytes a row (65 columns with one meter), **0.7 MB a day, about 260 MB a year per logger** (plain text; gzip in the backups divides it by about 5). A 16 GB SD card still holds over 50 years.
 

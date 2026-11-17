@@ -8,7 +8,17 @@ Meter at Adab: **FORT FCN300**, 3-phase 4-wire multifunction meter, Modbus RTU o
 
 Source: `fcn300-3e4y-modbus-guide.md`, received from the owner on 30 October 2026, kept as received.
 
-## Status: **not verified, and it can only be verified on site** (8 November 2026)
+## Status: **checked on site: the meter's values match real current** (owner, 17 November 2026)
+
+The meter's values were checked against real current at Adab and they match. Recorded in the site profile (`manage.py site-set adab
+meter_checked=2026-11-17`, [`../UPDATING.md`](../UPDATING.md) section C4), shown on the page **Current & balance**, whose measurement
+checks keep watching the CTs and the scales (direction, each CT on its own phase, the phases adding up to the total, the currents against
+the kVA). Still to do from section 4: commit the register table read on site here if it differs from
+[`registers-proposed.csv`](registers-proposed.csv) (step 9), so the next logger starts from it.
+
+The rest of this section is the status before the check, kept for the record.
+
+### Before the check (8 November 2026): not verified, and it could only be verified on site
 
 The spare meter at the office has **no Modbus port** (owner, 8 November 2026), so the register check planned on the bench (`docs/OFFICE-PREP.md` T4) is not possible. The register map is **a proposal to test on site**, at the first visit with the laptop and the USB-RS485 adapter, before the logger is left running (section 4). No manufacturer manual was found: the web search found only retailer pages, and the manual of the sibling model (Scribd, FCN300-E13ZY-D) could not be opened from the cloud session.
 
