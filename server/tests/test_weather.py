@@ -111,14 +111,15 @@ class WeatherTest(unittest.TestCase):
         nxt = datetime(2026, 11, 9, 4, 0, tzinfo=timezone.utc)     # next day 12:00 WITA
         wx.fetch = fake_open_meteo(nxt)
         wx.update("adab", nxt)
-        lg = wx.log("adab", 3)
+        # The three days up to "nxt" by their dates: "the last 3 days" would follow the real clock, not the test's days
+        lg = wx.log("adab", start="2026-11-07", end="2026-11-09")
         h = next(x for x in lg["hours"] if x["t"] == "2026-11-09 08:00")
         self.assertEqual(h["temp_c"], 28.5)
         self.assertEqual(h["fc_temp_c"], 29.5)
         self.assertIsNone(next(x for x in lg["hours"] if x["t"] == "2026-11-08 08:00")["fc_temp_c"])
         day = next(d for d in lg["days"] if d["date"] == "2026-11-09")
         self.assertEqual(day["fc_hours"], day["hours"])
-        csv_text = wx.log_csv("adab", 3)
+        csv_text = wx.log_csv("adab", start="2026-11-07", end="2026-11-09")
         self.assertIn("fc_temp_c", csv_text.splitlines()[0])
         # chosen dates, both included
         lg = wx.log("adab", start="2026-11-08", end="2026-11-08")
@@ -130,6 +131,10 @@ class WeatherTest(unittest.TestCase):
         for bad in (("2026-11-09", "2026-11-08"), ("2026-01-01", "2026-11-08"), ("2026-11-31", None)):
             with self.assertRaises(ValueError):
                 wx.log("adab", start=bad[0], end=bad[1])
+        # "the last 3 days": today (hotel time, the real clock) and the two days before it
+        today = wx.local_now("adab").date()
+        lg = wx.log("adab", 3)
+        self.assertEqual((lg["from"], lg["to"]), ((today - timedelta(days=2)).strftime("%Y-%m-%d 00:00"), today.strftime("%Y-%m-%d")))
 
     def test_off_without_position(self):
         self.profile({"weather": {"lat": 200, "lon": 1}})
