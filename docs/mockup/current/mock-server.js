@@ -1,5 +1,5 @@
 // ------------------------------------------------------------------ current per phase: the server's answers in the mockup (docs/mockup/current/)
-// Mockup only. Plays the two requests proposed for server/app/quality.py (README.md, "How it would be built"):
+// Mockup only. Plays the two requests of server/app/quality.py (current_hourly, current_minutes), with the same fields and rules:
 //   GET /api/v1/quality/<site>/current?days=N (or ?from=&to=)   one row per hotel hour
 //   GET /api/v1/quality/<site>/current/day/<date>                one row per minute of one hotel day
 // from simulated 1-minute records made out of the saved hours of the Arkan mockup: the total power, power factor and voltages of each
@@ -10,28 +10,22 @@
 //   - the pool pump (starts at 08:00 and 16:30) and the lift on all three phases.
 // Two events: Sat 7 Nov 19:38 to 19:44 the kitchen's ovens and dishwasher together on L1 (two 15-second samples above 90 % of the PLN
 // phase limit); Thu 5 Nov 14:10 to 14:51 L3 reads under 1 A while L1 and L2 carry their load (its CT shorted during work in the panel).
-// The current imbalance of the power quality overview (A10) is replaced by the one of these minutes, so both pages agree.
+// The current imbalance of the power quality overview (A10, counted from 25 A of mean current since v0.10.0) is replaced by the one
+// of these minutes, so both pages agree.
 if (MOCK && FX.quality) (() => {
   const Q = FX.quality, prof = FX.live.profile;
   const PLN = prof.contracted_kva * 1000 / 3 / (prof.contract_v_ln || 220);   // the PLN limiter of one phase: 125 A at Adab
+  Q.i_floor_a = 25;   // A10's floor since v0.10.0 (site.json i_imbalance_floor_a)
+  const LOADED = 10;  // A40: the two other phases carry this or more
   const LIM = {...Q.limits,
-    pln: {id: 'A37', name: 'Phase current near the PLN limit', v: 90, enabled: true},
-    rated: {id: 'A29', name: 'Phase current near the rating', v: 90, enabled: true},
-    pneg: {id: 'A30', name: 'Negative power on a phase', v: -0.5, enabled: true},
-    izero: {id: 'A40', name: 'Phase without current', v: 1, enabled: false, proposed: true},
-    neutral: {id: 'A41', name: 'Neutral current high', v: 80, enabled: false, proposed: true}};   // % of the neutral cable's rating
+    pln: {id: 'A37', name: 'Phase current near the PLN limit', v: 90, enabled: true, delay: 5},
+    rated: {id: 'A29', name: 'Phase current near the rating', v: 90, enabled: true, delay: 5},
+    pneg: {id: 'A30', name: 'Negative power on a phase', v: -0.5, enabled: true, delay: 5},
+    izero: {id: 'A40', name: 'Phase without current', v: 1, enabled: true, delay: 5}};
   let seed = 20261117;   // the same simulated minutes at every opening
   const R = () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const U = (a, b) => a + (b - a) * R();
   const win = (h, a, b, r = 0.5) => Math.max(0, Math.min(1, (h - a) / r + 0.5, (b - h) / r + 0.5));   // 1 from a to b (hours), ramps of r
-  const DEG = Math.PI / 180, ANG = [0, -120 * DEG, 120 * DEG];
-  // The estimated neutral current, as proposed for the server: |I1 + I2 + I3| of the fundamental, the three voltages 120° apart and each
-  // current lagging its voltage by acos(power factor of its phase). A phase without a power factor (under 0.3 kW) is taken in phase.
-  function neutral(i, pf) {
-    let re = 0, im = 0;
-    for (let k = 0; k < 3; k++) { const a = ANG[k] - Math.acos(Math.min(1, Math.max(0, pf[k] ?? 1))); re += i[k] * Math.cos(a); im += i[k] * Math.sin(a); }
-    return Math.hypot(re, im);
-  }
   const unb = (v, floor) => { const m = (v[0] + v[1] + v[2]) / 3; return m < floor ? null : Math.max(...v.map(x => Math.abs(x - m))) / m * 100; };
   const r1 = (x, d = 2) => x === null || x === undefined ? undefined : +x.toFixed(d);
 
@@ -71,7 +65,7 @@ if (MOCK && FX.quality) (() => {
     }
   });
 
-  // ---- 2. per minute: the power factor of each phase, the neutral, the unbalance, the 15-minute means; then the hours
+  // ---- 2. per minute: the power factor of each phase, the imbalance, the 15-minute means; then the hours
   const HRS = new Map(), ring = [[], [], []];
   let prev = null;
   const near = PLN * LIM.pln.v / 100;
@@ -79,14 +73,14 @@ if (MOCK && FX.quality) (() => {
     if (prev !== null && m.ms - prev > 6e4) ring.forEach(q => { q.length = 0; });
     prev = m.ms;
     m.pf = m.p.map((pk, k) => pk >= 0.3 && m.i[k] >= 1 ? pk * 1000 / (m.v[k] * m.i[k]) : null);
-    m.n = neutral(m.i, m.pf);
     m.iu = unb(m.i, Q.i_floor_a);
     m.d15 = m.i.map((y, k) => { ring[k].push(y); if (ring[k].length > 15) ring[k].shift(); return ring[k].length === 15 ? ring[k].reduce((a, b) => a + b) / 15 : null; });
-    m.zero = [0, 1, 2].find(k => m.i[k] < LIM.izero.v && [0, 1, 2].filter(j => j !== k).every(j => m.i[j] >= 10));
+    const lowK = m.i.indexOf(Math.min(...m.i));
+    m.zero = m.i[lowK] < LIM.izero.v && m.i.every((y, k) => k === lowK || y >= LOADED) ? lowK : undefined;
     const key = m.t.slice(0, 13) + ':00';
     let o = HRS.get(key);
     if (!o) HRS.set(key, o = {t: key, minutes: 0, n: 0, i: [0, 0, 0], lo: [null, null, null], hi: [null, null, null], d15: [null, null, null],
-      p: [0, 0, 0], pmin: [null, null, null], pfs: [0, 0, 0], pfn: [0, 0, 0], ns: 0, nmax: null, iu: 0, iun: 0, iumax: null, iuhi: 0,
+      p: [0, 0, 0], pmin: [null, null, null], pfs: [0, 0, 0], pfn: [0, 0, 0], iu: 0, iun: 0, iumax: null, iuhi: 0,
       ihi: [0, 0, 0], izero: 0, izeroPh: '', izeroAt: '', ps: 0, ss: 0, ld: 0});
     o.minutes++; o.n++;
     for (let k = 0; k < 3; k++) {
@@ -98,7 +92,6 @@ if (MOCK && FX.quality) (() => {
       if (m.pf[k] !== null) { o.pfs[k] += m.pf[k]; o.pfn[k]++; }
       o.ihi[k] += m.hi[k] > near;
     }
-    o.ns += m.n; o.nmax = Math.max(o.nmax ?? 0, m.n);
     if (m.iu !== null) { o.iu += m.iu; o.iun++; o.iumax = Math.max(o.iumax ?? 0, m.iu); o.iuhi += m.iu > LIM.iu.v; }
     if (m.zero !== undefined) { o.izero++; o.izeroPh = 'L' + (m.zero + 1); o.izeroAt ||= m.t.slice(11); }
     if (m.pt >= 1) { o.ps += (m.p[0] + m.p[1] + m.p[2]) / m.pt; o.ss += (m.v[0] * m.i[0] + m.v[1] * m.i[1] + m.v[2] * m.i[2]) / 1000 / m.st; o.ld++; }
@@ -111,7 +104,7 @@ if (MOCK && FX.quality) (() => {
         [`p${s}`]: r1(o.p[k] / o.n, 3), [`e${s}`]: r1(o.p[k] / 60, 3), [`p${s}_min`]: r1(o.pmin[k], 3),
         [`pf${s}`]: o.pfn[k] ? r1(o.pfs[k] / o.pfn[k], 3) : undefined, [`i${s}_hi`]: o.ihi[k]});
     }
-    Object.assign(r, {in: r1(o.ns / o.n), in_max: r1(o.nmax), iu: o.iun ? r1(o.iu / o.iun) : undefined, iu_max: r1(o.iumax), iu_n: o.iun, iu_hi: o.iuhi,
+    Object.assign(r, {iu: o.iun ? r1(o.iu / o.iun) : undefined, iu_max: r1(o.iumax), iu_n: o.iun, iu_hi: o.iuhi,
       i_zero: o.izero, i_zero_ph: o.izeroPh || undefined, i_zero_at: o.izeroAt || undefined,
       psum: o.ld ? r1(o.ps / o.ld * 100, 1) : undefined, sratio: o.ld ? r1(o.ss / o.ld * 100, 1) : undefined});
     return r;
@@ -119,7 +112,7 @@ if (MOCK && FX.quality) (() => {
   // the overview's current imbalance (A10) from the same minutes
   for (const r of Q.hours) { const c = HRS.get(r.t); if (c && c.iun) { r.iu = r1(c.iu / c.iun); r.iu_max = r1(c.iumax); } }
 
-  // ---- 3. the alarm lines these minutes give (A10 from the register; A40 as proposed), as server/app/alarms.py writes them
+  // ---- 3. the alarm lines these minutes give (A10, A40), as server/app/alarms.py writes them
   const EVENTS = [];
   const off = (prof.utc_offset_h ?? 8) * 36e5, utc = t => new Date(tp(t) - off).toISOString().slice(0, 19) + 'Z';
   const line = (a, state, t, value, unit, dur, message) => EVENTS.push({ts_utc: utc(t), local_time: t, id: a.id, name: a.name,
@@ -140,28 +133,28 @@ if (MOCK && FX.quality) (() => {
     });
   }
   replay(LIM.iu, m => m.iu !== null && m.iu > LIM.iu.v, m => m.iu !== null && m.iu < 15, 15, '%', m => m.iu,
-    'largest phase current deviation from the mean above 20 % for 15 min');
+    'largest phase current deviation from the mean above 20 % for 15 min while the mean current is 25 A or more');
   replay(LIM.izero, m => m.zero !== undefined, m => m.zero === undefined, 5, 'A', m => m.zero === undefined ? null : m.i[m.zero],
-    'a phase under 1 A while the two others carry 10 A or more, for 5 min (proposed)', true);
+    'a phase current below 1 A while the two others carry 10 A or more for 5 min', true);
   EVENTS.sort((a, b) => (a.ts_utc < b.ts_utc ? -1 : a.ts_utc > b.ts_utc ? 1 : a.state === 'start' ? -1 : 1));
 
   // ---- 4. the answers
   const ANS = (body, status = 200) => Promise.resolve({ok: status < 400, status, json: async () => JSON.parse(JSON.stringify(body))});
-  const COLS = ['t', 'i1', 'i1_min', 'i1_max', 'i2', 'i2_min', 'i2_max', 'i3', 'i3_min', 'i3_max', 'in', 'p1', 'p2', 'p3', 'iu'];
+  const COLS = ['t', 'i1', 'i1_min', 'i1_max', 'i2', 'i2_min', 'i2_max', 'i3', 'i3_min', 'i3_max', 'p1', 'p2', 'p3', 'iu'];
   const today = FX.history.now.slice(0, 10), base = window.fetch;
   window.fetch = (url, opt = {}) => {
     const u = String(url);
     let m = u.match(/^\/api\/v1\/quality\/[a-z0-9-]+\/current\/day\/(\d{4}-\d{2}-\d{2})$/);
     if (m) return ANS({site: FX.site, device: 'LOG-0001', meter: 'EM01', day: m[1], cols: COLS,
       rows: MIN.filter(x => x.t.startsWith(m[1])).map(x => [x.t.slice(11), ...x.i.flatMap((y, k) => [r1(y), r1(x.lo[k]), r1(x.hi[k])]),
-        r1(x.n), ...x.p.map(y => r1(y, 3)), x.iu === null ? null : r1(x.iu)])});
+        ...x.p.map(y => r1(y, 3)), x.iu === null ? null : r1(x.iu)])});
     if (/^\/api\/v1\/quality\/[a-z0-9-]+\/current\?/.test(u)) {
       const q = new URLSearchParams(u.split('?')[1]);
       const from = q.get('from') || addD(today, 1 - (+q.get('days') || 7)), to = q.get('to') || today;
       const ok = t => t.slice(0, 10) >= from && t.slice(0, 10) <= to;
       return ANS({site: FX.site, device: 'LOG-0001', meter: 'EM01', utc_offset_h: prof.utc_offset_h ?? 8, from: from + ' 00:00', to,
         now: FX.history.now, first_day: HOURS[0].t.slice(0, 10), nominal_v: prof.nominal_v || 230, pln_a: +PLN.toFixed(1), rated_a: prof.rated_a,
-        i_floor_a: Q.i_floor_a, pf_load_kw: 0.3, limits: LIM, hours: HOURS.filter(r => ok(r.t)), events: EVENTS.filter(e => ok(e.local_time))});
+        i_floor_a: Q.i_floor_a, i_loaded_a: LOADED, pf_load_kw: 0.3, limits: LIM, hours: HOURS.filter(r => ok(r.t)), events: EVENTS.filter(e => ok(e.local_time))});
     }
     return base(url, opt);
   };

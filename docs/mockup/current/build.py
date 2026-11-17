@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Builds docs/mockup/current/index.html: the site page of the Arkan mockup (server/app/live.html with
-docs/mockup/arkan/fixtures.json) plus the PROPOSED page "Current & balance" (#current, menu group Power quality).
+"""Builds docs/mockup/current/index.html: the site page (server/app/live.html, with its page Current & balance since
+v0.10.0) with the saved answers of docs/mockup/arkan/fixtures.json and 14 days of simulated currents of the three phases.
+mock-server.js answers the page's /api/v1/quality/<site>/current requests in the page, with the fields and rules of
+server/app/quality.py.
 
     python3 docs/mockup/current/build.py
 
-Nothing in server/ is changed: the new page (current.js, current.css) and the mockup's server answers (mock-server.js, with
-simulated 1-minute currents of the three phases) are put into a copy of the page here, at fixed places of live.html. Every
-place must be found once, or the build stops. One file, no network.
+Every insertion point must be found once in live.html, or the build stops. One file, no network.
 """
 import json
 import os
@@ -25,27 +25,18 @@ def read(path):
 def main():
     fx = json.loads(read(os.path.join(ROOT, "docs", "mockup", "arkan", "fixtures.json")))
     page = read(os.path.join(APP, "live.html"))
-    js, css, mock = (read(os.path.join(HERE, n)) for n in ("current.js", "current.css", "mock-server.js"))
+    mock = read(os.path.join(HERE, "mock-server.js"))
     fxs = json.dumps(fx, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
     page_marker = "// ------------------------------------------------------------------ page\n"
-    i_card = "          else if (prof.rated_a) extra = capBar(mx / prof.rated_a, `of the ${prof.rated_a} A main breaker (highest phase)`);\n"
-    iu_tile = "`highest hourly mean · ${esc(L.iu.id)} at ${L.iu.v} %, not below ${j.i_floor_a} A of mean current`"
     parts = [
-        # the proposed page and the mockup's answers, inside the page's own script, before the page starts
-        (page_marker, js + "\n" + mock + "\n" + page_marker),
-        # Live now: the current card gets the unbalance and the estimated neutral of the last snapshot, and a link to the page
-        (i_card, i_card + "          extra += curLive(V, M);\n"),
-        # Power quality: the current imbalance tile links to the page
-        (iu_tile, iu_tile[:-1] + ' · <a href="#current">details</a>`'),
-        ("const LABEL = {quality: 'power quality', voltage: 'power quality', pf: 'power quality',",
-         "const LABEL = {quality: 'power quality', voltage: 'power quality', pf: 'power quality', current: 'current per phase',"),
-        ("</style>\n<script src=\"/live/_ui/arkan-ui.js\"></script>", css + "</style>\n<script src=\"/live/_ui/arkan-ui.js\"></script>"),
+        # the server's side of the current page, inside the page's own script, before the page starts
+        (page_marker, mock + "\n" + page_marker),
         ("Design mockup · simulated data, 14 days · nothing is sent to a logger",
-         "Design mockup · <b>Current &amp; balance</b> page proposed for review · simulated data, 14 days"),
+         "Design mockup · <b>Current &amp; balance</b> page · simulated data, 14 days"),
         # then the kit and the saved answers, as docs/mockup/arkan/build.py does
         ('<link rel="stylesheet" href="/live/_ui/arkan-ui.css">', "<style>" + read(os.path.join(APP, "arkan-ui", "arkan-ui.css")) + "</style>"),
         ('<script src="/live/_ui/arkan-ui.js"></script>', "<script>" + read(os.path.join(APP, "arkan-ui", "arkan-ui.js")) + "</script>"),
-        ("<title>Live</title>", "<title>Arkan Monitoring: current per phase and balance (proposal)</title>"),
+        ("<title>Live</title>", "<title>Arkan Monitoring: current per phase and balance</title>"),
         ("/*__FIXTURES__*/null", fxs),
     ]
     for key, text in parts:

@@ -18,7 +18,8 @@ Status: **built and tested with the simulated logger** (7 November 2026). WhatsA
   - **A01 logger offline** is checked every minute on what the VPS **receives**;
   - **A18 clock** is checked on the live snapshots.
 - Nothing is lost by evaluating on the VPS: the logger keeps every record on its SD card, and **`manage.py alarms adab --rebuild` replays the whole history** (service stopped, see the VPS tutorial C6; A01 and A18, which do not come from the records, are kept as they were) against the current register (after an SD backfill, or to see what a new threshold would have given).
-- The **Power quality** pages of the site page (`/live/<site>/#quality`, `#voltage`, `#pf`) count minutes outside the voltage limits, dips, swells, unbalance and low power factor with the thresholds of this register (A04 to A07, A09, A10, A26 to A28): a changed threshold changes those pages too ([`../LIVE.md`](../LIVE.md#option-a-in-detail)).
+- The **Power quality** pages of the site page (`/live/<site>/#quality`, `#voltage`, `#current`, `#pf`) count minutes outside the voltage limits, dips, swells, unbalance, current imbalance, phase currents near the PLN limit, a phase without current and low power factor with the thresholds of this register (A04 to A07, A09, A10, A26 to A30, A37, A40): a changed threshold changes those pages too ([`../LIVE.md`](../LIVE.md#option-a-in-detail)).
+- **A new line in a release** (A40 in `v0.10.0`) is in `docs/alarms/alarms.csv` and in the image, but not in the register in use on the VPS, which `init` never overwrites: `manage.py alarm-register` lists the lines of the default register missing from it, `manage.py alarm-register --add` appends them (the lines already there, edited or not, are never changed; the previous file is kept as `alarm-register.csv.bak`).
 
 ## 2. Where the files are
 
@@ -68,7 +69,7 @@ Read the log:
 | `evaluated_on` | `1-min record`, `live snapshot` or `reception` |
 | `condition`, `note` | Plain text: what it means, what to check |
 
-## 5. The alarms and warnings recorded (37 lines, 34 enabled)
+## 5. The alarms and warnings recorded (38 lines, 35 enabled)
 
 **Power quality (from the 1-minute mean, min and max)**
 
@@ -82,7 +83,7 @@ Read the log:
 | A28 | **Voltage unbalance** (new) | > 2 % for 10 min (EN 50160 limit) | warning | no |
 | A07 | Frequency out of range | min or max more than 0.5 Hz from 50 Hz (genset) | warning | yes |
 | A09 | Low power factor | < 0.85 for 15 min, load above 1 kW | warning | no |
-| A10 | Current imbalance | > 20 % for 15 min, mean above 5 A | warning | no |
+| A10 | Current imbalance | > 20 % for 15 min, **while the mean current is 25 A or more** (since `v0.10.0`; was 5 A): at light load a few amperes make a large %. `i_imbalance_floor_a` in `site.json` changes the 25 A for a site | warning | no |
 | A32 | Mains lost, logger on UPS | **off until the UPS is installed** (needs a mains-sense signal) | critical | yes |
 
 **Load and meter**
@@ -95,6 +96,7 @@ Read the log:
 | A03 | Meter not answering | no good read in a whole minute | critical | yes |
 | A30 | **Negative power on a phase** (new) | phase kW < -0.5 for 5 min: CT backwards or on the wrong phase | warning | no |
 | A31 | **Energy counter not moving** (new) | kWh unchanged 30 min while load > 1 kW: wrong register | warning | no |
+| A40 | **Phase without current** (`v0.10.0`) | a phase current < 1 A while the two others carry 10 A or more, for 5 min (clears above 2 A): its CT shorted or disconnected (the meter then counts too few kWh), or every load of that phase off (a fuse, a sub-board breaker). No other alarm sees it: the voltage is there and the power stays positive. A38 and A39 are kept for the meter readings proposal | warning | yes |
 | A19 | Energy counter went backwards | event | warning | no |
 
 **Environment**: A11 room hot (35 C), A12 room very hot (40 C), A13 room humid (80 %), A22 outdoor very hot, A23 condensation risk, A24 room much warmer than outdoors (WhatsApp), A25 outdoor sensor wet; A21 off at adab.
@@ -133,7 +135,7 @@ Also kept in `events.jsonl` (not in the alarm log): settings sent and applied, l
 - **A37 before A29:** at 82.5 kVA the PLN limiter (3 x 125 A) trips long before the 200 A breaker is loaded, and it trips on **one** overloaded phase even when the total kVA is under the contract. A37 is the one that warns before a PLN trip; A29 stays as the breaker's own check.
 - **Voltage limits** (A05 207 V, A06 242 V, A26 207 V, A27 253 V): SNI tolerance +5 % / -10 % around 230 V. A supply that runs near 220 V is still inside them.
 - **A11, A12, A13** (electrical room), **A22 to A25** (outdoor): as proposed on 5 November.
-- **A04 to A10, A26 to A31, A37** depend on the meter register check, done on site (`docs/meter/README.md` section 4). Until then their values and thresholds are not trusted: a scale error equal to the CT ratio (50 for a 250/5 CT) would fire or silence A29 and A37.
+- **A04 to A10, A26 to A31, A37, A40** depend on the meter register check, done on site (`docs/meter/README.md` section 4). Until then their values and thresholds are not trusted: a scale error equal to the CT ratio (50 for a 250/5 CT) would fire or silence A29 and A37.
 - Review the log after the first week and tune: a line that fires every day is noise; raise its threshold or delay, or set WhatsApp to `no`.
 
 ## 7. What the WhatsApp group will receive (S6)

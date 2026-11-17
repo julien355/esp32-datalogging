@@ -10,6 +10,7 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+PAGE_MARKER = "// ------------------------------------------------------------------ page\n"
 
 
 def read(name):
@@ -24,7 +25,9 @@ def main():
     parts = {'<link rel="stylesheet" href="/live/_ui/arkan-ui.css">': "<style>" + read(os.path.join(app, "arkan-ui", "arkan-ui.css")) + "</style>",
              '<script src="/live/_ui/arkan-ui.js"></script>': "<script>" + read(os.path.join(app, "arkan-ui", "arkan-ui.js")) + "</script>",
              "<title>Live</title>": "<title>Arkan Monitoring: design mockup</title>",
-             "/*__FIXTURES__*/null": fx}
+             "/*__FIXTURES__*/null": fx,
+             # the page Current & balance: its answers from simulated phase currents (docs/mockup/current/mock-server.js)
+             PAGE_MARKER: read(os.path.join(HERE, "..", "current", "mock-server.js")) + "\n" + PAGE_MARKER}
     for key, text in parts.items():
         if page.count(key) != 1:
             sys.exit(f"live.html: expected 1 x {key}, found {page.count(key)}")

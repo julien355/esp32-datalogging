@@ -23,6 +23,9 @@ import time
 from datetime import datetime, timedelta, timezone
 
 GAP_S = 300                       # a gap longer than this resets a pending (not yet confirmed) alarm
+I_IMBALANCE_FLOOR_A = 25.0        # A10: current imbalance counted only with this mean current or more (site.json
+                                  # i_imbalance_floor_a): at light load a few amperes make a large percentage
+I_LOADED_A = 10.0                 # A40: a phase is "without current" only while the two others carry this or more
 PLANNED_BOOTS = ("sw:daily", "sw:console", "sw:portal", "sw:remote_cfg", "sw:remote_regs", "sw:ota", "sw:import", "sw:ota_rollback")
 POWER_BOOTS = ("poweron", "brownout")
 CRASH_BOOTS = ("panic", "task_wdt", "int_wdt", "wdt")
@@ -117,8 +120,24 @@ def r_v_unbalance_pct(row, a, ctx):
     return _unbalance(_phases(row, a, "v"), 100)
 
 
+def imbalance_floor(site):
+    """Mean current (A) below which the current imbalance is not counted: site.json i_imbalance_floor_a, else 25 A."""
+    v = num((site or {}).get("i_imbalance_floor_a"))
+    return I_IMBALANCE_FLOOR_A if v is None else v
+
+
 def r_i_imbalance_pct(row, a, ctx):
-    return _unbalance(_phases(row, a, "i"), 5)
+    return _unbalance(_phases(row, a, "i"), imbalance_floor(ctx["site"]))
+
+
+def r_i_phase_zero(row, a, ctx):
+    """A40: the current of the phase that carries the least, while the two others carry I_LOADED_A or more (its CT
+    shorted or disconnected, or every load of that phase off). None while they carry less: nothing can be told."""
+    i = _phases(row, a, "i")
+    if any(x is None for x in i):
+        return None
+    k = min(range(3), key=lambda n: i[n])
+    return i[k] if min(i[n] for n in range(3) if n != k) >= I_LOADED_A else None
 
 
 def r_f_dev(row, a, ctx):
@@ -306,6 +325,7 @@ LEVEL = {
     "v_unbalance_pct": ("above", r_v_unbalance_pct), "i_imbalance_pct": ("above", r_i_imbalance_pct),
     "f_dev": ("above", r_f_dev), "s_pct_contract": ("above", r_s_pct_contract), "pf_low": ("below", r_pf_low),
     "i_max_pct_rated": ("above", r_i_max_pct_rated), "i_pct_contract": ("above", r_i_pct_contract), "p_phase_negative": ("below", r_p_phase_negative),
+    "i_phase_zero": ("below", r_i_phase_zero),
     "meter_no_answer": ("flag", r_meter_no_answer), "e_frozen": ("flag", r_e_frozen),
     "temp_above": ("above", r_temp_above), "rh_above": ("above", r_rh_above),
     "sensor_missing": ("flag", r_sensor_missing), "temp_diff": ("above", r_temp_diff),

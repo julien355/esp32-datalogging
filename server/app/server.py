@@ -25,6 +25,11 @@ People endpoints (behind the Caddy web login, never published without it):
                                              frequency, power factor, kW, kvar, kWh, kVArh, unbalance, dips, swells,
                                              the limits of the alarm register and the power quality alarm lines
   GET  /api/v1/quality/<site>/day/<date>     the 1-minute voltage (mean, lowest, highest), frequency, power factor
+  GET  /api/v1/quality/<site>/current?days=14          current of each phase per local hour (mean, lowest, highest,
+                                             highest 15-minute mean), phase power, kWh and power factor, imbalance,
+                                             minutes near the PLN phase limit and with a phase without current, the
+                                             checks of the registers, the limits and the current alarm lines
+  GET  /api/v1/quality/<site>/current/day/<date>       the 1-minute currents, phase powers and imbalance
   GET  /api/v1/weather/<site>                Open-Meteo forecast (fetched every hour): today and tomorrow per hour
   GET  /api/v1/weather/<site>/log?days=7     actual weather per hour with the day-ahead forecast (&format=csv)
   GET  /api/v1/manual/<site>?days=14         meters read by hand (site.json manual_meters: water, power meter 2): their
@@ -89,7 +94,7 @@ from alarms import AlarmEngine  # noqa: E402
 from firmware import MAX_IMAGE, Firmware, FirmwareError, GitHub  # noqa: E402
 from store import CODE_RE, DEVICE_RE, DataStore, IngestError, atomic_write, iso_now  # noqa: E402
 
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_BODY = int(os.environ.get("MAX_BODY", "262144"))
 LIVE_POINTS = 240                      # 60 minutes at 15 s
@@ -501,6 +506,9 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/v1/alarms/([a-z0-9-]+)$", path)
         if m and CODE_RE.match(m.group(1)):
             return self.send_json(200, self.alarm_view(m.group(1)))
+        m = re.match(r"^/api/v1/(history|quality)/([a-z0-9-]+)(/current)?(?:/day/(\d{4}-\d{2}-\d{2}))?$", path)
+        if m and m.group(3) and m.group(1) == "quality" and CODE_RE.match(m.group(2)) and m.group(2) in self.store.sites():
+            return self.history(m.group(2), m.group(4), parse_qs(u.query), "current")
         m = re.match(r"^/api/v1/(history|quality)/([a-z0-9-]+)(?:/day/(\d{4}-\d{2}-\d{2}))?$", path)
         if m and CODE_RE.match(m.group(2)) and m.group(2) in self.store.sites():
             return self.history(m.group(2), m.group(3), parse_qs(u.query), m.group(1))
@@ -693,7 +701,7 @@ class Handler(BaseHTTPRequestHandler):
     def public_profile(self, site):
         p = self.store.site_profile(site)
         keys = ("name", "timezone", "utc_offset_h", "labels", "live", "sensors", "contracted_kva", "contract_v_ln", "rated_a",
-                "nominal_v")
+                "nominal_v", "meter_checked", "i_imbalance_floor_a")
         out = {k: p.get(k) for k in keys if k in p}
         out["manual_meters"] = manual.meters(p)   # meters read by hand: their pages in the menu (Meter readings)
         return out
@@ -719,6 +727,12 @@ class Handler(BaseHTTPRequestHandler):
         if not re.match(r"^[A-Z]{2}\d{2}$", meter):
             return self.send_json(400, {"ok": False, "error": "bad meter"})
         try:
+            if kind == "current":
+                if day:
+                    return self.send_json(200, quality.current_minutes(self.store, site, dev, day, meter))
+                days, start, end = self.period(q, 14)
+                return self.send_json(200, quality.current_hourly(self.store, self.store.alarms, site, dev, days, meter,
+                                                                  start, end))
             if kind == "quality":
                 if day:
                     return self.send_json(200, quality.minutes(self.store, site, dev, day, meter))
