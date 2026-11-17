@@ -1,0 +1,19 @@
+/* Current per phase and balance (PROPOSAL, docs/mockup/current/README.md) */
+.cban{display:flex;gap:8px;align-items:center;margin:0 0 16px}
+.cban a{color:inherit;font-weight:700}
+.cbal{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;align-items:center}
+@container app (max-width:799px){.cbal{grid-template-columns:1fr}}
+.cbal-t p{margin:0 0 10px;line-height:1.5}
+.cbal-t p:last-child{margin-bottom:0}
+.cbal-b{display:flex;flex-direction:column;gap:12px}
+.cph{display:grid;grid-template-columns:44px 1fr;gap:4px 10px;align-items:center}
+.cph .cl{grid-row:span 2;font-weight:700;font-size:13px;color:var(--ink)}
+.cbar{display:flex;align-items:center;gap:8px;min-width:0}
+.cbar span{display:block;height:12px;border-radius:3px;flex:none}
+.cbar.after span{background:transparent;border:2px dashed;height:10px}
+.cbar b{font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
+.cleg{margin:2px 0 0 54px}
+.legend i.cnow{background:var(--s4);height:10px}
+.legend i.cafter{background:none;border:2px dashed var(--s4);height:7px;width:12px}
+.cphase td:first-child{white-space:normal;min-width:120px}
+@container app (max-width:560px){.cphase table.data td,.cphase table.data th{padding-left:6px;padding-right:6px}.cphase td:first-child{min-width:0}}
