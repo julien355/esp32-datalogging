@@ -15,6 +15,7 @@ reading a FORT FCN300 (3E4Y or 3EH4Y, same registers) meter over Modbus RTU. Pil
 - **Weather** on the site page: today's forecast hour by hour, tomorrow's forecast, and a log of the actual weather against the forecast and the outdoor sensor (Open-Meteo, no key): [`docs/WEATHER.md`](docs/WEATHER.md)
 - **One server, one data folder:** where every piece of data is (live, records, alarms, weather) and how a second dashboard reads it at the same time: [`docs/DATA-ACCESS.md`](docs/DATA-ACCESS.md)
 - Keeping RAM low on the VPS: [`docs/VPS-MEMORY.md`](docs/VPS-MEMORY.md)
+- **Plan (draft, to approve): the Claude sessions see the VPS directly**, read-only from cloud sessions over HTTPS, and a Claude session on the VPS itself for updates: [`docs/CLAUDE-VPS-ACCESS.md`](docs/CLAUDE-VPS-ACCESS.md)
 - Hardware photos and original sketch: [`docs/img/`](docs/img/)
 - **Logger firmware** (PlatformIO, ESP32-S3): [`firmware/`](firmware/). Functions and every setting: [`docs/FIRMWARE.md`](docs/FIRMWARE.md)
 - **Firmware versions** page `/live/<site>/#versions`: what each logger runs, since when, every change and restart, the GitHub releases (read only, everyone)
