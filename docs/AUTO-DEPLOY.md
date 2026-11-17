@@ -3,6 +3,8 @@
 Status: **DRAFT v0.2, 17 November 2026. Nothing built yet; to approve** (section 7).
 v0.2 replaces v0.1 ("Connecting the Claude chats to hermes-vps"), after the owner's answer: the office PC is broken, so the deploy over SSH from the PC must go; it should not need a manual push anyway; and **Claude Code now runs on the VPS, connected to the Claude app** (Remote Control).
 
+The flows and files as a chart: [`AUTO-DEPLOY-flow.html`](AUTO-DEPLOY-flow.html) (open it in a browser; GitHub shows the HTML source).
+
 ## 1. Today and the target
 
 Today ([`HOW-TO-UPDATE.md`](HOW-TO-UPDATE.md) part 2): you merge on GitHub, then from the PC you tag and push the tag, then over SSH from the PC you back up, fetch, check out, compare, rebuild and check. Two of those three steps need the PC.
@@ -69,7 +71,7 @@ Each run does the steps of HOW-TO-UPDATE part 2, in that order:
 | 6 | `git checkout vX.Y.Z`, then `docker compose up -d --build` (2.4, 2.6) | |
 | 7 | Checks for up to 3 minutes (2.7): `/health` shows the new version, `docker compose ps` shows `healthy` | |
 | 8 | If 7 failed: `git checkout <previous tag>`, `docker compose up -d --build`, checks again; the new tag is marked failed, never retried (2.8) | |
-| 9 | One line in `/srv/arkan-monitoring/data/deploy.jsonl`: time, from, to, result, reason | |
+| 9 | One line in `/srv/arkan-monitoring/data/deploy.jsonl`: time, from, to, result, reason. A stop or a wait is written once, not every 5 minutes | |
 
 It also:
 - has `--dry-run`, which prints what it would do and changes nothing;

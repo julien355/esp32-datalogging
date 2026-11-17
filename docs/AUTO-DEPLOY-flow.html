@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto-deploy flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Arkan UI kit tokens (server/app/arkan-ui/arkan-ui.css). Layout: one reading column, figures may scroll sideways on a phone. */
+:root {
+  --bg:#F7F7F8; --surface:#FFFFFF; --surface-2:#EEF3F9; --stage:#E9EDF2;
+  --ink:#1F1F1F; --ink-2:#3A3A3A; --muted:#5B6674; --line:#D7DDE4; --line-2:#C0C4C9;
+  --brand:#0D62BC; --brand-ink:#163F73; --brand-tint:#E4EFFC; --action:#0D62BC; --on-action:#FFFFFF;
+  --good:#2FA66A; --good-ink:#1C7A4B; --good-bg:#E3F3EA;
+  --warn:#D06A0A; --warn-ink:#99510B; --warn-bg:#FDEFE0;
+  --crit:#D14343; --crit-ink:#A62A2A; --crit-bg:#FBE6E6;
+  --area:rgba(13,98,188,.08);
+  --font:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#0E131A; --surface:#151C25; --surface-2:#1C2633; --stage:#0B1016;
+  --ink:#F2F5F9; --ink-2:#D0D8E2; --muted:#98A4B4; --line:#283341; --line-2:#3A4657;
+  --brand:#5AA2EC; --brand-ink:#AFCFF5; --brand-tint:#172F4C; --action:#2C77CC; --on-action:#FFFFFF;
+  --good:#47BF81; --good-ink:#82DAAB; --good-bg:#12321F;
+  --warn:#F5A04E; --warn-ink:#F7BE84; --warn-bg:#3A2613;
+  --crit:#EE6B6B; --crit-ink:#F59B9B; --crit-bg:#3E1A1C;
+  --area:rgba(90,162,236,.12);
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg:#0E131A; --surface:#151C25; --surface-2:#1C2633; --stage:#0B1016;
+  --ink:#F2F5F9; --ink-2:#D0D8E2; --muted:#98A4B4; --line:#283341; --line-2:#3A4657;
+  --brand:#5AA2EC; --brand-ink:#AFCFF5; --brand-tint:#172F4C; --action:#2C77CC; --on-action:#FFFFFF;
+  --good:#47BF81; --good-ink:#82DAAB; --good-bg:#12321F;
+  --warn:#F5A04E; --warn-ink:#F7BE84; --warn-bg:#3A2613;
+  --crit:#EE6B6B; --crit-ink:#F59B9B; --crit-bg:#3E1A1C;
+  --area:rgba(90,162,236,.12);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.55 var(--font); }
+main { max-width: 1040px; margin: 0 auto; padding: 32px 20px 56px; display: grid; gap: 40px; }
+header { display: grid; gap: 10px; }
+header h1, header .lead { max-width: 68ch; }
+.eyebrow { font: 600 12px/1 var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+h1 { font: 700 34px/1.15 var(--font); margin: 0; text-wrap: balance; }
+h2 { font: 700 21px/1.25 var(--font); margin: 0 0 6px; text-wrap: balance; }
+p { margin: 0; }
+.lead { font-size: 17px; color: var(--ink-2); }
+code, .mono { font-family: var(--mono); font-size: .88em; }
+section { display: grid; gap: 14px; }
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 6px 0 0; padding: 0; list-style: none; counter-reset: s; }
+.steps li { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 14.5px; counter-increment: s; }
+.steps li::before { content: counter(s); display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--brand-tint); color: var(--brand-ink); font: 700 12px/1 var(--font); margin-right: 8px; }
+.steps li.you { border-color: var(--brand); }
+@media (max-width: 820px) { .steps { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 440px) { .steps { grid-template-columns: 1fr; } }
+.steps li.you::before { background: var(--action); color: var(--on-action); }
+
+figure { margin: 0; display: grid; gap: 10px; }
+.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+.scroll svg { display: block; width: 100%; height: auto; }
+.fig1 { min-width: 760px; }
+.fig2 { min-width: 560px; max-width: 760px; margin: 0 auto; }
+figcaption { font-size: 14px; color: var(--muted); max-width: 75ch; }
+.hint { display: none; font-size: 13px; color: var(--muted); }
+@media (max-width: 760px) { .hint { display: block; } }
+
+/* Diagram marks, styled from the page tokens */
+.lane { fill: var(--area); }
+.col { fill: var(--surface); stroke: var(--line); }
+.box { fill: var(--surface-2); stroke: var(--line-2); }
+.box-key { fill: var(--brand-tint); stroke: var(--brand); stroke-width: 1.5; }
+.box-grey { fill: var(--stage); stroke: var(--line); }
+.dash { stroke-dasharray: 5 4; }
+.chip { fill: var(--surface); stroke: var(--brand); stroke-width: 1.5; }
+.chip-act { fill: var(--action); }
+.s-good { fill: var(--good-bg); stroke: var(--good); }
+.s-warn { fill: var(--warn-bg); stroke: var(--warn); }
+.s-crit { fill: var(--crit-bg); stroke: var(--crit); }
+.s-idle { fill: var(--surface); stroke: var(--line-2); }
+.s-wait { fill: var(--brand-tint); stroke: var(--brand); stroke-dasharray: 5 4; }
+.ln { stroke: var(--ink-2); stroke-width: 1.5; fill: none; }
+.ln-b { stroke: var(--brand); stroke-width: 2; fill: none; }
+.mk { fill: var(--ink-2); }
+.mk-b { fill: var(--brand); }
+.badge { fill: var(--brand); }
+.t-badge { font: 700 10.5px var(--font); fill: var(--on-action); }
+.t-lane { font: 700 11px var(--font); letter-spacing: .08em; text-transform: uppercase; fill: var(--brand-ink); }
+.t-col { font: 700 15px var(--font); fill: var(--ink); }
+.t-title { font: 600 13px var(--font); fill: var(--ink); }
+.t-mono { font: 400 12px var(--mono); fill: var(--ink); }
+.t-monob { font: 600 12.5px var(--mono); fill: var(--ink); }
+.t-mono-s { font: 400 11px var(--mono); fill: var(--ink-2); }
+.t-mono-xs { font: 400 10.5px var(--mono); fill: var(--ink-2); }
+.t-note { font: 400 11.5px var(--font); fill: var(--muted); }
+.t-edge { font: 600 11px var(--font); fill: var(--ink-2); }
+.t-edge-b { font: 600 11px var(--font); fill: var(--brand); }
+.t-chip { font: 600 12.5px var(--font); fill: var(--brand-ink); }
+.t-chip-act { font: 600 12.5px var(--font); fill: var(--on-action); }
+.t-grey { font: 600 13px var(--font); fill: var(--muted); }
+.t-good { font: 600 13px var(--font); fill: var(--good-ink); }
+.t-warn { font: 600 13px var(--font); fill: var(--warn-ink); }
+.t-crit { font: 600 13px var(--font); fill: var(--crit-ink); }
+.halo { paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+
+/* File table */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+thead th { font: 700 12px var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); }
+tbody th[colspan] { font: 700 13.5px var(--font); color: var(--brand-ink); background: var(--area); }
+td:first-child { font-family: var(--mono); font-size: 13px; width: 32%; overflow-wrap: anywhere; }
+tr:last-child td { border-bottom: 0; }
+.pill { display: inline-block; font: 600 12px/1.6 var(--font); padding: 0 9px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent; }
+.p-new { background: var(--brand-tint); color: var(--brand-ink); border-color: var(--brand); }
+.p-rel { background: var(--surface-2); color: var(--ink-2); border-color: var(--line-2); }
+.p-cond { background: var(--brand-tint); color: var(--brand-ink); border: 1px dashed var(--brand); }
+.p-old { background: var(--surface); color: var(--muted); border-color: var(--line-2); }
+.p-owner { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn); }
+footer { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+a { color: var(--brand); }
+a:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <p class="eyebrow">esp32-datalogging · plan v0.2, draft, nothing built yet</p>
+  <h1>Auto-deploy flow</h1>
+  <p class="lead">You merge the release pull request on your phone. GitHub tags it once the tests pass, and within 5 minutes the VPS takes it by itself: backup, rebuild, health check, and back to the previous version if the check fails. No PC, no SSH.</p>
+  <ol class="steps" aria-label="The release in four steps">
+    <li>A cloud session opens the release pull request</li>
+    <li class="you">You merge it on GitHub (your only tap)</li>
+    <li>CI tests it and pushes the tag <code>vX.Y.Z</code></li>
+    <li>The VPS pulls the tag and deploys it within 5 minutes</li>
+  </ol>
+</header>
+
+<section aria-labelledby="h-map">
+  <h2 id="h-map">Where each step runs, and the files it touches</h2>
+  <figure>
+    <div class="scroll">
+<svg class="fig1" viewBox="0 0 1000 784" role="img" aria-label="Release flow across three places. A cloud session opens a release pull request. You merge it on GitHub. CI tests it and the new tag-release job pushes the tag. On hermes-vps the deployer, run every 5 minutes by the crontab of user ai, pulls the tag, backs up, checks out, rebuilds the service and writes one line to the deploy log, which the Firmware versions page shows. The Claude Code session on the VPS only finishes releases that wait for a manual step. Caddy stays with the owner.">
+  <defs>
+    <marker id="f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="f1-ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-b" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+
+  <!-- You, on the phone -->
+  <rect class="lane" x="20" y="20" width="960" height="80" rx="14"/>
+  <text class="t-lane" x="36" y="40">You, on the phone</text>
+  <rect class="chip" x="40" y="52" width="240" height="36" rx="18"/>
+  <text class="t-chip" x="160" y="75" text-anchor="middle">Ask for a change</text>
+  <rect class="chip-act" x="380" y="52" width="220" height="36" rx="18"/>
+  <text class="t-chip-act" x="490" y="75" text-anchor="middle">Merge the release PR</text>
+  <rect class="chip dash" x="724" y="52" width="240" height="36" rx="18"/>
+  <text class="t-chip" x="844" y="75" text-anchor="middle">Claude app: finish the update</text>
+
+  <!-- Columns -->
+  <rect class="col" x="20" y="116" width="280" height="596" rx="14"/>
+  <rect class="col" x="340" y="116" width="280" height="596" rx="14"/>
+  <rect class="col" x="660" y="116" width="320" height="596" rx="14"/>
+  <text class="t-col" x="36" y="142">Cloud session</text>
+  <text class="t-note" x="36" y="160">claude.ai/code</text>
+  <text class="t-col" x="356" y="142">GitHub</text>
+  <text class="t-note" x="356" y="160">julien355/esp32-datalogging</text>
+  <text class="t-col" x="676" y="142">hermes-vps</text>
+  <text class="t-note" x="676" y="160">user ai, no sudo</text>
+
+  <!-- Taps into the columns -->
+  <path class="ln" d="M250,88 V182" marker-end="url(#f1-ah)"/>
+  <text class="t-edge halo" x="258" y="138">asks</text>
+  <path class="ln-b" d="M570,88 V182" marker-end="url(#f1-ahb)"/>
+  <text class="t-edge-b halo" x="578" y="138">merge</text>
+  <path class="ln-b dash" d="M930,88 V182" marker-end="url(#f1-ahb)"/>
+  <text class="t-edge-b halo" x="938" y="138">asks</text>
+
+  <!-- Cloud session: the release pull request -->
+  <rect class="box" x="36" y="184" width="248" height="220" rx="8"/>
+  <text class="t-title" x="52" y="208">Release pull request</text>
+  <text class="t-mono" x="52" y="236">server/app/server.py</text>
+  <text class="t-note" x="52" y="252">VERSION = "0.8.2"</text>
+  <text class="t-mono" x="52" y="282">docs/UPDATING.md</text>
+  <text class="t-note" x="52" y="298">the release section</text>
+  <text class="t-mono" x="52" y="328">server/deploy/hold/v0.8.2.md</text>
+  <text class="t-note" x="52" y="344">only if a manual step</text>
+  <text class="t-mono" x="52" y="374">CLAUDE.md</text>
+  <text class="t-note" x="52" y="390">the release checklist</text>
+
+  <text class="t-note" x="36" y="440">It writes code, tests and docs,</text>
+  <text class="t-note" x="36" y="456">and opens pull requests.</text>
+  <text class="t-note" x="36" y="480">It cannot push tags or reach</text>
+  <text class="t-note" x="36" y="496">the VPS.</text>
+
+  <!-- Legend -->
+  <text class="t-lane" x="36" y="572">How to read it</text>
+  <path class="ln" d="M36,594 H78" marker-end="url(#f1-ah)"/>
+  <text class="t-note" x="92" y="598">runs by itself</text>
+  <path class="ln-b" d="M36,618 H78" marker-end="url(#f1-ahb)"/>
+  <text class="t-note" x="92" y="622">your tap</text>
+  <path class="ln-b dash" d="M36,642 H78" marker-end="url(#f1-ahb)"/>
+  <text class="t-note" x="92" y="646">only when a release waits</text>
+  <rect class="box-grey" x="36" y="657" width="42" height="18" rx="4"/>
+  <text class="t-note" x="92" y="670">never touched by the deployer</text>
+  <circle class="badge" cx="57" cy="690" r="9"/>
+  <text class="t-badge" x="57" y="694" text-anchor="middle">5</text>
+  <text class="t-note" x="92" y="694">deployer step, see figure 2</text>
+
+  <!-- R to PR -->
+  <path class="ln" d="M284,202 H358" marker-end="url(#f1-ah)"/>
+  <text class="t-edge halo" x="322" y="194" text-anchor="middle">opens</text>
+
+  <!-- GitHub column -->
+  <rect class="box" x="360" y="184" width="240" height="36" rx="8"/>
+  <text class="t-title" x="480" y="207" text-anchor="middle">Pull request</text>
+  <rect class="box" x="360" y="250" width="240" height="48" rx="8"/>
+  <text class="t-title" x="480" y="270" text-anchor="middle">Default branch</text>
+  <text class="t-mono-s" x="480" y="288" text-anchor="middle">ccr-a52c0421-oygp4n</text>
+  <rect class="box" x="360" y="328" width="240" height="48" rx="8"/>
+  <text class="t-title" x="480" y="348" text-anchor="middle">CI tests</text>
+  <text class="t-mono-s" x="480" y="366" text-anchor="middle">ci.yml: firmware, server, tools</text>
+  <rect class="box-key" x="360" y="406" width="240" height="48" rx="8"/>
+  <text class="t-title" x="480" y="426" text-anchor="middle">tag-release (new job)</text>
+  <text class="t-note" x="480" y="444" text-anchor="middle">tags v&lt;VERSION&gt; if it is new</text>
+  <rect class="box" x="360" y="484" width="240" height="40" rx="8"/>
+  <text class="t-monob" x="480" y="509" text-anchor="middle">tag v0.8.2</text>
+
+  <path class="ln" d="M480,220 V248" marker-end="url(#f1-ah)"/>
+  <text class="t-edge" x="490" y="239">merged</text>
+  <path class="ln" d="M480,298 V326" marker-end="url(#f1-ah)"/>
+  <text class="t-edge" x="490" y="317">push runs CI</text>
+  <path class="ln" d="M480,376 V404" marker-end="url(#f1-ah)"/>
+  <text class="t-edge" x="490" y="395">all green</text>
+  <path class="ln" d="M480,454 V482" marker-end="url(#f1-ah)"/>
+  <text class="t-edge" x="490" y="473">pushes the tag</text>
+
+  <text class="t-note" x="356" y="556">Red CI, or VERSION unchanged:</text>
+  <text class="t-note" x="356" y="572">no tag, nothing is deployed.</text>
+  <text class="t-note" x="356" y="604">Firmware fw-v tags stay by hand,</text>
+  <text class="t-note" x="356" y="620">after the bench test</text>
+  <text class="t-note" x="356" y="636">(GitHub, Releases page).</text>
+
+  <!-- Tag pulled by the VPS -->
+  <path class="ln" d="M600,504 H674" marker-end="url(#f1-ah)"/>
+  <text class="t-edge halo" x="638" y="496" text-anchor="middle">pulls tags</text>
+  <text class="t-edge halo" x="638" y="521" text-anchor="middle">every 5 min</text>
+
+  <!-- hermes-vps column -->
+  <rect class="box dash" x="676" y="184" width="288" height="56" rx="8"/>
+  <text class="t-title" x="692" y="206">Claude Code on the VPS</text>
+  <text class="t-note" x="692" y="226">Remote Control; only when a release waits</text>
+
+  <rect class="box-grey" x="676" y="256" width="288" height="48" rx="8"/>
+  <text class="t-grey" x="692" y="276">Caddy, /opt/edge</text>
+  <text class="t-note" x="692" y="294">owner only: sudo, over the tablet's SSH</text>
+
+  <rect class="box" x="676" y="322" width="288" height="40" rx="8"/>
+  <text class="t-mono" x="692" y="347">~/.arkan-deploy</text>
+  <text class="t-note" x="814" y="347">hold file, failed tags</text>
+
+  <rect class="box-key" x="676" y="480" width="288" height="48" rx="8"/>
+  <text class="t-monob" x="692" y="500">~/bin/arkan-auto-deploy</text>
+  <text class="t-note" x="692" y="518">crontab of ai, every 5 min</text>
+
+  <path class="ln" d="M820,480 V364" marker-end="url(#f1-ah)"/>
+  <text class="t-edge" x="828" y="426">reads</text>
+
+  <rect class="box" x="676" y="568" width="120" height="64" rx="8"/>
+  <text class="t-title" x="688" y="588">Backups</text>
+  <text class="t-mono-s" x="688" y="605">data-*.tar.gz</text>
+  <text class="t-note" x="688" y="621">before a deploy</text>
+
+  <rect class="box" x="812" y="568" width="152" height="64" rx="8"/>
+  <text class="t-title" x="824" y="588">Code checkout</text>
+  <text class="t-mono-xs" x="822" y="605">/opt/arkan-monitoring</text>
+  <text class="t-note" x="824" y="621">at the tag, + .env</text>
+
+  <rect class="box" x="676" y="656" width="120" height="48" rx="8"/>
+  <text class="t-title" x="688" y="676">Deploy log</text>
+  <text class="t-mono-s" x="688" y="694">deploy.jsonl</text>
+
+  <rect class="box" x="812" y="656" width="152" height="48" rx="8"/>
+  <text class="t-title" x="824" y="676">Service :8800</text>
+  <text class="t-note" x="824" y="694">/health, site pages</text>
+
+  <!-- Deployer actions -->
+  <path class="ln" d="M736,528 V566" marker-end="url(#f1-ah)"/>
+  <circle class="badge" cx="736" cy="546" r="9"/>
+  <text class="t-badge" x="736" y="550" text-anchor="middle">5</text>
+  <text class="t-edge" x="752" y="550">backup</text>
+  <path class="ln" d="M888,528 V566" marker-end="url(#f1-ah)"/>
+  <circle class="badge" cx="888" cy="546" r="9"/>
+  <text class="t-badge" x="888" y="550" text-anchor="middle">6</text>
+  <text class="t-edge" x="904" y="550">checkout</text>
+  <path class="ln" d="M888,632 V654" marker-end="url(#f1-ah)"/>
+  <text class="t-edge" x="900" y="648">build, start</text>
+  <path class="ln" d="M676,516 H668 V680 H674" marker-end="url(#f1-ah)"/>
+  <circle class="badge" cx="668" cy="548" r="9"/>
+  <text class="t-badge" x="668" y="552" text-anchor="middle">9</text>
+  <text class="t-edge halo" x="641" y="580" text-anchor="middle">result</text>
+  <path class="ln" d="M796,680 H810" marker-end="url(#f1-ah)"/>
+
+  <!-- Waiting release: the VPS session does the user-level steps -->
+  <path class="ln-b dash" d="M964,212 H974 V600 H966" marker-end="url(#f1-ahb)"/>
+
+  <!-- You read the result -->
+  <path class="ln" d="M888,704 V728" marker-end="url(#f1-ah)"/>
+  <text class="t-edge halo" x="898" y="724">shows the log</text>
+  <rect class="chip" x="676" y="730" width="200" height="36" rx="18"/>
+  <text class="t-chip" x="776" y="753" text-anchor="middle">You: Firmware versions page</text>
+</svg>
+    </div>
+    <p class="hint">Swipe sideways to see the whole figure.</p>
+    <figcaption><strong>Figure 1.</strong> Your only routine tap is the merge. Everything on a solid arrow runs by itself; GitHub never reaches into the VPS, the VPS pulls. Dashed arrows happen only when a release carries a manual step: you ask the Claude Code session on the VPS to finish it, and it does the steps user <code>ai</code> can do (new <code>.env</code> names, checkout). Caddy stays with the owner.</figcaption>
+  </figure>
+</section>
+
+<section aria-labelledby="h-logic">
+  <h2 id="h-logic">What the deployer does every 5 minutes</h2>
+  <figure>
+    <div class="scroll">
+<svg class="fig2" viewBox="0 0 730 750" role="img" aria-label="The deployer's checks in order. 0 deploys allowed, 1 a newer v tag, 2 the tag is safe, 3 clean start, 4 nothing manual in the release, 5 backup. If any answer is no it stops or waits and changes nothing. Then 6 checkout and rebuild, 7 health check: if healthy the new version runs, if not, 8 it goes back to the previous tag and marks the new tag failed. 9 one line in the deploy log.">
+  <defs>
+    <marker id="f2-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+
+  <!-- Main path -->
+  <rect class="box" x="40" y="20" width="380" height="48" rx="8"/>
+  <circle class="badge" cx="62" cy="44" r="11"/><text class="t-badge" x="62" y="48" text-anchor="middle">0</text>
+  <text class="t-title" x="84" y="40">Deploys allowed?</text>
+  <text class="t-note" x="84" y="58">no hold file in ~/.arkan-deploy</text>
+
+  <rect class="box" x="40" y="92" width="380" height="48" rx="8"/>
+  <circle class="badge" cx="62" cy="116" r="11"/><text class="t-badge" x="62" y="120" text-anchor="middle">1</text>
+  <text class="t-title" x="84" y="112">A newer v tag on GitHub?</text>
+  <text class="t-note" x="84" y="130">git ls-remote; tags that failed before are skipped</text>
+
+  <rect class="box" x="40" y="164" width="380" height="48" rx="8"/>
+  <circle class="badge" cx="62" cy="188" r="11"/><text class="t-badge" x="62" y="192" text-anchor="middle">2</text>
+  <text class="t-title" x="84" y="184">Is the tag safe?</text>
+  <text class="t-note" x="84" y="202">fetched without --force, on the default branch</text>
+
+  <rect class="box" x="40" y="236" width="380" height="48" rx="8"/>
+  <circle class="badge" cx="62" cy="260" r="11"/><text class="t-badge" x="62" y="264" text-anchor="middle">3</text>
+  <text class="t-title" x="84" y="256">Clean start?</text>
+  <text class="t-note" x="84" y="274">on a tag, no file modified, /health answers</text>
+
+  <rect class="box" x="40" y="308" width="380" height="48" rx="8"/>
+  <circle class="badge" cx="62" cy="332" r="11"/><text class="t-badge" x="62" y="336" text-anchor="middle">4</text>
+  <text class="t-title" x="84" y="328">Nothing manual in this release?</text>
+  <text class="t-note" x="84" y="346">no hold/vX.Y.Z.md, Caddy file unchanged, .env complete</text>
+
+  <rect class="box" x="40" y="380" width="380" height="48" rx="8"/>
+  <circle class="badge" cx="62" cy="404" r="11"/><text class="t-badge" x="62" y="408" text-anchor="middle">5</text>
+  <text class="t-title" x="84" y="400">Backup OK?</text>
+  <text class="t-mono-s" x="84" y="418">server/deploy/backup.sh</text>
+
+  <rect class="box-key" x="40" y="452" width="380" height="48" rx="8"/>
+  <circle class="badge" cx="62" cy="476" r="11"/><text class="t-badge" x="62" y="480" text-anchor="middle">6</text>
+  <text class="t-title" x="84" y="472">Check out and rebuild</text>
+  <text class="t-note" x="84" y="490">git checkout vX.Y.Z, then docker compose up -d --build</text>
+
+  <rect class="box" x="40" y="524" width="380" height="48" rx="8"/>
+  <circle class="badge" cx="62" cy="548" r="11"/><text class="t-badge" x="62" y="552" text-anchor="middle">7</text>
+  <text class="t-title" x="84" y="544">New version healthy?</text>
+  <text class="t-note" x="84" y="562">/health shows vX.Y.Z, container healthy, within 3 min</text>
+
+  <rect class="s-good" x="40" y="612" width="380" height="44" rx="8"/>
+  <text class="t-good" x="230" y="639" text-anchor="middle">Done: vX.Y.Z is running</text>
+
+  <rect class="box" x="40" y="690" width="670" height="48" rx="8"/>
+  <circle class="badge" cx="62" cy="714" r="11"/><text class="t-badge" x="62" y="718" text-anchor="middle">9</text>
+  <text class="t-title" x="84" y="710">One line in /srv/arkan-monitoring/data/deploy.jsonl</text>
+  <text class="t-note" x="84" y="728">time, from, to, result, reason; shown under Service updates on the Firmware versions page</text>
+
+  <!-- Down arrows: yes -->
+  <path class="ln" d="M230,68 V90" marker-end="url(#f2-ah)"/><text class="t-edge" x="240" y="84">yes</text>
+  <path class="ln" d="M230,140 V162" marker-end="url(#f2-ah)"/><text class="t-edge" x="240" y="156">yes</text>
+  <path class="ln" d="M230,212 V234" marker-end="url(#f2-ah)"/><text class="t-edge" x="240" y="228">yes</text>
+  <path class="ln" d="M230,284 V306" marker-end="url(#f2-ah)"/><text class="t-edge" x="240" y="300">yes</text>
+  <path class="ln" d="M230,356 V378" marker-end="url(#f2-ah)"/><text class="t-edge" x="240" y="372">yes</text>
+  <path class="ln" d="M230,428 V450" marker-end="url(#f2-ah)"/><text class="t-edge" x="240" y="444">yes</text>
+  <path class="ln" d="M230,500 V522" marker-end="url(#f2-ah)"/>
+  <path class="ln" d="M230,572 V610" marker-end="url(#f2-ah)"/><text class="t-edge" x="240" y="595">yes</text>
+  <path class="ln" d="M230,656 V688" marker-end="url(#f2-ah)"/>
+
+  <!-- Exits: no -->
+  <rect class="s-idle" x="470" y="20" width="240" height="48" rx="8"/>
+  <text class="t-title" x="486" y="40">Does nothing</text>
+  <text class="t-note" x="486" y="58">until the hold file is removed</text>
+  <rect class="s-idle" x="470" y="92" width="240" height="48" rx="8"/>
+  <text class="t-title" x="486" y="112">Nothing to do</text>
+  <text class="t-note" x="486" y="130">the usual case, every 5 min</text>
+  <rect class="s-warn" x="470" y="164" width="240" height="48" rx="8"/>
+  <text class="t-warn" x="486" y="184">Stops, changes nothing</text>
+  <text class="t-note" x="486" y="202">a tag was moved: ask the owner</text>
+  <rect class="s-warn" x="470" y="236" width="240" height="48" rx="8"/>
+  <text class="t-warn" x="486" y="256">Stops, changes nothing</text>
+  <text class="t-note" x="486" y="274">fix it through GitHub, not by hand</text>
+  <rect class="s-wait" x="470" y="308" width="240" height="48" rx="8"/>
+  <text class="t-title" x="486" y="328">Waits, changes nothing</text>
+  <text class="t-note" x="486" y="346">the VPS session finishes it with you</text>
+  <rect class="s-warn" x="470" y="380" width="240" height="48" rx="8"/>
+  <text class="t-warn" x="486" y="400">Stops, changes nothing</text>
+  <text class="t-note" x="486" y="418">disk or folder problem</text>
+  <rect class="s-crit" x="470" y="524" width="240" height="48" rx="8"/>
+  <circle class="badge" cx="492" cy="548" r="11"/><text class="t-badge" x="492" y="552" text-anchor="middle">8</text>
+  <text class="t-crit" x="512" y="544">Goes back by itself</text>
+  <text class="t-note" x="512" y="562">previous tag, never retried</text>
+
+  <path class="ln" d="M420,44 H468" marker-end="url(#f2-ah)"/><text class="t-edge" x="445" y="38" text-anchor="middle">no</text>
+  <path class="ln" d="M420,116 H468" marker-end="url(#f2-ah)"/><text class="t-edge" x="445" y="110" text-anchor="middle">no</text>
+  <path class="ln" d="M420,188 H468" marker-end="url(#f2-ah)"/><text class="t-edge" x="445" y="182" text-anchor="middle">no</text>
+  <path class="ln" d="M420,260 H468" marker-end="url(#f2-ah)"/><text class="t-edge" x="445" y="254" text-anchor="middle">no</text>
+  <path class="ln" d="M420,332 H468" marker-end="url(#f2-ah)"/><text class="t-edge" x="445" y="326" text-anchor="middle">no</text>
+  <path class="ln" d="M420,404 H468" marker-end="url(#f2-ah)"/><text class="t-edge" x="445" y="398" text-anchor="middle">no</text>
+  <path class="ln" d="M420,548 H468" marker-end="url(#f2-ah)"/><text class="t-edge" x="445" y="542" text-anchor="middle">no</text>
+  <path class="ln" d="M590,572 V688" marker-end="url(#f2-ah)"/>
+</svg>
+    </div>
+    <figcaption><strong>Figure 2.</strong> The steps of <code>docs/AUTO-DEPLOY.md</code> 2.2, in order. Down the left, everything is in order and the release goes live. A stop or a wait changes nothing on the VPS. It writes one line to the deploy log once, not every 5 minutes, so the Firmware versions page shows why the VPS is still on the old version.</figcaption>
+  </figure>
+</section>
+
+<section aria-labelledby="h-files">
+  <h2 id="h-files">Every file, who writes it, what it is for</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th scope="col">File or place</th><th scope="col">Status</th><th scope="col">Written by</th><th scope="col">What it is for</th></tr>
+      </thead>
+      <tbody>
+        <tr><th colspan="4" scope="colgroup">In the repository, on GitHub</th></tr>
+        <tr><td>.github/workflows/ci.yml</td><td><span class="pill p-new">changed in v0.8.1</span></td><td>cloud session, pull request</td><td>New job <code>tag-release</code>: once firmware, server and tools are green on the default branch, tags <code>v&lt;VERSION&gt;</code> if that tag is new</td></tr>
+        <tr><td>server/deploy/auto-deploy.sh</td><td><span class="pill p-new">new in v0.8.1</span></td><td>cloud session, pull request</td><td>The deployer, tested in CI with stand-ins for docker and curl</td></tr>
+        <tr><td>CLAUDE.md</td><td><span class="pill p-new">new in v0.8.1</span></td><td>cloud session, pull request</td><td>Release checklist for cloud sessions; rules for the VPS session (no edits in the checkout, no push, no sudo, ask before live changes)</td></tr>
+        <tr><td>server/app/server.py</td><td><span class="pill p-rel">every release</span></td><td>cloud session, pull request</td><td><code>VERSION</code>: a new number is what makes a release. v0.8.1 also adds Service updates to <code>/api/v1/versions</code></td></tr>
+        <tr><td>docs/UPDATING.md</td><td><span class="pill p-rel">every release</span></td><td>cloud session, pull request</td><td>The release section: what changed, checks, manual steps</td></tr>
+        <tr><td>server/deploy/hold/vX.Y.Z.md</td><td><span class="pill p-cond">only if needed</span></td><td>cloud session, pull request</td><td>Makes the deployer wait for that release, and says which manual step it needs (Caddy file, new settings, data format)</td></tr>
+        <tr><td>docs/HOW-TO-UPDATE.md, CHECK-UP-TO-DATE.md, PLAN.md</td><td><span class="pill p-new">changed in v0.8.1</span></td><td>cloud session, pull request</td><td>The automatic path, the PC out of the VPS path, the new house rule of PLAN.md §4.3</td></tr>
+        <tr><td>tags vX.Y.Z</td><td><span class="pill p-rel">made by CI</span></td><td>job <code>tag-release</code></td><td>What the VPS deploys. Never moved</td></tr>
+        <tr><td>tags fw-vX.Y.Z</td><td><span class="pill p-old">by hand, as today</span></td><td>you, GitHub Releases page</td><td>Firmware releases, only after the bench test by cable</td></tr>
+
+        <tr><th colspan="4" scope="colgroup">On hermes-vps</th></tr>
+        <tr><td>/home/ai/bin/arkan-auto-deploy</td><td><span class="pill p-new">set up once</span></td><td>VPS Claude session, with you</td><td>The installed copy of <code>auto-deploy.sh</code>, so a checkout never swaps it while it runs</td></tr>
+        <tr><td>crontab of ai</td><td><span class="pill p-new">set up once</span></td><td>VPS Claude session, with you</td><td><code>*/5 * * * *</code> runs the deployer; its output goes to <code>deploy.log</code></td></tr>
+        <tr><td>/home/ai/.arkan-deploy/</td><td><span class="pill p-new">new</span></td><td>the deployer; you or the VPS session</td><td>The <code>hold</code> file stops all deploys (going back by hand); the list of failed tags, never retried</td></tr>
+        <tr><td>/opt/arkan-monitoring</td><td><span class="pill p-old">existing</span></td><td>the deployer, <code>git checkout</code> only</td><td>The code at a tag. Never edited by hand: a modified file stops the deployer</td></tr>
+        <tr><td>/opt/arkan-monitoring/server/.env</td><td><span class="pill p-old">existing, not in git</span></td><td>VPS session, for a waiting release</td><td>The settings. The deployer only reads it, to find missing names</td></tr>
+        <tr><td>/srv/arkan-monitoring/backups/data-*.tar.gz</td><td><span class="pill p-old">existing</span></td><td>backup.sh: nightly and before each deploy</td><td>The data folder, 14 kept</td></tr>
+        <tr><td>/srv/arkan-monitoring/backups/deploy.log</td><td><span class="pill p-new">new</span></td><td>the deployer, through the crontab</td><td>The full text of every run, for the VPS session to read</td></tr>
+        <tr><td>/srv/arkan-monitoring/data/deploy.jsonl</td><td><span class="pill p-new">new</span></td><td>the deployer</td><td>One line per deploy, stop or wait; shown under Service updates on the Firmware versions page</td></tr>
+        <tr><td>container arkan-monitoring-ingest, 127.0.0.1:8800</td><td><span class="pill p-old">existing</span></td><td><code>docker compose up -d --build</code></td><td>The service; <code>/health</code> tells the deployer which version runs</td></tr>
+        <tr><td>/home/ai/.claude/</td><td><span class="pill p-old">existing</span></td><td>Claude Code</td><td>The VPS session's sign-in and its settings (deny <code>sudo</code>, <code>git push</code>, edits in <code>/opt/edge</code> and <code>/etc</code>)</td></tr>
+        <tr><td>/opt/edge/sites/monitoring.caddy, /etc/caddy</td><td><span class="pill p-owner">owner only</span></td><td>you, with sudo</td><td>Never touched by the deployer or the VPS session</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  From <code>docs/AUTO-DEPLOY.md</code>, branch <code>ccr-bcc41c96-01vre4</code> of julien355/esp32-datalogging. The plan is a draft: nothing on GitHub or on the VPS has changed yet. Version numbers (v0.8.2) are examples.
+</footer>
+
+</main>
+</body>
+</html>
